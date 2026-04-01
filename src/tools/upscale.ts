@@ -20,7 +20,7 @@ export async function handleUpscale(
 ): Promise<CallToolResult> {
   const imageInput = await loadImageBlob(args.image);
 
-  // Upscale uses image_request JSON wrapper for params
+  // Upscale endpoint requires image_request JSON — always send it (even empty)
   const imageRequest: Record<string, unknown> = {};
   if (args.prompt) imageRequest.prompt = args.prompt;
   if (args.resemblance !== undefined) imageRequest.resemblance = args.resemblance;
@@ -31,18 +31,19 @@ export async function handleUpscale(
 
   const form = new FormData();
   form.append("image_file", imageInput.blob, imageInput.filename);
-  if (Object.keys(imageRequest).length > 0) {
-    form.append("image_request", JSON.stringify(imageRequest));
-  }
+  form.append("image_request", JSON.stringify(imageRequest));
 
   const raw = await ideogramRequest("/upscale", form);
   const response = IdeogramResponseSchema.parse(raw);
 
+  const safeImages = response.data.filter((img) => img.url !== null);
+  const unsafeImages = response.data.filter((img) => img.url === null);
+
   const results = await Promise.allSettled(
-    response.data.map(async (image) => {
-      const { buffer, extension } = await downloadImage(image.url);
+    safeImages.map(async (image) => {
+      const { buffer, extension } = await downloadImage(image.url!);
       const filePath = await saveImage(buffer, extension);
-      return `Saved: ${filePath}\n  Seed: ${image.seed}\n  Resolution: ${image.resolution ?? "unknown"}`;
+      return `Saved: ${filePath}\n  Seed: ${image.seed}\n  Resolution: ${image.resolution ?? "unknown"}\n  Safe: ${image.is_image_safe}`;
     }),
   );
 
@@ -51,6 +52,7 @@ export async function handleUpscale(
 
   const lines: string[] = [];
   if (succeeded.length > 0) lines.push(`${succeeded.length} upscaled image(s) saved:\n`, ...succeeded.map((r) => r.value));
+  if (unsafeImages.length > 0) lines.push(`${unsafeImages.length} image(s) flagged as unsafe`);
   if (failed.length > 0) lines.push(`${failed.length} failed:\n`, ...failed.map((r) => `  Error: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`));
 
   return {

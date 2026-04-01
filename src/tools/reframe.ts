@@ -2,12 +2,12 @@ import { z } from "zod/v4";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { ideogramRequest, downloadImage } from "../client.js";
 import { saveImage } from "../storage.js";
-import { RenderingSpeed, IdeogramResponseSchema } from "../types.js";
+import { RenderingSpeed, ReframeResolution, IdeogramResponseSchema } from "../types.js";
 import { loadImageBlob } from "../image-input.js";
 
 export const reframeInputSchema = z.object({
   image: z.string().min(1).describe("Local file path of the source image to reframe"),
-  resolution: z.string().regex(/^\d+x\d+$/, "Format: WIDTHxHEIGHT (e.g. 1920x1080)").describe("Target resolution (e.g. 1920x1080)"),
+  resolution: ReframeResolution.describe("Target resolution (e.g. 1024x1024, 1920x1080). See Ideogram docs for all 78 valid resolutions."),
   num_images: z.number().int().min(1).max(8).optional().describe("Number of variations (1-8, default: 1)"),
   rendering_speed: RenderingSpeed.optional().describe("Speed/quality tradeoff (default: DEFAULT)"),
   seed: z.number().int().min(0).max(2147483647).optional().describe("Reproducibility seed"),
@@ -28,11 +28,14 @@ export async function handleReframe(
   const raw = await ideogramRequest("/v1/ideogram-v3/reframe", form);
   const response = IdeogramResponseSchema.parse(raw);
 
+  const safeImages = response.data.filter((img) => img.url !== null);
+  const unsafeImages = response.data.filter((img) => img.url === null);
+
   const results = await Promise.allSettled(
-    response.data.map(async (image) => {
-      const { buffer, extension } = await downloadImage(image.url);
+    safeImages.map(async (image) => {
+      const { buffer, extension } = await downloadImage(image.url!);
       const filePath = await saveImage(buffer, extension);
-      return `Saved: ${filePath}\n  Seed: ${image.seed}\n  Resolution: ${image.resolution ?? "unknown"}`;
+      return `Saved: ${filePath}\n  Seed: ${image.seed}\n  Resolution: ${image.resolution ?? "unknown"}\n  Safe: ${image.is_image_safe}`;
     }),
   );
 
@@ -41,6 +44,7 @@ export async function handleReframe(
 
   const lines: string[] = [];
   if (succeeded.length > 0) lines.push(`${succeeded.length} reframed image(s) saved:\n`, ...succeeded.map((r) => r.value));
+  if (unsafeImages.length > 0) lines.push(`${unsafeImages.length} image(s) flagged as unsafe`);
   if (failed.length > 0) lines.push(`${failed.length} failed:\n`, ...failed.map((r) => `  Error: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`));
 
   return {

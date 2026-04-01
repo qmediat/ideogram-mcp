@@ -30,11 +30,17 @@ export async function handleReplaceBg(
   const raw = await ideogramRequest("/v1/ideogram-v3/replace-background", form);
   const response = IdeogramResponseSchema.parse(raw);
 
+  const safeImages = response.data.filter((img) => img.url !== null);
+  const unsafeImages = response.data.filter((img) => img.url === null);
+
   const results = await Promise.allSettled(
-    response.data.map(async (image) => {
-      const { buffer, extension } = await downloadImage(image.url);
+    safeImages.map(async (image) => {
+      const { buffer, extension } = await downloadImage(image.url!);
       const filePath = await saveImage(buffer, extension);
-      return `Saved: ${filePath}\n  Seed: ${image.seed}\n  Resolution: ${image.resolution ?? "unknown"}`;
+      return (
+        `Saved: ${filePath}\n  Seed: ${image.seed}\n  Resolution: ${image.resolution ?? "unknown"}\n  Safe: ${image.is_image_safe}` +
+        (image.prompt ? `\n  Enhanced prompt: ${image.prompt}` : "")
+      );
     }),
   );
 
@@ -43,6 +49,7 @@ export async function handleReplaceBg(
 
   const lines: string[] = [];
   if (succeeded.length > 0) lines.push(`${succeeded.length} image(s) with new background saved:\n`, ...succeeded.map((r) => r.value));
+  if (unsafeImages.length > 0) lines.push(`${unsafeImages.length} image(s) flagged as unsafe`);
   if (failed.length > 0) lines.push(`${failed.length} failed:\n`, ...failed.map((r) => `  Error: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`));
 
   return {

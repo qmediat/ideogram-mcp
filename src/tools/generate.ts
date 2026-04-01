@@ -15,6 +15,16 @@ export const generateInputSchema = z.object({
   seed: z.number().int().min(0).max(2147483647).optional().describe("Reproducibility seed (0-2,147,483,647)"),
 });
 
+function formatImageResult(filePath: string, image: { seed: number; is_image_safe: boolean; resolution?: string; prompt?: string }): string {
+  return (
+    `Saved: ${filePath}\n` +
+    `  Seed: ${image.seed}\n` +
+    `  Resolution: ${image.resolution ?? "unknown"}\n` +
+    `  Safe: ${image.is_image_safe}` +
+    (image.prompt ? `\n  Enhanced prompt: ${image.prompt}` : "")
+  );
+}
+
 export async function handleGenerate(
   args: z.infer<typeof generateInputSchema>,
 ): Promise<CallToolResult> {
@@ -31,17 +41,15 @@ export async function handleGenerate(
   const raw = await ideogramRequest("/v1/ideogram-v3/generate", form);
   const response = IdeogramResponseSchema.parse(raw);
 
+  // Separate safe (downloadable) from unsafe (url=null) images
+  const safeImages = response.data.filter((img) => img.url !== null);
+  const unsafeImages = response.data.filter((img) => img.url === null);
+
   const results = await Promise.allSettled(
-    response.data.map(async (image) => {
-      const { buffer, extension } = await downloadImage(image.url);
+    safeImages.map(async (image) => {
+      const { buffer, extension } = await downloadImage(image.url!);
       const filePath = await saveImage(buffer, extension);
-      return (
-        `Saved: ${filePath}\n` +
-        `  Seed: ${image.seed}\n` +
-        `  Resolution: ${image.resolution ?? "unknown"}\n` +
-        `  Safe: ${image.is_image_safe}\n` +
-        (image.prompt ? `  Enhanced prompt: ${image.prompt}\n` : "")
-      );
+      return formatImageResult(filePath, image);
     }),
   );
 
@@ -53,18 +61,20 @@ export async function handleGenerate(
     lines.push(`${succeeded.length} image(s) saved:\n`);
     lines.push(...succeeded.map((r) => r.value));
   }
+  if (unsafeImages.length > 0) {
+    lines.push(`\n${unsafeImages.length} image(s) flagged as unsafe (not downloaded):\n`);
+    lines.push(...unsafeImages.map((img) => `  Seed: ${img.seed} — blocked by safety filter`));
+  }
   if (failed.length > 0) {
-    lines.push(`${failed.length} image(s) failed to download:\n`);
+    lines.push(`\n${failed.length} image(s) failed to download:\n`);
     lines.push(...failed.map((r) => `  Error: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`));
   }
 
+  const allFailed = succeeded.length === 0 && safeImages.length > 0;
+  const nothingGenerated = succeeded.length === 0 && safeImages.length === 0;
+
   return {
-    content: [
-      {
-        type: "text" as const,
-        text: lines.join("\n"),
-      },
-    ],
-    ...(failed.length > 0 && succeeded.length === 0 ? { isError: true } : {}),
+    content: [{ type: "text" as const, text: lines.join("\n") }],
+    ...((allFailed || nothingGenerated) ? { isError: true } : {}),
   };
 }

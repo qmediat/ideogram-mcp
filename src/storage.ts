@@ -60,14 +60,13 @@ export async function validateInputImage(rawPath: string): Promise<{
 }> {
   const resolvedPath = resolve(rawPath);
 
-  // Reject symlinks — prevents secret.png → /etc/passwd bypass
-  const lstats = await lstat(resolvedPath);
-  if (lstats.isSymbolicLink()) {
-    throw new Error(`Symlinks not allowed: ${rawPath}`);
+  // Resolve to real path — detects symlinks at any level (file or intermediate dirs)
+  const realPath = await realpath(resolvedPath);
+  if (realPath !== resolvedPath) {
+    throw new Error(`Symlinks not allowed (path resolves to different location): ${rawPath}`);
   }
 
-  // Resolve to real path and validate extension on the real target
-  const realPath = await realpath(resolvedPath);
+  // Validate extension on the real target
   const meta = getImageMeta(realPath);
 
   // Validate existence and size
