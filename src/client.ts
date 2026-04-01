@@ -126,9 +126,8 @@ export async function ideogramRequest(
       console.error(
         `Ideogram API ${response.status} on ${path}, retry ${attempt + 1}/${MAX_RETRIES} in ${Math.round(retryMs)}ms`,
       );
-      await drainBody(response);
-      await delay(retryMs);
       lastError = await parseErrorResponse(response).catch(() => lastError);
+      await delay(retryMs);
       continue;
     }
 

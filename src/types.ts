@@ -13,7 +13,7 @@ export const MagicPrompt = z.enum(["AUTO", "ON", "OFF"]);
 
 export const DescribeModelVersion = z.enum(["V_2", "V_3"]);
 
-// All 78 valid resolutions for the reframe endpoint (from Ideogram V3 API spec)
+// All 69 valid resolutions for the reframe endpoint (from Ideogram V3 API spec)
 export const ReframeResolution = z.enum([
   "512x1536", "576x1408", "576x1472", "576x1536",
   "640x1344", "640x1408", "640x1472", "640x1536",

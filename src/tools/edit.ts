@@ -61,6 +61,6 @@ export async function handleEdit(
 
   return {
     content: [{ type: "text" as const, text: lines.join("\n") }],
-    ...(failed.length > 0 && succeeded.length === 0 ? { isError: true } : {}),
+    ...(succeeded.length === 0 ? { isError: true } : {}),
   };
 }

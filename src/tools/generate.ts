@@ -70,11 +70,8 @@ export async function handleGenerate(
     lines.push(...failed.map((r) => `  Error: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`));
   }
 
-  const allFailed = succeeded.length === 0 && safeImages.length > 0;
-  const nothingGenerated = succeeded.length === 0 && safeImages.length === 0;
-
   return {
     content: [{ type: "text" as const, text: lines.join("\n") }],
-    ...((allFailed || nothingGenerated) ? { isError: true } : {}),
+    ...(succeeded.length === 0 ? { isError: true } : {}),
   };
 }

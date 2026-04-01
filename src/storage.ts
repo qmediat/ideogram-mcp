@@ -1,4 +1,4 @@
-import { mkdir, writeFile, stat, lstat, realpath } from "node:fs/promises";
+import { mkdir, writeFile, stat, realpath } from "node:fs/promises";
 import { join, resolve, relative, isAbsolute, extname } from "node:path";
 import { randomBytes } from "node:crypto";
 import { getConfig } from "./config.js";

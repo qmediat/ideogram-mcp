@@ -7,7 +7,7 @@ import { loadImageBlob } from "../image-input.js";
 
 export const reframeInputSchema = z.object({
   image: z.string().min(1).describe("Local file path of the source image to reframe"),
-  resolution: ReframeResolution.describe("Target resolution (e.g. 1024x1024, 1920x1080). See Ideogram docs for all 78 valid resolutions."),
+  resolution: ReframeResolution.describe("Target resolution (e.g. 1024x1024, 1536x640). See Ideogram docs for all 69 valid resolutions."),
   num_images: z.number().int().min(1).max(8).optional().describe("Number of variations (1-8, default: 1)"),
   rendering_speed: RenderingSpeed.optional().describe("Speed/quality tradeoff (default: DEFAULT)"),
   seed: z.number().int().min(0).max(2147483647).optional().describe("Reproducibility seed"),
@@ -49,6 +49,6 @@ export async function handleReframe(
 
   return {
     content: [{ type: "text" as const, text: lines.join("\n") }],
-    ...(failed.length > 0 && succeeded.length === 0 ? { isError: true } : {}),
+    ...(succeeded.length === 0 ? { isError: true } : {}),
   };
 }
