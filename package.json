@@ -1,0 +1,47 @@
+{
+  "name": "ideogram-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Ideogram V3 API — generate, edit, remix, upscale, and describe images with zero-axios security",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "ideogram-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "ideogram",
+    "ideogram-v3",
+    "image-generation",
+    "ai",
+    "model-context-protocol",
+    "claude-code",
+    "image-editing",
+    "image-description",
+    "upscale"
+  ],
+  "homepage": "https://github.com/qmediat/ideogram-mcp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/qmediat/ideogram-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/qmediat/ideogram-mcp/issues"
+  },
+  "author": "Quantum Media Technologies <dev@qmediat.io> (https://www.qmediat.io)",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.3",
+    "typescript": "6.0.2"
+  },
+  "engines": {
+    "node": ">=25.0.0"
+  }
+}
