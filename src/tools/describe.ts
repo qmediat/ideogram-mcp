@@ -1,9 +1,8 @@
 import { z } from "zod/v4";
-import { readFile } from "node:fs/promises";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { ideogramRequest } from "../client.js";
 import { DescribeModelVersion, IdeogramDescribeResponseSchema } from "../types.js";
-import { validateInputImage } from "../storage.js";
+import { loadImageBlob } from "../image-input.js";
 
 export const describeInputSchema = z.object({
   image: z.string().min(1).describe("Local file path of the image to describe"),
@@ -13,14 +12,10 @@ export const describeInputSchema = z.object({
 export async function handleDescribe(
   args: z.infer<typeof describeInputSchema>,
 ): Promise<CallToolResult> {
-  // Validate: extension must be image, file must exist, size must be <= 10MB
-  const { resolvedPath, meta } = await validateInputImage(args.image);
-
-  const imageBuffer = await readFile(resolvedPath);
-  const blob = new Blob([new Uint8Array(imageBuffer)], { type: meta.mimeType });
+  const imageInput = await loadImageBlob(args.image);
 
   const form = new FormData();
-  form.append("image_file", blob, meta.filename);
+  form.append("image_file", imageInput.blob, imageInput.filename);
   if (args.describe_model_version) {
     form.append("describe_model_version", args.describe_model_version);
   }

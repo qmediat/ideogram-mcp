@@ -3,7 +3,7 @@ import { IdeogramApiError, isRetryableStatus, isRetryableNetworkError } from "./
 
 const BASE_URL = "https://api.ideogram.ai";
 const MAX_RETRIES = 3;
-const REQUEST_TIMEOUT_MS = 60_000;
+const REQUEST_TIMEOUT_MS = 120_000; // 120s — QUALITY speed with multiple images can be slow
 const MAX_DOWNLOAD_SIZE = 50 * 1024 * 1024; // 50 MB cap on image downloads
 
 const ALLOWED_DOWNLOAD_HOSTS = new Set([
@@ -54,6 +54,18 @@ async function parseErrorResponse(response: Response): Promise<IdeogramApiError>
   }
 }
 
+async function parseJsonResponse(response: Response, path: string): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    throw new IdeogramApiError(
+      response.status,
+      "INVALID_JSON",
+      `Ideogram API returned non-JSON response on ${path} (status ${response.status})`,
+    );
+  }
+}
+
 function validateDownloadUrl(url: string): void {
   let parsed: URL;
   try {
@@ -77,6 +89,7 @@ export async function ideogramRequest(
 ): Promise<unknown> {
   const config = getConfig();
   const url = `${BASE_URL}${path}`;
+  let lastError: IdeogramApiError | undefined;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     let response: Response;
@@ -105,7 +118,7 @@ export async function ideogramRequest(
     }
 
     if (response.ok) {
-      return response.json();
+      return await parseJsonResponse(response, path);
     }
 
     if (isRetryableStatus(response.status) && attempt < MAX_RETRIES) {
@@ -113,7 +126,7 @@ export async function ideogramRequest(
       console.error(
         `Ideogram API ${response.status} on ${path}, retry ${attempt + 1}/${MAX_RETRIES} in ${Math.round(retryMs)}ms`,
       );
-      await drainBody(response);
+      lastError = await parseErrorResponse(response).catch(() => lastError);
       await delay(retryMs);
       continue;
     }
@@ -121,27 +134,31 @@ export async function ideogramRequest(
     throw await parseErrorResponse(response);
   }
 
-  throw new IdeogramApiError(503, "RETRY_EXHAUSTED", "Max retries exceeded");
+  throw lastError ?? new IdeogramApiError(503, "RETRY_EXHAUSTED", "Max retries exceeded");
 }
 
 function detectExtensionFromResponse(response: Response, url: string): string {
-  const contentType = response.headers.get("Content-Type")?.toLowerCase();
-  if (contentType?.includes("image/jpeg") || contentType?.includes("image/jpg")) return "jpg";
-  if (contentType?.includes("image/webp")) return "webp";
-  if (contentType?.includes("image/png")) return "png";
+  const contentType = response.headers.get("Content-Type")?.toLowerCase() ?? "";
+
+  if (contentType.includes("image/jpeg") || contentType.includes("image/jpg")) return "jpg";
+  if (contentType.includes("image/webp")) return "webp";
+  if (contentType.includes("image/png")) return "png";
 
   // Fallback: check URL path
   try {
     const path = new URL(url).pathname.toLowerCase();
     if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "jpg";
     if (path.endsWith(".webp")) return "webp";
+    if (path.endsWith(".png")) return "png";
   } catch { /* ignore */ }
 
-  return "png"; // safe default
+  // Default to png — Ideogram primarily generates PNG
+  return "png";
 }
 
 export async function downloadImage(url: string): Promise<{ buffer: Buffer; extension: string }> {
   validateDownloadUrl(url);
+  let lastError: IdeogramApiError | undefined;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     let response: Response;
@@ -179,11 +196,40 @@ export async function downloadImage(url: string): Promise<{ buffer: Buffer; exte
     }
 
     if (response.ok) {
+      // Require image Content-Type — reject HTML/JSON error pages
+      const contentType = response.headers.get("Content-Type") ?? "";
+      if (!contentType.toLowerCase().startsWith("image/")) {
+        await drainBody(response);
+        throw new IdeogramApiError(
+          response.status,
+          "DOWNLOAD_INVALID_TYPE",
+          `Expected image Content-Type, got: ${contentType || "(missing)"}`,
+        );
+      }
+
+      // Pre-check Content-Length when available
+      const contentLength = response.headers.get("Content-Length");
+      if (contentLength) {
+        const size = parseInt(contentLength, 10);
+        if (!isNaN(size) && size > MAX_DOWNLOAD_SIZE) {
+          await drainBody(response);
+          throw new IdeogramApiError(
+            response.status,
+            "DOWNLOAD_TOO_LARGE",
+            `Image ${(size / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_DOWNLOAD_SIZE / 1024 / 1024}MB limit`,
+          );
+        }
+      }
+
       const extension = detectExtensionFromResponse(response, url);
       const buffer = Buffer.from(await response.arrayBuffer());
 
       if (buffer.byteLength > MAX_DOWNLOAD_SIZE) {
-        throw new IdeogramApiError(0, "DOWNLOAD_TOO_LARGE", `Downloaded image ${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_DOWNLOAD_SIZE / 1024 / 1024}MB limit`);
+        throw new IdeogramApiError(
+          response.status,
+          "DOWNLOAD_TOO_LARGE",
+          `Downloaded image ${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_DOWNLOAD_SIZE / 1024 / 1024}MB limit`,
+        );
       }
 
       return { buffer, extension };
@@ -196,6 +242,7 @@ export async function downloadImage(url: string): Promise<{ buffer: Buffer; exte
       );
       await drainBody(response);
       await delay(retryMs);
+      lastError = new IdeogramApiError(response.status, "DOWNLOAD_FAILED", response.statusText);
       continue;
     }
 
@@ -206,5 +253,5 @@ export async function downloadImage(url: string): Promise<{ buffer: Buffer; exte
     );
   }
 
-  throw new IdeogramApiError(503, "DOWNLOAD_RETRY_EXHAUSTED", "Max download retries exceeded");
+  throw lastError ?? new IdeogramApiError(503, "DOWNLOAD_RETRY_EXHAUSTED", "Max download retries exceeded");
 }
