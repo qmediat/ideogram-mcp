@@ -1,4 +1,4 @@
-import { mkdir, writeFile, stat } from "node:fs/promises";
+import { mkdir, writeFile, stat, lstat, realpath } from "node:fs/promises";
 import { join, resolve, relative, isAbsolute, extname } from "node:path";
 import { randomBytes } from "node:crypto";
 import { getConfig } from "./config.js";
@@ -60,13 +60,20 @@ export async function validateInputImage(rawPath: string): Promise<{
 }> {
   const resolvedPath = resolve(rawPath);
 
-  // Validate extension (also prevents reading non-image files like .env)
-  const meta = getImageMeta(resolvedPath);
+  // Reject symlinks — prevents secret.png → /etc/passwd bypass
+  const lstats = await lstat(resolvedPath);
+  if (lstats.isSymbolicLink()) {
+    throw new Error(`Symlinks not allowed: ${rawPath}`);
+  }
+
+  // Resolve to real path and validate extension on the real target
+  const realPath = await realpath(resolvedPath);
+  const meta = getImageMeta(realPath);
 
   // Validate existence and size
-  await validateFileSize(resolvedPath);
+  await validateFileSize(realPath);
 
-  return { resolvedPath, meta };
+  return { resolvedPath: realPath, meta };
 }
 
 export async function saveImage(

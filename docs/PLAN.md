@@ -66,10 +66,9 @@ ideogram/
 
 ## Dependencies (minimal)
 
-**Runtime (3):**
+**Runtime (2):**
 - `@modelcontextprotocol/sdk` — MCP protocol
 - `zod` — schema validation
-- `form-data` — multipart/form-data for API requests
 
 **Dev (2):**
 - `typescript`

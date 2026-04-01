@@ -179,6 +179,23 @@ export async function downloadImage(url: string): Promise<{ buffer: Buffer; exte
     }
 
     if (response.ok) {
+      // Reject non-image content types
+      const contentType = response.headers.get("Content-Type") ?? "";
+      if (contentType && !contentType.toLowerCase().startsWith("image/")) {
+        await drainBody(response);
+        throw new IdeogramApiError(0, "DOWNLOAD_INVALID_TYPE", `Expected image content, got: ${contentType}`);
+      }
+
+      // Pre-check Content-Length when available
+      const contentLength = response.headers.get("Content-Length");
+      if (contentLength) {
+        const size = parseInt(contentLength, 10);
+        if (!isNaN(size) && size > MAX_DOWNLOAD_SIZE) {
+          await drainBody(response);
+          throw new IdeogramApiError(0, "DOWNLOAD_TOO_LARGE", `Image ${(size / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_DOWNLOAD_SIZE / 1024 / 1024}MB limit`);
+        }
+      }
+
       const extension = detectExtensionFromResponse(response, url);
       const buffer = Buffer.from(await response.arrayBuffer());
 
