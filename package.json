@@ -1,5 +1,5 @@
 {
-  "name": "ideogram-mcp",
+  "name": "@qmediat.io/ideogram-mcp",
   "version": "1.0.0",
   "files": [
     "dist",
@@ -13,6 +13,10 @@
   "main": "dist/index.js",
   "bin": {
     "ideogram-mcp": "dist/index.js"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "scripts": {
     "build": "tsc",

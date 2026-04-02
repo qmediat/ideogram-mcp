@@ -1,9 +1,9 @@
-# ideogram-mcp
+# @qmediat.io/ideogram-mcp
 
 MCP server for the [Ideogram V3 API](https://developer.ideogram.ai) — generate, edit, remix, upscale, and describe images from Claude Code, Claude Desktop, or any MCP client.
 
-[![npm version](https://img.shields.io/npm/v/ideogram-mcp)](https://www.npmjs.com/package/ideogram-mcp)
-[![license](https://img.shields.io/npm/l/ideogram-mcp)](./LICENSE)
+[![npm version](https://img.shields.io/npm/v/@qmediat.io/ideogram-mcp)](https://www.npmjs.com/package/@qmediat.io/ideogram-mcp)
+[![license](https://img.shields.io/npm/l/@qmediat.io/ideogram-mcp)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](./tsconfig.json)
 
 ## Why this server?
@@ -17,13 +17,13 @@ MCP server for the [Ideogram V3 API](https://developer.ideogram.ai) — generate
 ## Quick Start
 
 ```bash
-npm install -g ideogram-mcp
+npm install -g @qmediat.io/ideogram-mcp
 ```
 
 Or use directly:
 
 ```bash
-npx ideogram-mcp
+npx @qmediat.io/ideogram-mcp
 ```
 
 Requires `IDEOGRAM_API_KEY` — get one at [ideogram.ai/manage-api](https://ideogram.ai/manage-api).
@@ -38,7 +38,7 @@ Add to `~/.claude.json` → `mcpServers`:
 {
   "ideogram": {
     "command": "npx",
-    "args": ["-y", "ideogram-mcp"],
+    "args": ["-y", "@qmediat.io/ideogram-mcp"],
     "env": {
       "IDEOGRAM_API_KEY": "your-api-key",
       "IDEOGRAM_OUTPUT_DIR": "/tmp/ideogram-output"
@@ -56,7 +56,7 @@ Add to `claude_desktop_config.json`:
   "mcpServers": {
     "ideogram": {
       "command": "npx",
-      "args": ["-y", "ideogram-mcp"],
+      "args": ["-y", "@qmediat.io/ideogram-mcp"],
       "env": {
         "IDEOGRAM_API_KEY": "your-api-key",
         "IDEOGRAM_OUTPUT_DIR": "/tmp/ideogram-output"
