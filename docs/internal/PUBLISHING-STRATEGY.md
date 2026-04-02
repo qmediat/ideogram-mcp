@@ -69,16 +69,13 @@ Najprościej przez `npx` (nie wymaga instalacji):
     "args": ["-y", "ideogram-mcp"],
     "env": {
       "IDEOGRAM_API_KEY": "${IDEOGRAM_API_KEY}",
-      "IDEOGRAM_OUTPUT_DIR": "~/Pictures/ideogram"
+      "IDEOGRAM_OUTPUT_DIR": "/tmp/ideogram-output"
     }
   }
 }
 ```
 
-`IDEOGRAM_OUTPUT_DIR` — dowolny folder, gdzie chcesz zapisywać obrazy. Domyślnie `/tmp/ideogram-output`. Przykłady:
-- `~/Pictures/ideogram` — folder w home
-- `./output/images` — relatywny do CWD
-- `/tmp/ideogram-output` — tymczasowy (domyślny)
+`IDEOGRAM_OUTPUT_DIR` — dowolny folder (absolutna ścieżka), gdzie chcesz zapisywać obrazy. Domyślnie `/tmp/ideogram-output`.
 
 **End-to-end test z prawdziwym API** — wymaga IDEOGRAM_API_KEY.
 

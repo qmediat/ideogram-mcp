@@ -58,14 +58,16 @@ export async function validateInputImage(rawPath: string): Promise<{
   resolvedPath: string;
   meta: { extension: string; mimeType: string; filename: string };
 }> {
-  // Resolve to real path (follows system symlinks like /tmp → /private/tmp on macOS)
-  const realPath = await realpath(resolve(rawPath));
+  const resolvedPath = resolve(rawPath);
 
-  // Reject if the final file itself is a symlink (prevents secret.png → /etc/passwd)
-  const lstats = await lstat(realPath);
+  // Reject if the file itself is a symlink BEFORE resolving (prevents evil.png → target bypass)
+  const lstats = await lstat(resolvedPath);
   if (lstats.isSymbolicLink()) {
     throw new Error(`Symlinks not allowed: ${rawPath}`);
   }
+
+  // Resolve system-level symlinks (e.g. /tmp → /private/tmp on macOS) for actual reading
+  const realPath = await realpath(resolvedPath);
 
   // Validate extension on the real target
   const meta = getImageMeta(realPath);

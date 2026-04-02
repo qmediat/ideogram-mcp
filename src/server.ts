@@ -44,7 +44,7 @@ export function createServer(): McpServer {
   });
 
   server.registerTool("ideogram_reframe", {
-    description: "Extend an image to a new resolution via outpainting. Specify target resolution (e.g. 1920x1080).",
+    description: "Extend an image to a new resolution via outpainting. Specify target resolution (e.g. 1024x1024, 1536x640).",
     inputSchema: reframeInputSchema,
   }, async (args) => {
     try { return await handleReframe(args); } catch (error) { return errorResponse(error); }
