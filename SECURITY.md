@@ -41,7 +41,7 @@ We will acknowledge your report within 48 hours and aim to release a fix within 
 | Threat | Protection |
 |--------|-----------|
 | **Path traversal** | Extension allowlist (`.png`, `.jpg`, `.jpeg`, `.webp` only) |
-| **Symlink attacks** | `realpath()` comparison — rejects symlinks at any path level |
+| **Symlink attacks** | `lstat()` on original path before reading — rejects user-created symlinks |
 | **File size DoS** | `stat()` check before read — 10 MB limit (Ideogram API limit) |
 | **Filename injection** | Output filenames are `ideogram-{timestamp}-{random}.{ext}` — no user input |
 | **Output directory escape** | `path.relative()` containment check on all saved files |

@@ -101,7 +101,7 @@ Add to `claude_desktop_config.json`:
 This server is designed with a zero-trust, minimal-dependency approach:
 
 - **SSRF protection** — HTTPS-only downloads, hostname allowlist, redirect blocking
-- **Symlink rejection** — `realpath()` comparison catches symlinks at any path level
+- **Symlink rejection** — `lstat()` rejects user-created symlinks before reading
 - **Content-Type validation** — downloads must be `image/*`, rejecting HTML/JSON error pages
 - **Zod response validation** — API responses parsed through schemas, no blind type casts
 - **Path traversal prevention** — extension allowlist + `path.relative()` containment check
