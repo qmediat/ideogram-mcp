@@ -1,4 +1,4 @@
-import { mkdir, writeFile, stat, realpath } from "node:fs/promises";
+import { mkdir, writeFile, stat, lstat, realpath } from "node:fs/promises";
 import { join, resolve, relative, isAbsolute, extname } from "node:path";
 import { randomBytes } from "node:crypto";
 import { getConfig } from "./config.js";
@@ -58,12 +58,13 @@ export async function validateInputImage(rawPath: string): Promise<{
   resolvedPath: string;
   meta: { extension: string; mimeType: string; filename: string };
 }> {
-  const resolvedPath = resolve(rawPath);
+  // Resolve to real path (follows system symlinks like /tmp → /private/tmp on macOS)
+  const realPath = await realpath(resolve(rawPath));
 
-  // Resolve to real path — detects symlinks at any level (file or intermediate dirs)
-  const realPath = await realpath(resolvedPath);
-  if (realPath !== resolvedPath) {
-    throw new Error(`Symlinks not allowed (path resolves to different location): ${rawPath}`);
+  // Reject if the final file itself is a symlink (prevents secret.png → /etc/passwd)
+  const lstats = await lstat(realPath);
+  if (lstats.isSymbolicLink()) {
+    throw new Error(`Symlinks not allowed: ${rawPath}`);
   }
 
   // Validate extension on the real target
