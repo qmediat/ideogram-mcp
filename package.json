@@ -1,6 +1,13 @@
 {
   "name": "ideogram-mcp",
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "SECURITY.md"
+  ],
   "description": "MCP server for Ideogram V3 API — generate, edit, remix, upscale, and describe images with zero-axios security",
   "type": "module",
   "main": "dist/index.js",
@@ -9,6 +16,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "prepack": "npm run build",
     "start": "node dist/index.js"
   },
   "keywords": [
@@ -42,6 +50,6 @@
     "typescript": "6.0.2"
   },
   "engines": {
-    "node": ">=25.0.0"
+    "node": ">=22.0.0"
   }
 }
