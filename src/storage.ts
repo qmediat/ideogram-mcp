@@ -52,7 +52,7 @@ export async function validateFileSize(filePath: string): Promise<void> {
 /**
  * Validates an input image path for tools that accept user-provided images.
  * Does NOT restrict to a specific directory (user may describe any of their images),
- * but validates: absolute path, file exists, allowed extension, size limit.
+ * but validates: not a symlink, file exists, allowed extension, size limit.
  */
 export async function validateInputImage(rawPath: string): Promise<{
   resolvedPath: string;
