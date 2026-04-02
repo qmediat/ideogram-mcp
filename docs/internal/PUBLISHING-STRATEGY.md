@@ -60,18 +60,25 @@ Dlaczego:
 6. Built by QMT badge + link do www.qmediat.io
 
 **Konfiguracja w `~/.claude.json`:**
+
+Najprościej przez `npx` (nie wymaga instalacji):
 ```json
 {
   "ideogram": {
-    "command": "node",
-    "args": ["/Users/mikeb/MCP-Servers/ideogram/dist/index.js"],
+    "command": "npx",
+    "args": ["-y", "ideogram-mcp"],
     "env": {
       "IDEOGRAM_API_KEY": "${IDEOGRAM_API_KEY}",
-      "IDEOGRAM_OUTPUT_DIR": "/Users/mikeb/MCP-Servers/output/images/ideogram"
+      "IDEOGRAM_OUTPUT_DIR": "~/Pictures/ideogram"
     }
   }
 }
 ```
+
+`IDEOGRAM_OUTPUT_DIR` — dowolny folder, gdzie chcesz zapisywać obrazy. Domyślnie `/tmp/ideogram-output`. Przykłady:
+- `~/Pictures/ideogram` — folder w home
+- `./output/images` — relatywny do CWD
+- `/tmp/ideogram-output` — tymczasowy (domyślny)
 
 **End-to-end test z prawdziwym API** — wymaga IDEOGRAM_API_KEY.
 

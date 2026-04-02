@@ -41,7 +41,7 @@ Add to `~/.claude.json` → `mcpServers`:
     "args": ["-y", "ideogram-mcp"],
     "env": {
       "IDEOGRAM_API_KEY": "your-api-key",
-      "IDEOGRAM_OUTPUT_DIR": "./output/images/ideogram"
+      "IDEOGRAM_OUTPUT_DIR": "~/Pictures/ideogram"
     }
   }
 }
@@ -59,7 +59,7 @@ Add to `claude_desktop_config.json`:
       "args": ["-y", "ideogram-mcp"],
       "env": {
         "IDEOGRAM_API_KEY": "your-api-key",
-        "IDEOGRAM_OUTPUT_DIR": "/tmp/ideogram-output"
+        "IDEOGRAM_OUTPUT_DIR": "~/Pictures/ideogram"
       }
     }
   }
@@ -70,8 +70,8 @@ Add to `claude_desktop_config.json`:
 
 | Variable | Required | Default | Description |
 |----------|:--------:|---------|-------------|
-| `IDEOGRAM_API_KEY` | Yes | — | Your Ideogram API key |
-| `IDEOGRAM_OUTPUT_DIR` | No | `/tmp/ideogram-output` | Directory for saved images |
+| `IDEOGRAM_API_KEY` | Yes | — | Your Ideogram API key ([get one here](https://ideogram.ai/manage-api)) |
+| `IDEOGRAM_OUTPUT_DIR` | No | `/tmp/ideogram-output` | Any folder where you want images saved. Examples: `~/Pictures/ideogram`, `./output`, `/tmp/ideogram-output` |
 
 ## Available Tools
 
