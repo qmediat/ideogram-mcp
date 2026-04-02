@@ -91,7 +91,7 @@ Extend images to target resolutions via outpainting.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `image` | file | Yes | — | Source image to reframe |
-| `resolution` | string | Yes | — | Target resolution (e.g., "1920x1080") |
+| `resolution` | enum | Yes | — | Target resolution (e.g., "1024x1024", "1536x640"). 69 valid values — see Ideogram docs |
 | `num_images` | integer | No | 1 | Variations (1-8) |
 | `rendering_speed` | enum | No | "DEFAULT" | Speed/quality tradeoff |
 | `seed` | integer | No | random | Reproducibility seed |
@@ -179,7 +179,9 @@ All image generation endpoints return:
 }
 ```
 
-**Important:** Image URLs are temporary and expire. Download immediately.
+**Important:**
+- Image URLs are temporary and expire. Download immediately.
+- When `is_image_safe` is `false`, `url` is `null` — the image was blocked by the safety filter.
 
 ---
 
@@ -191,7 +193,9 @@ All image generation endpoints return:
 - `401` — Invalid API key
 - `429` — Rate limited (retry with exponential backoff)
 - `500` — Server error (retryable)
+- `502` — Bad gateway (retryable)
 - `503` — Service unavailable (retryable)
+- `504` — Gateway timeout (retryable)
 
 **Error Response:**
 
@@ -206,10 +210,12 @@ All image generation endpoints return:
 
 ## Image Input Formats
 
-All endpoints accepting images support:
+The Ideogram API supports three input formats:
 1. **File upload** — binary in multipart form
 2. **URL** — `https://example.com/image.jpg`
 3. **Base64** — `data:image/png;base64,iVBORw0KGgo...`
+
+**Note:** This MCP server currently supports **local file paths only** (option 1). The file is read, validated, and uploaded as multipart binary.
 
 **Constraints:**
 - Max file size: 10 MB

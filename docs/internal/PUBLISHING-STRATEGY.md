@@ -34,11 +34,13 @@ Dlaczego:
 
 ### Krok 1: Repo na GitHub ✅ DONE
 
-- Repo: `qmediat/ideogram-mcp` (PRIVATE)
+- Repo: `qmediat/ideogram-mcp` (**PUBLIC** od 2026-04-02)
 - Topics: mcp, ideogram, image-generation, claude-code, ai, model-context-protocol, typescript
 - PR #1 (Phase 1) — merged
 - PR #2 (Phase 2) — merged
-- 4 rundy code review × 4 reviewerów = 16 przeglądów
+- PR #3 (Release v1.0) — merged
+- PR #4 (Final polish) — merged
+- 6 rund code review × 4 reviewerów = 24 przeglądy, 49 issues naprawionych
 
 ### Krok 2: Phase 1 + 2 ✅ DONE
 
@@ -47,39 +49,15 @@ Dlaczego:
 - LICENSE (MIT)
 - Security: SSRF, symlink, Content-Type, retry, Zod validation, path traversal
 
-### Krok 3: Przygotowanie do publikacji ⏳ TODO
+### Krok 3: Przygotowanie do publikacji ✅ DONE
 
-**package.json** — już zaktualizowany z branding i metadata.
+- README.md, SECURITY.md, CONTRIBUTING.md, CHANGELOG.md — all written
+- package.json: v1.0.0, files field, prepack script, Node >=22
+- npm pack: 23.1 KB, 65 plików, czyste (brak src/docs/internal/.env)
+- Konfiguracja w ~/.claude.json jako serwer #20
+- Live test: wszystkie 7 tooli verified z prawdziwym Ideogram API
 
-**README.md — kluczowe sekcje (marketing):**
-1. Logo/banner + jednozdaniowy pitch
-2. "Why this server?" — tabela porównawcza vs konkurencja (security, deps, tools)
-3. Quick start (3 linie: npx/install/configure)
-4. All 7 tools z opisem + przykładami
-5. Security design section (selling point!)
-6. Built by QMT badge + link do www.qmediat.io
-
-**Konfiguracja w `~/.claude.json`:**
-
-Najprościej przez `npx` (nie wymaga instalacji):
-```json
-{
-  "ideogram": {
-    "command": "npx",
-    "args": ["-y", "ideogram-mcp"],
-    "env": {
-      "IDEOGRAM_API_KEY": "${IDEOGRAM_API_KEY}",
-      "IDEOGRAM_OUTPUT_DIR": "/tmp/ideogram-output"
-    }
-  }
-}
-```
-
-`IDEOGRAM_OUTPUT_DIR` — dowolny folder (absolutna ścieżka), gdzie chcesz zapisywać obrazy. Domyślnie `/tmp/ideogram-output`.
-
-**End-to-end test z prawdziwym API** — wymaga IDEOGRAM_API_KEY.
-
-### Krok 4: Publikacja (dzień release) ⏳ TODO
+### Krok 4: Publikacja ⏳ BLOCKED — npm 2FA
 
 **Kolejność:**
 1. `gh repo edit qmediat/ideogram-mcp --visibility public`
@@ -123,7 +101,27 @@ Built with ❤️ by [Quantum Media Technologies](https://www.qmediat.io)
 
 ## Weryfikacja
 
-1. `gh repo view qmediat/ideogram-mcp` — repo istnieje ✅
-2. Po Phase 3: `npm publish --dry-run` — package gotowy
-3. Po publikacji: `npx ideogram-mcp` — serwer startuje
-4. `npm search ideogram mcp` — nasza paczka w wynikach
+1. ✅ `gh repo view qmediat/ideogram-mcp` — repo istnieje, PUBLIC
+2. ✅ `npm pack --dry-run` — 23.1 KB, 65 plików, czyste
+3. ⏳ `npm publish --access public` — blocked na 2FA/granular token
+4. ⏳ `npx ideogram-mcp` — po npm publish
+5. ⏳ `npm search ideogram mcp` — po npm publish
+
+## Blokada npm publish (2026-04-02)
+
+npm wymaga 2FA lub granular access token z bypass 2FA.
+
+**Rozwiązanie (do następnej sesji):**
+1. https://www.npmjs.com/settings/tokens/create
+2. Typ: "Granular Access Token"
+3. Permissions: Read + Write
+4. Packages: ideogram-mcp
+5. Potem: `npm config set //registry.npmjs.org/:_authToken=TOKEN`
+6. Potem: `npm publish --access public`
+
+**Po npm publish:**
+1. `gh release create v1.0.0 --generate-notes`
+2. Submit do MCP Registry (`registry.modelcontextprotocol.io`)
+3. PR do `punkpeye/awesome-mcp-servers`
+4. Submit do smithery.ai + mcp.so + glama.ai
+5. Pin repo w profilu org `qmediat`
