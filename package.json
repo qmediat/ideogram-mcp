@@ -15,8 +15,7 @@
     "ideogram-mcp": "dist/index.js"
   },
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   },
   "scripts": {
     "build": "tsc",
