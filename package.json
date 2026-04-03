@@ -42,7 +42,7 @@
   "bugs": {
     "url": "https://github.com/qmediat/ideogram-mcp/issues"
   },
-  "author": "Quantum Media Technologies sp. z o.o. <dev@qmediat.io> (https://www.qmediat.io)",
+  "author": "Quantum Media Technologies <dev@qmediat.io> (https://www.qmediat.io)",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",

@@ -1,6 +1,6 @@
 # Contributing to ideogram-mcp
 
-Thank you for your interest in contributing! This is a flagship open-source project by [Quantum Media Technologies sp. z o.o.](https://www.qmediat.io)
+Thank you for your interest in contributing! This is a flagship open-source project by [Quantum Media Technologies](https://www.qmediat.io)
 
 ## Architecture Principles
 

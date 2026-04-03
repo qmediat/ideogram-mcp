@@ -129,4 +129,4 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for architecture guidelines and PR requ
 
 ## License
 
-[MIT](./LICENSE) — [Quantum Media Technologies sp. z o.o.](https://www.qmediat.io)
+[MIT](./LICENSE) — [Quantum Media Technologies](https://www.qmediat.io)
