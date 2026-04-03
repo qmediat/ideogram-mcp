@@ -12,7 +12,7 @@ import { IdeogramApiError } from "./errors.js";
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "ideogram",
-    version: "1.0.0",
+    version: "1.0.1",
   });
 
   server.registerTool("ideogram_generate", {
