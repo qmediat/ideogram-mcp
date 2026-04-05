@@ -1,0 +1,36 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.qmediat/ideogram-mcp",
+  "description": "MCP server for Ideogram V3 API — generate, edit, remix, reframe, replace background, upscale, and describe images. Security-first: zero axios, SSRF protection, Zod validation.",
+  "repository": {
+    "url": "https://github.com/qmediat/ideogram-mcp",
+    "source": "github"
+  },
+  "version": "1.0.2",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@qmediat.io/ideogram-mcp",
+      "version": "1.0.2",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "Your Ideogram API key (get one at https://ideogram.ai/manage-api)",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": true,
+          "name": "IDEOGRAM_API_KEY"
+        },
+        {
+          "description": "Directory for saved images (default: /tmp/ideogram-output)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "IDEOGRAM_OUTPUT_DIR"
+        }
+      ]
+    }
+  ]
+}
