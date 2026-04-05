@@ -116,6 +116,14 @@ ideogram/
 - Live test with real Ideogram API (all 7 tools)
 - 2 additional rounds of code review (release gate)
 
+### Phase 4: Publication & distribution ✅
+- npm: `@qmediat.io/ideogram-mcp` v1.0.2 (scoped org)
+- GitHub: repo PUBLIC, Release v1.0.0
+- MCP Registry: `io.github.qmediat/ideogram-mcp` (via mcp-publisher CLI)
+- Awesome MCP Servers: PR #4191 (punkpeye/awesome-mcp-servers)
+- GitHub Actions: CI (Node 22+24) + publish workflow with `--provenance`
+- server.json + mcpName for registry verification
+
 ## Code Review History
 
 6 rounds × 4 reviewers = 24 reviews total:
@@ -132,7 +140,7 @@ ideogram/
 {
   "ideogram": {
     "command": "npx",
-    "args": ["-y", "ideogram-mcp"],
+    "args": ["-y", "@qmediat.io/ideogram-mcp"],
     "env": {
       "IDEOGRAM_API_KEY": "your-api-key",
       "IDEOGRAM_OUTPUT_DIR": "/tmp/ideogram-output"
@@ -155,3 +163,7 @@ ideogram/
 10. ✅ `ideogram_upscale` — 1024→2048 upscale
 11. ✅ Security: symlink blocked, SSRF blocked, extension validated
 12. ✅ `npm pack` — clean tarball (23 KB, no src/docs/internal/.env)
+13. ✅ `npm publish` — `@qmediat.io/ideogram-mcp` v1.0.2 on npm
+14. ✅ MCP Registry — `io.github.qmediat/ideogram-mcp` searchable
+15. ✅ GitHub Actions CI — passes on Node 22 + 24
+16. ✅ Awesome MCP Servers — PR #4191 submitted
