@@ -127,6 +127,11 @@ IDEOGRAM_API_KEY=your-key node dist/index.js
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for architecture guidelines and PR requirements.
 
+
+## Trademarks and affiliation
+
+Ideogram is a trademark of Ideogram. This is an independent, community-maintained integration published by Quantum Media Technologies sp. z o.o.; it is not affiliated with, sponsored by or endorsed by Ideogram. Use of the Ideogram API or CLI through this server is subject to Ideogram's own terms and to your own API key or account.
+
 ## License
 
 [MIT](./LICENSE) — [Quantum Media Technologies](https://www.qmediat.io)
