@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 
 const ConfigSchema = z.object({
-  apiKey: z.string().min(1, "IDEOGRAM_API_KEY is required"),
+  apiKey: z.string({ error: "IDEOGRAM_API_KEY is required" }).min(1, "IDEOGRAM_API_KEY is required"),
   outputDir: z.string().min(1).default("/tmp/ideogram-output"),
 });
 

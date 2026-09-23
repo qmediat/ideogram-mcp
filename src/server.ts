@@ -8,11 +8,15 @@ import { reframeInputSchema, handleReframe } from "./tools/reframe.js";
 import { replaceBgInputSchema, handleReplaceBg } from "./tools/replace-bg.js";
 import { upscaleInputSchema, handleUpscale } from "./tools/upscale.js";
 import { IdeogramApiError } from "./errors.js";
+import { createRequire } from "node:module";
+
+// dist/server.js → ../package.json is the package root both in the repository and when installed from npm.
+const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
 
 export function createServer(): McpServer {
   const server = new McpServer({
     name: "ideogram",
-    version: "1.0.2",
+    version,
   });
 
   server.registerTool("ideogram_generate", {
