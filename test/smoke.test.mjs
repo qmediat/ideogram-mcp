@@ -25,6 +25,8 @@ const EXPECTED_TOOLS = [
 /** Spawns the built server; every request either resolves with its response or rejects (timeout, child exit, error). */
 function startServer(env) {
   const child = spawn(process.execPath, [SERVER], { env, stdio: ["pipe", "pipe", "pipe"] });
+  // Registered before anything can happen, so an early exit is never missed by stop().
+  const closed = once(child, "close");
   const pending = new Map();
   let stderr = "";
   child.stderr.on("data", (chunk) => {
@@ -41,7 +43,13 @@ function startServer(env) {
   child.on("exit", (code, signal) => failAll(`server exited early (code ${code}, signal ${signal})`));
   createInterface({ input: child.stdout }).on("line", (line) => {
     if (line.trim() === "") return;
-    const message = JSON.parse(line);
+    let message;
+    try {
+      message = JSON.parse(line);
+    } catch {
+      failAll(`non-JSON line on stdout: ${line.slice(0, 200)}`);
+      return;
+    }
     const entry = pending.get(message.id);
     if (entry === undefined) return;
     clearTimeout(entry.timer);
@@ -62,9 +70,9 @@ function startServer(env) {
   const notify = (method) => child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method })}\n`);
   const stop = async () => {
     child.kill();
-    await once(child, "close");
+    await closed;
   };
-  return { child, request, notify, stop, stderr: () => stderr };
+  return { closed, request, notify, stop, stderr: () => stderr };
 }
 
 test("the server completes the MCP handshake, advertises the package version and lists the seven tools", async () => {
@@ -99,7 +107,7 @@ test("the server refuses to start without IDEOGRAM_API_KEY and says so on stderr
   delete env.IDEOGRAM_API_KEY;
   const server = startServer(env);
   // `close` fires after the stdio streams have ended, so stderr is complete when it resolves.
-  const [code] = await once(server.child, "close");
+  const [code] = await server.closed;
   assert.equal(code, 1);
   assert.match(server.stderr(), /IDEOGRAM_API_KEY is required/);
 });
