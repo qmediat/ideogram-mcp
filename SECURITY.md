@@ -5,7 +5,7 @@
 If you discover a security vulnerability, please report it privately:
 
 - **Preferred:** GitHub's [Report a vulnerability](https://github.com/qmediat/ideogram-mcp/security/advisories/new) form (Security tab → Advisories) — it reaches the maintainers privately and tracks the fix and the disclosure.
-- **Email:** dev@qmediat.io
+- **Email:** security@qmediat.io
 - **Subject:** `[SECURITY] ideogram-mcp: <brief description>`
 
 We will acknowledge your report within 48 hours and aim to release a fix within 7 days for critical issues.
