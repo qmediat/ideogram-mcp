@@ -46,7 +46,7 @@ Flagowy open-source MCP server Quantum Media Technologies dla Ideogram V3 API. B
 | Awesome MCP Servers | ✅ PR #4191 | https://github.com/punkpeye/awesome-mcp-servers/pull/4191 |
 | GitHub Actions CI | ✅ | Node 22 + 24, passes |
 | GitHub Actions publish | ✅ | Triggered on release, npm publish with `--provenance` |
-| NPM_TOKEN secret | ✅ | Configured in repo secrets |
+| npm Trusted Publishing | ⏳ | trusted publisher on npmjs.com: GitHub Actions, owner `qmediat`, repository `ideogram-mcp`, workflow `publish.yml`, no environment; the old NPM_TOKEN is retired |
 
 ### Krok 4: SEO i discovery ⏳ TODO
 
