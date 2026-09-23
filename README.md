@@ -1,3 +1,12 @@
+<p align="left">
+  <a href="https://www.qmediat.io/open-source?utm_source=oss-readme&utm_medium=ideogram-mcp&utm_campaign=open-source">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/qmediat/.github/main/assets/qmediat-wordmark-light.svg">
+      <img src="https://raw.githubusercontent.com/qmediat/.github/main/assets/qmediat-wordmark-dark.svg" alt="Quantum Media Technologies" height="40">
+    </picture>
+  </a>
+</p>
+
 # @qmediat.io/ideogram-mcp
 
 MCP server for the [Ideogram V3 API](https://developer.ideogram.ai) — generate, edit, remix, upscale, and describe images from Claude Code, Claude Desktop, or any MCP client.
@@ -135,3 +144,7 @@ Ideogram is a trademark of Ideogram. This is an independent, community-maintaine
 ## License
 
 [MIT](./LICENSE) — [Quantum Media Technologies](https://www.qmediat.io)
+
+---
+
+Made by [Quantum Media Technologies](https://www.qmediat.io/open-source?utm_source=oss-readme&utm_medium=ideogram-mcp&utm_campaign=open-source) · [more open source from qmediat](https://www.qmediat.io/open-source?utm_source=oss-readme&utm_medium=ideogram-mcp&utm_campaign=open-source)
