@@ -26,10 +26,9 @@ jobs:
 
       - name: Release tag must equal package.json version
         run: |
-          tag="${GITHUB_REF_NAME#v}"
           pkg="$(node -p "require('./package.json').version")"
-          if [ "$tag" != "$pkg" ]; then
-            echo "::error ::release tag $GITHUB_REF_NAME does not match package.json version $pkg"
+          if [ "$GITHUB_REF_NAME" != "v$pkg" ]; then
+            echo "::error ::release tag $GITHUB_REF_NAME must be v$pkg (package.json version with the v prefix)"
             exit 1
           fi
 

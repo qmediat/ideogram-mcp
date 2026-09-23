@@ -23,7 +23,7 @@ We will acknowledge your report within 48 hours and aim to release a fix within 
 | **2 runtime dependencies only** | `@modelcontextprotocol/sdk` + `zod` — no axios, no form-data |
 | **Native fetch** | Node.js built-in `fetch`, `FormData`, `Blob` — no HTTP library |
 | **Pinned exact versions** | No `^` or `~` ranges in `package.json` |
-| **No eval/exec** | Zero usage of `eval()`, `child_process`, `exec`, or `Function()` |
+| **No eval/exec** | Zero usage of `eval()`, `child_process`, `exec`, or `Function()` in the server (`src/`); the smoke test in `test/` spawns the built server to talk to it over stdio |
 | **No telemetry** | No analytics, no phoning home, no tracking |
 | **Audit gate** | CI and the publish workflow refuse a build with a known high-severity advisory in the shipped dependency tree (`npm audit --omit=dev --audit-level=high`); Dependabot security updates are enabled |
 | **Provenance** | Published from GitHub Actions with `npm publish --provenance`; the npm page of every version links the workflow run that built it |

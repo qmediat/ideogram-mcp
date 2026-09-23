@@ -10,7 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - Lockfile refresh closes all 45 open Dependabot advisories (9 high; all transitive dependencies of the MCP SDK):
   `hono` 4.13.8, `fast-uri` 3.1.8, `qs` 6.16.0, `body-parser` 2.3.0, `ip-address` 10.7.2. `npm audit` reports
-  0 vulnerabilities. Direct dependencies stay pinned exactly (`@modelcontextprotocol/sdk` 1.29.0, `zod` 4.3.6).
+  0 vulnerabilities. `@modelcontextprotocol/sdk` is pinned to 1.30.0, the version this release was tested with;
+  `zod` stays at 4.3.6. The advisories sit in transitive dependencies under the SDK's caret ranges, so a project
+  that already has this package in its lockfile keeps its old tree until it runs `npm update` (or `npm audit fix`);
+  a fresh install gets the refreshed tree.
 - CI now typechecks, runs the smoke test and refuses a build with a known high-severity advisory in the shipped
   dependency tree (`npm audit --omit=dev --audit-level=high`); the CI token is read-only.
 - The publish workflow verifies that the release tag equals the `package.json` version before publishing and runs
@@ -20,12 +23,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `SECURITY.md` points to the private reporting form first.
 
 ### Fixed
+- The server advertised `version: 1.0.2` in `serverInfo` regardless of the package version; it now reads the
+  version from `package.json`, and the smoke test asserts the two agree.
+- The publish workflow accepted a release tag without the `v` prefix; the contract is `v<version>`.
 - Starting without `IDEOGRAM_API_KEY` printed a serialized Zod issue list naming `apiKey`; it now prints
   `Configuration error: IDEOGRAM_API_KEY is required` (found by the new smoke test).
 
 ### Added
-- `npm test`: a stdio smoke test on Node's built-in runner — the built server completes the MCP handshake and lists
-  its seven tools; it refuses to start without `IDEOGRAM_API_KEY`. No new dependency.
+- `npm test` (builds first): a stdio smoke test on Node's built-in runner — the built server completes the MCP
+  handshake, advertises the package version and lists its seven tools; it refuses to start without
+  `IDEOGRAM_API_KEY`. Every request has a 10 s deadline and is rejected if the server exits. No new dependency.
 
 ## [1.0.2] - 2026-04-05
 
