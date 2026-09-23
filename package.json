@@ -1,6 +1,6 @@
 {
   "name": "@qmediat.io/ideogram-mcp",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "mcpName": "io.github.qmediat/ideogram-mcp",
   "files": [
     "dist",
@@ -20,6 +20,8 @@
   },
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test",
     "prepack": "npm run build",
     "start": "node dist/index.js"
   },
