@@ -1,8 +1,10 @@
 name: Release
 
-# A published GitHub Release whose tag is v<version> (equal to package.json) → verify (read-only job: typecheck, tests, audit of the shipped tree, tag and manifest checks)
-# → publish (the only job with the publishing permissions; installs with --ignore-scripts, skips a version already on
-# npm so a re-run is safe).
+# A published GitHub Release whose tag is v<version> (equal to package.json) → verify (read-only job: tag, manifest and CHANGELOG checks, typecheck, tests, audit of the shipped
+# tree) → publish (the only job with the publishing permissions; installs with --ignore-scripts, skips a version
+# already on npm so a re-run is safe).
+# `workflow_dispatch` with `tag` releases an existing tag with THIS workflow definition (a tag pushed earlier would
+# otherwise run the workflow as it was at that tag).
 # Publishing needs the npm publishing credential NPM_TOKEN (an npm "Automation" token with publish rights on
 # @qmediat.io) visible to this repository, or npm Trusted Publishing configured for this workflow.
 # Actions are pinned to full commit SHAs; Dependabot keeps the pins current.
@@ -10,6 +12,12 @@ name: Release
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release with the current workflow (v<version>)"
+        required: true
+        type: string
 
 permissions: {}
 
@@ -22,18 +30,22 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          ref: ${{ inputs.tag || github.ref }}
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - name: Resolve the release tag
+        run: echo "TAG=${INPUT_TAG:-$GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
 
       - name: Tag must be v<package.json version>
         run: |
           pkg="$(node -p "require('./package.json').version")"
-          if [ "$GITHUB_REF_NAME" != "v$pkg" ]; then
-            echo "::error ::tag $GITHUB_REF_NAME must be v$pkg (package.json version with the v prefix)"
+          if [ "$TAG" != "v$pkg" ]; then
+            echo "::error ::tag $TAG must be v$pkg (package.json version with the v prefix)"
             exit 1
           fi
 
@@ -46,6 +58,7 @@ jobs:
             console.log(`server.json versions match ${v}`);
           '
 
+      - run: npm ci
       - run: npm run typecheck
       - run: npm test
       - run: npm audit --omit=dev --audit-level=high
@@ -60,12 +73,18 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          ref: ${{ inputs.tag || github.ref }}
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
           cache: npm
+      - name: Resolve the release tag
+        run: echo "TAG=${INPUT_TAG:-$GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+
       - run: npm ci --ignore-scripts
       - run: npm run build
 
