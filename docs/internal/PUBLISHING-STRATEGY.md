@@ -45,7 +45,7 @@ Flagowy open-source MCP server Quantum Media Technologies dla Ideogram V3 API. B
 | MCP Registry | ✅ v1.0.2 | `io.github.qmediat/ideogram-mcp` |
 | Awesome MCP Servers | ✅ PR #4191 | https://github.com/punkpeye/awesome-mcp-servers/pull/4191 |
 | GitHub Actions CI | ✅ | Node 22 + 24, passes |
-| GitHub Actions publish | ✅ | Triggered on release, npm publish with `--provenance` |
+| GitHub Actions publish | ✅ | Triggered on a published GitHub Release (or dispatch with a tag); `npm stage publish --provenance`, a maintainer approves on npmjs.com with 2FA |
 | npm Trusted Publishing | ✅ | stage-only trusted publisher on npmjs.com (GitHub Actions, owner `qmediat`, repository `ideogram-mcp`, workflow `publish.yml`, no environment, `npm publish` not allowed): the workflow stages, a maintainer approves with 2FA |
 
 ### Krok 4: SEO i discovery ⏳ TODO
@@ -72,7 +72,7 @@ Flagowy open-source MCP server Quantum Media Technologies dla Ideogram V3 API. B
 
 ## Infrastructure
 
-- **CI/CD:** GitHub Actions — build on push/PR (Node 22+24), publish on release with provenance
+- **CI/CD:** GitHub Actions — build on push/PR (Node 22+24), stage on release with provenance; a maintainer approves the version on npmjs.com
 - **npm auth:** Trusted Publishing (OIDC) from `publish.yml`, stage-only — `npm stage publish`, then a maintainer approves each version on npmjs.com with 2FA; the granular access token (expired 2026-05-03) is retired and nothing reads NPM_TOKEN
 - **MCP publisher CLI:** `/tmp/mcp-publisher` (reinstall from GitHub releases after reboot)
 - **Registry tokens:** `.mcpregistry_*` files (gitignored)
