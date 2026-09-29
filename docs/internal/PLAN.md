@@ -9,9 +9,9 @@ Build a clean, secure MCP server for the Ideogram AI image generation API (V3). 
 ## Architecture
 
 - **Runtime:** Node.js 22+ / TypeScript / ES Modules
-- **MCP SDK:** `@modelcontextprotocol/sdk` 1.29.0 (pinned)
+- **MCP SDK:** `@modelcontextprotocol/sdk` (pinned in `package.json`)
 - **HTTP:** Native `fetch` + `FormData` + `Blob` (Node built-in) — zero HTTP deps
-- **Validation:** `zod` 4.3.6 via `zod/v4` (pinned)
+- **Validation:** `zod` via `zod/v4` (pinned in `package.json`)
 - **License:** MIT
 
 ### Directory Structure
@@ -86,13 +86,15 @@ ideogram/
 
 ## Dependencies (minimal)
 
+Exact versions are pinned in `package.json` (Dependabot keeps them current).
+
 **Runtime (2):**
-- `@modelcontextprotocol/sdk` 1.29.0 — MCP protocol
-- `zod` 4.3.6 — schema validation (via `zod/v4`)
+- `@modelcontextprotocol/sdk` — MCP protocol
+- `zod` — schema validation (via `zod/v4`)
 
 **Dev (2):**
-- `typescript` 6.0.2
-- `@types/node` 22.15.3
+- `typescript`
+- `@types/node` — the Node major in `engines.node`, not the newest one
 
 ## Implementation Phases
 

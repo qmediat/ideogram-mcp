@@ -19,6 +19,10 @@ npm install
 npm run build
 ```
 
+The project compiles with TypeScript 7 (the native compiler). Its npm package ships only `tsc` — no `tsserver` —
+so an editor set to use the workspace TypeScript version cannot load it from `node_modules`; keep the editor's
+bundled TypeScript.
+
 ## Code Style
 
 - TypeScript strict mode
