@@ -68,8 +68,7 @@ jobs:
       - name: CHANGELOG.md must have a section for this version
         run: |
           v="${TAG#v}"
-          awk -v v="$v" 'index($0, "## [" v "]") == 1 {p=1; next} /^## \[/ {p=0} p' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
-          if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/notes.md"; then
+          if ! awk -v v="$v" 'index($0, "## [" v "]") == 1 {p=1; next} /^## \[/ {p=0} p' CHANGELOG.md | grep -q '[^[:space:]]'; then
             echo "::error ::CHANGELOG.md has no section for [$v]"
             exit 1
           fi
@@ -98,8 +97,9 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
       # Staged publishing needs npm 11.15.0+. The release runs ONE npm, pinned by version and by the sha512 of its tarball
-      # (`npm view npm@<version> dist.integrity`): a changed tarball stops here, before anything runs with id-token.
-      # Dependabot does not see this pin: raise both values together, by hand, within npm 11.
+      # (`npm view npm@<version> dist.integrity`): a changed tarball stops here, before that npm is installed and talks to
+      # the registry with the OIDC token. Dependabot does not see this pin: raise both values together, by hand, within
+      # npm 11 — the same pin is in the release workflows of cursor-mcp, gemini-code-context-mcp and ideogram-mcp.
       - name: Pinned npm (staged publishing needs 11.15.0+)
         env:
           NPM_PIN: 11.20.0
