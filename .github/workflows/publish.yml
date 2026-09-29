@@ -68,7 +68,8 @@ jobs:
       - name: CHANGELOG.md must have a section for this version
         run: |
           v="${TAG#v}"
-          if ! awk -v v="$v" 'index($0, "## [" v "]") == 1 {p=1; next} /^## \[/ {p=0} p' CHANGELOG.md | grep -q '^[[:space:]]*- '; then
+          # one awk, no pipe: a reader that stops at the first match could SIGPIPE the writer under pipefail
+          if ! awk -v v="$v" 'index($0, "## [" v "]") == 1 {p=1; next} /^## \[/ {p=0} p && /^[[:space:]]*- / {found=1} END {exit !found}' CHANGELOG.md; then
             echo "::error ::CHANGELOG.md has no section with entries for [$v]"
             exit 1
           fi
