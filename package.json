@@ -41,7 +41,7 @@
   "homepage": "https://www.qmediat.io/open-source",
   "repository": {
     "type": "git",
-    "url": "https://github.com/qmediat/ideogram-mcp.git"
+    "url": "git+https://github.com/qmediat/ideogram-mcp.git"
   },
   "bugs": {
     "url": "https://github.com/qmediat/ideogram-mcp/issues"
