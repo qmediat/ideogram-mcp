@@ -68,8 +68,8 @@ jobs:
       - name: CHANGELOG.md must have a section for this version
         run: |
           v="${TAG#v}"
-          if ! awk -v v="$v" 'index($0, "## [" v "]") == 1 {p=1; next} /^## \[/ {p=0} p' CHANGELOG.md | grep -q '[^[:space:]]'; then
-            echo "::error ::CHANGELOG.md has no section for [$v]"
+          if ! awk -v v="$v" 'index($0, "## [" v "]") == 1 {p=1; next} /^## \[/ {p=0} p' CHANGELOG.md | grep -q '^[[:space:]]*- '; then
+            echo "::error ::CHANGELOG.md has no section with entries for [$v]"
             exit 1
           fi
 
@@ -107,6 +107,10 @@ jobs:
         working-directory: ${{ runner.temp }}
         run: |
           tgz="$(npm pack "npm@$NPM_PIN" --silent)"
+          if [ ! -f "$tgz" ]; then
+            echo "::error ::npm pack npm@$NPM_PIN printed no tarball name ($tgz)"
+            exit 1
+          fi
           got="sha512-$(openssl dgst -sha512 -binary "$tgz" | openssl base64 -A)"
           if [ "$got" != "$NPM_INTEGRITY" ]; then
             echo "::error ::npm@$NPM_PIN tarball is $got, the pin is $NPM_INTEGRITY"
@@ -149,6 +153,7 @@ jobs:
       - name: Stage on npm (Trusted Publishing, provenance) unless this version is already public
         run: |
           set -o pipefail # the default bash of a run step has no pipefail: a failing stage behind tee would read as green
+          : "${PUBLIC:?set by the public-check step}" "${NAME:?}" "${VERSION:?}"
           if [ "$PUBLIC" = 1 ]; then
             echo "$NAME@$VERSION is already public on npm; skipping"
           elif ! npm stage publish --provenance --access public --ignore-scripts 2>&1 | tee "$RUNNER_TEMP/stage.log"; then
