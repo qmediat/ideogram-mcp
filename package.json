@@ -1,6 +1,6 @@
 {
   "name": "@qmediat.io/ideogram-mcp",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "mcpName": "io.github.qmediat/ideogram-mcp",
   "files": [
     "dist",
