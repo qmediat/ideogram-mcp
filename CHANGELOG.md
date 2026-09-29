@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   quote style differ) and the source maps are regenerated. The TypeScript 7 npm package ships only `tsc` — no
   `tsserver` and no JavaScript API — so an editor set to use the workspace TypeScript version cannot load it from
   `node_modules`; use the editor's bundled one.
+- The release workflow checks that `CHANGELOG.md` has a section for the version, asks npm once whether the version
+  is already public and stops on any answer other than yes or no (a registry error used to read as "not public"),
+  runs an npm pinned by version and by the sha512 of its tarball, and names a failed stage in the run summary.
 
 ## [1.0.3] - 2026-09-23
 
