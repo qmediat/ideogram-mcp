@@ -14,7 +14,7 @@ import {
   appendStyleControlFiles,
 } from "../style-controls.js";
 
-export const generateInputSchema = z.object({
+export const generateInputSchema = z.strictObject({
   prompt: z.string().min(1).max(10000).describe("Image description (1-10,000 characters)"),
   num_images: z.number().int().min(1).max(8).optional().describe("Number of images to generate (1-8, default: 1)"),
   aspect_ratio: AspectRatio.optional().describe("Output aspect ratio (default: 1x1)"),

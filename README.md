@@ -101,7 +101,7 @@ Every input image is a local file (`.png`, `.jpg`, `.jpeg`, `.webp`) of at most 
 | `character_reference_image`, `character_reference_mask` | generate (3.0), edit, remix | one local image of a character to keep consistent, with an optional grayscale mask of the same size; Ideogram bills character references at its own rate |
 | `style_codes` | generate (3.0), edit, remix | 1-8 eight-character hexadecimal codes from Ideogram |
 | `style_preset` | generate (3.0), edit, remix | a named preset as Ideogram lists them |
-| `color_palette` | generate (3.0), edit, remix | `{"name": "EMBER"}` (presets: `EMBER`, `FRESH`, `JUNGLE`, `MAGIC`, `MELON`, `MOSAIC`, `PASTEL`, `ULTRAMARINE`) or `{"members": [{"color_hex": "#FF0000", "color_weight": 0.7}, …]}` (1-10 colours), never both; sent as one JSON part as the OpenAPI spec declares (not verified against the live API by this package's tests, which stub `fetch`) |
+| `color_palette` | generate (3.0), edit, remix | `{"name": "EMBER"}` (presets: `EMBER`, `FRESH`, `JUNGLE`, `MAGIC`, `MELON`, `MOSAIC`, `PASTEL`, `ULTRAMARINE`) or `{"members": [{"color_hex": "#FF0000", "color_weight": 0.7}, …]}` (1-10 colours), never both; sent as one `application/json` part as the OpenAPI spec declares (accepted by the live API in a probe on 2026-10-01; the tests stub `fetch`) |
 | `resolution` | generate, remix | one of Ideogram's 69 sizes (e.g. `1536x640`); not together with `aspect_ratio` |
 | `custom_model_uri` | generate (3.0) | `model/<name>/version/<version>` of a trained model |
 | `enable_copyright_detection` | generate | `true` runs the detection on this request; `false` leaves the organisation setting in force (it cannot switch an organisation-wide detection off) |

@@ -12,7 +12,7 @@ import {
 import { RenderingSpeed, MagicPrompt, StyleType, IdeogramResponseSchema } from "../types.js";
 import { loadImageBlob } from "../image-input.js";
 
-export const editInputSchema = z.object({
+export const editInputSchema = z.strictObject({
   image: z.string().min(1).describe("Local file path of the source image to edit"),
   mask: z.string().min(1).describe("Local file path of the mask image (black = regions to edit, white = keep)"),
   prompt: z.string().min(1).max(10000).describe("Description of desired changes"),

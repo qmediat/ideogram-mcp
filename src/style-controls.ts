@@ -67,9 +67,10 @@ export const generateOnlyControls = {
     .describe("true runs Ideogram's copyright detection on this request; false leaves the organisation setting in force (it cannot switch an organisation-wide detection off)"),
 };
 
-/** Every control any endpoint takes; a value a given endpoint does not take is never present in its args. */
-export const styleControlsSchema = z.object({ ...sharedStyleControls, ...resolutionControl, ...generateOnlyControls });
-export type StyleControls = Partial<z.infer<typeof styleControlsSchema>>;
+/** Every control any endpoint takes (all optional); an endpoint's own schema spreads only the fields it takes, so
+ * a value an endpoint lacks is never present in its args. */
+const everyControl = z.object({ ...sharedStyleControls, ...resolutionControl, ...generateOnlyControls });
+export type StyleControls = z.infer<typeof everyControl>;
 
 /** resolution and aspect_ratio are alternatives: the API refuses the pair, so the tool refuses it before any upload. */
 export function assertOneOfResolutionOrAspect(args: { resolution?: string; aspect_ratio?: string }): void {
@@ -98,8 +99,8 @@ export function appendStyleControlFields(form: FormData, args: StyleControls): v
   for (const code of args.style_codes ?? []) form.append("style_codes", code);
   if (args.style_preset) form.append("style_preset", args.style_preset);
   if (args.color_palette) {
-    // The OpenAPI spec declares this part as application/json; the encoding is from the spec, not verified against
-    // the live API in this package's tests (they stub fetch).
+    // The OpenAPI spec declares this part as application/json; a live probe on 2026-10-01 (TURBO, one image)
+    // was accepted both as this JSON part and as a plain string field. The tests stub fetch.
     form.append("color_palette", new Blob([JSON.stringify(args.color_palette)], { type: "application/json" }));
   }
   if (args.resolution) form.append("resolution", args.resolution);

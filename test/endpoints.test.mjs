@@ -182,8 +182,10 @@ test("the tools refuse what the API refuses: resolution with aspect_ratio, a pal
   const both = { name: "EMBER", members: [{ color_hex: "#FF0000" }] };
   assert.equal(generateInputSchema.safeParse({ prompt: "x", color_palette: both }).success, false, "name and members together are refused, never silently reduced");
   assert.equal(generateInputSchema.safeParse({ prompt: "x", resolution: "9999x9999" }).success, false, "only Ideogram's 69 sizes");
-  assert.equal(editInputSchema.safeParse({ image, mask, prompt: "x", resolution: "1024x1024" }).success, true, "zod drops an unknown key…");
-  assert.equal("resolution" in editInputSchema.shape, false, "…because inpaint has no such parameter in its schema");
+  assert.equal(editInputSchema.safeParse({ image, mask, prompt: "x", resolution: "1024x1024" }).success, false, "a control inpaint lacks is refused, never silently dropped");
+  assert.equal("resolution" in editInputSchema.shape, false, "inpaint has no such parameter in its schema");
+  assert.equal(remixInputSchema.safeParse({ image, prompt: "x", custom_model_uri: "model/a/version/1" }).success, false);
+  assert.equal(generateInputSchema.safeParse({ prompt: "x", cloud: true }).success, false, "every unknown key is refused");
   assert.equal("custom_model_uri" in remixInputSchema.shape, false);
 });
 

@@ -19,12 +19,15 @@ A comparison with Ideogram's own MCP server and the current API (`docs/COMPETITI
   (one of the 69 sizes, not with `aspect_ratio`) on generate and remix; `custom_model_uri` and
   `enable_copyright_detection` on generate — each endpoint gets exactly the parameters its documentation lists, sent
   under the API's field names (a list as repeated fields, the palette as one `application/json` part as the OpenAPI
-  spec declares; the tests stub `fetch`, so that part's acceptance by the live API is not proven here). Every file
+  spec declares — a live probe on 2026-10-01 accepted it; the tests stub `fetch`). The three tools' input schemas
+  are strict: a parameter an endpoint does not take (an exact `resolution` on edit) is refused by name, never
+  silently dropped. Every file
   counts against the 50 MB request limit, checked with `stat` before any file is read. Tests pin the encoding, the
   per-endpoint fields and the refusals on all three endpoints.
 - `ideogram_generate` with `model: "4.0"` posts to `/v1/ideogram-v4/generate` (`text_prompt`, `resolution`,
   `rendering_speed` except `FLASH`, `enable_copyright_detection`); a 3.0-only parameter given with 4.0 is refused by
-  name, never dropped.
+  name, never dropped. A live probe on 2026-10-01 returned the documented shape (`response_type`, `created`,
+  `data[].url/prompt/resolution/is_image_safe/seed`), which the response schema accepts.
 
 ### Changed
 

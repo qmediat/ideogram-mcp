@@ -14,7 +14,7 @@ import {
   appendStyleControlFiles,
 } from "../style-controls.js";
 
-export const remixInputSchema = z.object({
+export const remixInputSchema = z.strictObject({
   image: z.string().min(1).describe("Local file path of the source image to remix"),
   prompt: z.string().min(1).max(10000).describe("New creative direction"),
   image_weight: z.number().int().min(0).max(100).optional().describe("Original image influence (0-100, default: 50)"),

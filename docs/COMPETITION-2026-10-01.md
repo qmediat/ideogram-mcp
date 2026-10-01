@@ -1,6 +1,7 @@
 # Competitive landscape — 2026-10-01
 
-What other tools offer that `@qmediat.io/ideogram-mcp` 1.1.0 does not, with the provider's own tools first. Every row
+What other tools offered that `@qmediat.io/ideogram-mcp` 1.1.0 did not, with the provider's own tools first. The
+matrix is the 1.1.0 picture that motivated 1.2.0; a row 1.2.0 closed says so in its first cell. Every row
 was read from the linked page on 2026-10-01; "unverified" marks what could not be opened.
 
 ## The provider: Ideogram
@@ -37,15 +38,15 @@ was read from the linked page on 2026-10-01; "unverified" marks what could not b
 | Feature | This package | Official MCP | Best community | Raw API |
 |---|---|---|---|---|
 | Ideogram 3.0 generate / inpaint / remix / reframe / replace background / upscale / describe | yes | generate, edit, reframe, upscale | takeshijuan (all) | v1 + v2 |
-| Ideogram 4.0 / 4.5 | **no** | yes | no | v1 `ideogram-v4`, v2 `ideogram-4`, `ideogram-4-5` |
+| Ideogram 4.0 / 4.5 | **no** in 1.1.0 → 4.0 generate in 1.2.0 (4.5 and v2 still no) | yes | no | v1 `ideogram-v4`, v2 `ideogram-4`, `ideogram-4-5` |
 | Precise Edit 4.5 (reference images, exact-pixel keep) | **no** | `edit_image` (model unverified) | no | v2 |
 | Remove background / transparent generation | **no** | yes | no | v1 |
-| `style_reference_images`, `character_reference_images` (+ mask) | **no** | unverified | takeshijuan (character), delorenj / sunwood (style) | every v3 endpoint |
-| `style_codes`, `style_preset`, `color_palette`, `resolution`, `enable_copyright_detection` | **no** (aspect ratio only) | yes (`resolution`) | sunwood (style codes) | yes |
+| `style_reference_images`, `character_reference_images` (+ mask) | **no** in 1.1.0 → yes in 1.2.0 | unverified | takeshijuan (character), delorenj / sunwood (style) | generate, remix, inpaint |
+| `style_codes`, `style_preset`, `color_palette`, `resolution`, `enable_copyright_detection` | **no** in 1.1.0 → yes in 1.2.0 (each where its endpoint takes it) | yes (`resolution`) | sunwood (style codes) | yes |
 | Async + polling / cancel / webhook | **no** | training only | takeshijuan, runapi | v2 async, v1 v4-async |
 | Real cost (`dry_run`, `usage_cost_usd_micros`, `/v2/account/usage`) | **no** | n/a (subscription) | takeshijuan (estimate) | yes |
 | Image input from URL / base64; image returned inline as MCP content | **no** (local files, paths in text) | yes | takeshijuan, delorenj | file, URL, base64 |
-| Custom models (`custom_model_uri`), datasets, training | **no** | yes | no | yes |
+| Custom models (`custom_model_uri`), datasets, training | **no** in 1.1.0 → `custom_model_uri` on generate in 1.2.0; no training | yes | no | yes |
 | Hardening: HTTPS allowlist, redirects blocked, symlinks rejected, `image/*` required, Zod on every response, request-size checks before any read, safety-filtered images reported | **yes** (only this package) | unverified | no | — |
 | Transport / auth | stdio + API key | remote HTTP + OAuth | stdio + key or reseller login | — |
 
