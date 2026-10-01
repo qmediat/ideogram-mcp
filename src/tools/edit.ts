@@ -7,12 +7,12 @@ import { loadImageBlob } from "../image-input.js";
 
 export const editInputSchema = z.object({
   image: z.string().min(1).describe("Local file path of the source image to edit"),
-  mask: z.string().min(1).describe("Local file path of the mask image (black=edit, white=keep, min 10% black)"),
+  mask: z.string().min(1).describe("Local file path of the mask image (black = regions to edit, white = keep)"),
   prompt: z.string().min(1).max(10000).describe("Description of desired changes"),
   num_images: z.number().int().min(1).max(8).optional().describe("Number of variations (1-8, default: 1)"),
   rendering_speed: RenderingSpeed.optional().describe("Speed/quality tradeoff (default: DEFAULT)"),
   magic_prompt: MagicPrompt.optional().describe("Auto-enhance prompts (default: AUTO)"),
-  style_type: StyleType.optional().describe("Visual style (default: AUTO)"),
+  style_type: StyleType.optional().describe("Visual style (the API default is GENERAL when omitted)"),
   seed: z.number().int().min(0).max(2147483647).optional().describe("Reproducibility seed"),
 });
 
@@ -34,7 +34,8 @@ export async function handleEdit(
   if (args.style_type) form.append("style_type", args.style_type);
   if (args.seed !== undefined) form.append("seed", String(args.seed));
 
-  const raw = await ideogramRequest("/v1/ideogram-v3/edit", form);
+  // Ideogram marks /v1/ideogram-v3/edit "Legacy: use /v1/ideogram-v3/inpaint instead" (same image/mask/prompt fields).
+  const raw = await ideogramRequest("/v1/ideogram-v3/inpaint", form);
   const response = IdeogramResponseSchema.parse(raw);
 
   const safeImages = response.data.filter((img) => img.url !== null);

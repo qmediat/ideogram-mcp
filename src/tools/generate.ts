@@ -10,7 +10,7 @@ export const generateInputSchema = z.object({
   aspect_ratio: AspectRatio.optional().describe("Output aspect ratio (default: 1x1)"),
   rendering_speed: RenderingSpeed.optional().describe("Speed/quality tradeoff. FLASH=fastest, QUALITY=best (default: DEFAULT)"),
   magic_prompt: MagicPrompt.optional().describe("Auto-enhance prompts (default: AUTO)"),
-  style_type: StyleType.optional().describe("Visual style (default: AUTO)"),
+  style_type: StyleType.optional().describe("Visual style (the API default is GENERAL when omitted)"),
   negative_prompt: z.string().optional().describe("What to exclude from the generated image"),
   seed: z.number().int().min(0).max(2147483647).optional().describe("Reproducibility seed (0-2,147,483,647)"),
 });

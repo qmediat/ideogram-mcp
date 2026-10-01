@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.qmediat/ideogram-mcp",
-  "description": "Ideogram V3 API — generate, edit, remix, reframe, replace background, upscale images",
+  "description": "Ideogram 3.0 through api.ideogram.ai (v1): generate, edit (inpaint), remix, reframe, replace background, upscale and describe images.",
   "repository": {
     "url": "https://github.com/qmediat/ideogram-mcp",
     "source": "github"
   },
-  "version": "1.0.4",
+  "version": "1.1.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@qmediat.io/ideogram-mcp",
-      "version": "1.0.4",
+      "version": "1.1.0",
       "transport": {
         "type": "stdio"
       },
