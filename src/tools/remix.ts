@@ -4,6 +4,8 @@ import { ideogramRequest, downloadImage } from "../client.js";
 import { saveImage } from "../storage.js";
 import { AspectRatio, RenderingSpeed, MagicPrompt, StyleType, IdeogramResponseSchema } from "../types.js";
 import { loadImageBlob } from "../image-input.js";
+import { assertRequestFits } from "../storage.js";
+import { styleControlsSchema, styleControlFiles, assertStyleControlsConsistent, appendStyleControlFields, appendStyleControlFiles } from "../style-controls.js";
 
 export const remixInputSchema = z.object({
   image: z.string().min(1).describe("Local file path of the source image to remix"),
@@ -16,11 +18,14 @@ export const remixInputSchema = z.object({
   style_type: StyleType.optional().describe("Visual style (the API default is GENERAL when omitted)"),
   negative_prompt: z.string().optional().describe("What to exclude"),
   seed: z.number().int().min(0).max(2147483647).optional().describe("Reproducibility seed"),
+  ...styleControlsSchema.shape,
 });
 
 export async function handleRemix(
   args: z.infer<typeof remixInputSchema>,
 ): Promise<CallToolResult> {
+  assertStyleControlsConsistent(args);
+  await assertRequestFits([args.image, ...styleControlFiles(args)]);
   const imageInput = await loadImageBlob(args.image);
 
   const form = new FormData();
@@ -34,6 +39,8 @@ export async function handleRemix(
   if (args.style_type) form.append("style_type", args.style_type);
   if (args.negative_prompt) form.append("negative_prompt", args.negative_prompt);
   if (args.seed !== undefined) form.append("seed", String(args.seed));
+  appendStyleControlFields(form, args);
+  await appendStyleControlFiles(form, args);
 
   const raw = await ideogramRequest("/v1/ideogram-v3/remix", form);
   const response = IdeogramResponseSchema.parse(raw);

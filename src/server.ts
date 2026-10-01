@@ -20,7 +20,7 @@ export function createServer(): McpServer {
   });
 
   server.registerTool("ideogram_generate", {
-    description: "Generate images from text prompts with Ideogram 3.0. Supports multiple aspect ratios, style types, and quality levels.",
+    description: "Generate images from text prompts with Ideogram 3.0 (default) or 4.0 (model: '4.0'). 3.0 takes aspect ratios or an exact resolution, style types, style and character reference images, style codes, presets, colour palettes and custom models.",
     inputSchema: generateInputSchema,
   }, async (args) => {
     try { return await handleGenerate(args); } catch (error) { return errorResponse(error); }
@@ -34,14 +34,14 @@ export function createServer(): McpServer {
   });
 
   server.registerTool("ideogram_edit", {
-    description: "Edit specific areas of an image using mask-based inpainting. Requires source image, mask (black=edit, white=keep), and prompt.",
+    description: "Edit specific areas of an image using mask-based inpainting. Requires source image, mask (black=edit, white=keep), and prompt; takes the same style controls as generate.",
     inputSchema: editInputSchema,
   }, async (args) => {
     try { return await handleEdit(args); } catch (error) { return errorResponse(error); }
   });
 
   server.registerTool("ideogram_remix", {
-    description: "Transform an image with a new prompt while preserving characteristics. Control influence with image_weight (0-100).",
+    description: "Transform an image with a new prompt while preserving characteristics. Control influence with image_weight (0-100); takes the same style controls as generate.",
     inputSchema: remixInputSchema,
   }, async (args) => {
     try { return await handleRemix(args); } catch (error) { return errorResponse(error); }

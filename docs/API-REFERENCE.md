@@ -3,7 +3,7 @@
 **Base URL:** `https://api.ideogram.ai`
 **Auth:** `Api-Key` header
 **Content-Type:** `multipart/form-data` (all endpoints)
-**API Keys:** https://ideogram.ai/platform → API Keys (setup guide: https://developer.ideogram.ai/ideogram-api/api-setup). Checked against developer.ideogram.ai on 2026-10-01; the v1 API keeps working, Ideogram 4.x uses the v2 API, which this server does not call.
+**API Keys:** https://ideogram.ai/platform → API Keys (setup guide: https://developer.ideogram.ai/ideogram-api/api-setup). Checked against developer.ideogram.ai on 2026-10-01; the v1 API keeps working and also has Ideogram 4.0 (`/v1/ideogram-v4/generate`, used by `ideogram_generate` with `model: "4.0"`); the v2 API (Ideogram 4.5, Precise Edit, async, usage) is not called.
 **Official Docs:** https://developer.ideogram.ai
 
 ---
@@ -26,7 +26,15 @@ Generate images from text prompts.
 | `style_type` | enum | No | "GENERAL" | Visual style (API default when omitted) |
 | `negative_prompt` | string | No | — | What to exclude |
 | `seed` | integer | No | random | Reproducibility seed (0-2,147,483,647) |
-| `character_reference_images` | file[] | No | — | Character consistency (max 5) |
+| `style_reference_images` | file[] | No | — | Style to follow (1-3 files, 25 MB each; tool parameter `style_reference_images`) |
+| `character_reference_images` | file | No | — | Character consistency (max 1; tool parameter `character_reference_image`) |
+| `character_reference_images_mask` | file | No | — | Grayscale mask of the character reference (`character_reference_mask`) |
+| `style_codes` | string[] | No | — | 8-character hexadecimal codes, repeated form fields |
+| `style_preset` | string | No | — | A named preset |
+| `color_palette` | JSON | No | — | `{"name": PRESET}` or `{"members": [{"color_hex", "color_weight"}]}` as one form field |
+| `resolution` | enum | No | — | Exact `WIDTHxHEIGHT`; replaces `aspect_ratio` |
+| `custom_model_uri` | string | No | — | `model/<name>/version/<version>` |
+| `enable_copyright_detection` | boolean | No | — | Post-generation copyright detection |
 
 **Aspect Ratios:** `1x1`, `16x9`, `9x16`, `4x3`, `3x4`, `3x2`, `2x3`, `4x5`, `5x4`, `1x2`, `2x1`, `1x3`, `3x1`, `10x16`, `16x10`
 
@@ -35,6 +43,10 @@ Generate images from text prompts.
 **Style Types:** `AUTO`, `GENERAL`, `REALISTIC`, `DESIGN`, `FICTION`
 
 **Magic Prompt:** `AUTO`, `ON`, `OFF`
+
+#### Ideogram 4.0 — `POST /v1/ideogram-v4/generate`
+
+`ideogram_generate` with `model: "4.0"`. Multipart: `text_prompt` (the prompt; magic prompt is automatic), `resolution`, `rendering_speed` (`FLASH` answers 400 today), `enable_copyright_detection`. The response has the same shape as 3.0. Every other parameter of this tool is refused by name for 4.0.
 
 ---
 
@@ -54,7 +66,15 @@ Edit specific areas of existing images using mask-based inpainting. (`/v1/ideogr
 | `magic_prompt` | enum | No | "AUTO" | Auto-enhance prompts |
 | `style_type` | enum | No | "GENERAL" | Visual style (API default when omitted) |
 | `seed` | integer | No | random | Reproducibility seed |
-| `character_reference_images` | file[] | No | — | Character consistency (max 5) |
+| `style_reference_images` | file[] | No | — | Style to follow (1-3 files, 25 MB each; tool parameter `style_reference_images`) |
+| `character_reference_images` | file | No | — | Character consistency (max 1; tool parameter `character_reference_image`) |
+| `character_reference_images_mask` | file | No | — | Grayscale mask of the character reference (`character_reference_mask`) |
+| `style_codes` | string[] | No | — | 8-character hexadecimal codes, repeated form fields |
+| `style_preset` | string | No | — | A named preset |
+| `color_palette` | JSON | No | — | `{"name": PRESET}` or `{"members": [{"color_hex", "color_weight"}]}` as one form field |
+| `resolution` | enum | No | — | Exact `WIDTHxHEIGHT`; replaces `aspect_ratio` |
+| `custom_model_uri` | string | No | — | `model/<name>/version/<version>` |
+| `enable_copyright_detection` | boolean | No | — | Post-generation copyright detection |
 
 **Mask requirements:** Same dimensions as source image. PNG/JPEG/WebP.
 
@@ -78,7 +98,15 @@ Transform images with new prompts while preserving characteristics.
 | `style_type` | enum | No | "GENERAL" | Visual style (API default when omitted) |
 | `negative_prompt` | string | No | — | What to exclude |
 | `seed` | integer | No | random | Reproducibility seed |
-| `character_reference_images` | file[] | No | — | Character consistency (max 5) |
+| `style_reference_images` | file[] | No | — | Style to follow (1-3 files, 25 MB each; tool parameter `style_reference_images`) |
+| `character_reference_images` | file | No | — | Character consistency (max 1; tool parameter `character_reference_image`) |
+| `character_reference_images_mask` | file | No | — | Grayscale mask of the character reference (`character_reference_mask`) |
+| `style_codes` | string[] | No | — | 8-character hexadecimal codes, repeated form fields |
+| `style_preset` | string | No | — | A named preset |
+| `color_palette` | JSON | No | — | `{"name": PRESET}` or `{"members": [{"color_hex", "color_weight"}]}` as one form field |
+| `resolution` | enum | No | — | Exact `WIDTHxHEIGHT`; replaces `aspect_ratio` |
+| `custom_model_uri` | string | No | — | `model/<name>/version/<version>` |
+| `enable_copyright_detection` | boolean | No | — | Post-generation copyright detection |
 
 ---
 

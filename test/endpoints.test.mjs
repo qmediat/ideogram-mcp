@@ -10,6 +10,8 @@ process.env.IDEOGRAM_API_KEY = "dummy-key-for-tests";
 process.env.IDEOGRAM_OUTPUT_DIR = await mkdtemp(join(tmpdir(), "ideogram-out-"));
 
 const { handleEdit } = await import("../dist/tools/edit.js");
+const { handleGenerate, generateInputSchema } = await import("../dist/tools/generate.js");
+const { handleRemix } = await import("../dist/tools/remix.js");
 const { ideogramRequest, downloadImage } = await import("../dist/client.js");
 const { validateFileSize } = await import("../dist/storage.js");
 
@@ -116,4 +118,92 @@ test("the per-image cap is Ideogram's 25 MB: 25 MB passes, one byte more is refu
   await validateFileSize(big);
   await truncate(big, 25 * 1024 * 1024 + 1);
   await assert.rejects(() => validateFileSize(big), /25MB/);
+});
+
+test("the style controls reach every v3 generation endpoint under the API's field names", async () => {
+  const ref = join(dir, "ref.png");
+  const character = join(dir, "character.png");
+  const charMask = join(dir, "character-mask.png");
+  await writeFile(ref, PNG);
+  await writeFile(character, PNG);
+  await writeFile(charMask, PNG);
+  const controls = {
+    style_reference_images: [ref],
+    character_reference_image: character,
+    character_reference_mask: charMask,
+    style_codes: ["A1B2C3D4", "ffffffff"],
+    style_preset: "VINTAGE_POSTER",
+    color_palette: { members: [{ color_hex: "#FF0000", color_weight: 0.7 }, { color_hex: "#00FF00" }] },
+    resolution: "1536x640",
+    custom_model_uri: "model/brand/version/3",
+    enable_copyright_detection: true,
+  };
+  const calls = await capture(async () => {
+    await handleGenerate({ prompt: "a poster", ...controls });
+    await handleRemix({ image, prompt: "a poster", ...controls });
+    await handleEdit({ image, mask, prompt: "a poster", ...controls });
+  });
+  assert.deepEqual(
+    calls.map((c) => c.url),
+    [
+      "https://api.ideogram.ai/v1/ideogram-v3/generate",
+      "https://api.ideogram.ai/v1/ideogram-v3/remix",
+      "https://api.ideogram.ai/v1/ideogram-v3/inpaint",
+    ],
+  );
+  for (const call of calls) {
+    const form = call.init.body;
+    assert.deepEqual(form.getAll("style_codes"), ["A1B2C3D4", "ffffffff"], "a list is repeated fields");
+    assert.equal(form.get("style_preset"), "VINTAGE_POSTER");
+    assert.deepEqual(JSON.parse(form.get("color_palette")), controls.color_palette, "the palette is one JSON field");
+    assert.equal(form.get("resolution"), "1536x640");
+    assert.equal(form.get("custom_model_uri"), "model/brand/version/3");
+    assert.equal(form.get("enable_copyright_detection"), "true");
+    assert.equal(form.getAll("style_reference_images").length, 1);
+    assert.ok(form.get("style_reference_images") instanceof Blob);
+    assert.ok(form.get("character_reference_images") instanceof Blob);
+    assert.ok(form.get("character_reference_images_mask") instanceof Blob);
+  }
+});
+
+test("a character mask without its image, a bad style code and a bad palette colour are refused before any upload", async () => {
+  const calls = await capture(() => assert.rejects(() => handleGenerate({ prompt: "x", character_reference_mask: image }), /needs character_reference_image/));
+  assert.equal(calls.length, 0);
+  assert.equal(generateInputSchema.safeParse({ prompt: "x", style_codes: ["xyz"] }).success, false);
+  assert.equal(generateInputSchema.safeParse({ prompt: "x", color_palette: { members: [{ color_hex: "red" }] } }).success, false);
+  assert.equal(generateInputSchema.safeParse({ prompt: "x", color_palette: { name: "EMBER" } }).success, true);
+  assert.equal(generateInputSchema.safeParse({ prompt: "x", resolution: "1024x1024" }).success, true);
+  assert.equal(generateInputSchema.safeParse({ prompt: "x", resolution: "big" }).success, false);
+});
+
+test("reference images count against the 50 MB request limit before any file is read", async () => {
+  const big1 = join(dir, "big1.png");
+  const big2 = join(dir, "big2.png");
+  await writeFile(big1, PNG);
+  await writeFile(big2, PNG);
+  await truncate(big1, 25 * 1024 * 1024);
+  await truncate(big2, 25 * 1024 * 1024);
+  const calls = await capture(() =>
+    assert.rejects(() => handleGenerate({ prompt: "x", style_reference_images: [big1, big2] }), /under 50MB/),
+  );
+  assert.equal(calls.length, 0, "nothing was uploaded");
+});
+
+test("model 4.0 posts text_prompt to the v4 endpoint and refuses the 3.0-only parameters instead of dropping them", async () => {
+  const calls = await capture(() =>
+    handleGenerate({ prompt: "a cat", model: "4.0", resolution: "1024x1024", rendering_speed: "QUALITY", enable_copyright_detection: false }),
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://api.ideogram.ai/v1/ideogram-v4/generate");
+  const form = calls[0].init.body;
+  assert.equal(form.get("text_prompt"), "a cat");
+  assert.equal(form.get("prompt"), null, "the v4 field name, not the v3 one");
+  assert.equal(form.get("resolution"), "1024x1024");
+  assert.equal(form.get("rendering_speed"), "QUALITY");
+  assert.equal(form.get("enable_copyright_detection"), "false");
+  const refused = await capture(() =>
+    assert.rejects(() => handleGenerate({ prompt: "a cat", model: "4.0", style_type: "REALISTIC", seed: 1 }), /does not take: style_type, seed/),
+  );
+  assert.equal(refused.length, 0);
+  await assert.rejects(() => handleGenerate({ prompt: "a cat", model: "4.0", rendering_speed: "FLASH" }), /no FLASH/);
 });
