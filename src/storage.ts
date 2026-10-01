@@ -3,7 +3,9 @@ import { join, resolve, relative, isAbsolute, extname } from "node:path";
 import { randomBytes } from "node:crypto";
 import { getConfig } from "./config.js";
 
-const MAX_IMAGE_SIZE = 25 * 1024 * 1024; // 25 MB — Ideogram's documented maximum per image file
+export const MAX_IMAGE_SIZE = 25 * 1024 * 1024; // 25 MB — Ideogram's documented maximum per image file
+/** Ideogram's limit for a whole multipart request (inpaint: image + mask, each up to 25 MB). */
+export const MAX_REQUEST_SIZE = 50 * 1024 * 1024;
 
 const ALLOWED_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 

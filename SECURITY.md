@@ -35,7 +35,7 @@ We will acknowledge your report within 48 hours and aim to release a fix within 
 | **SSRF via download URLs** | HTTPS required + hostname allowlist (`ideogram.ai`, `api.ideogram.ai`, known CDN) |
 | **SSRF via redirects** | `redirect: "manual"` — all redirects blocked and reported |
 | **API key exfiltration** | Key sent only to `api.ideogram.ai` (hardcoded base URL), never logged |
-| **Request timeout** | `AbortSignal.timeout(120s)` on every outbound request |
+| **Request timeout** | `AbortSignal.timeout(120s)` on every outbound request; a timed-out request is not retried (the server may have accepted and billed it), only connection failures and 429/5xx are |
 | **Content-Type validation** | Downloads must have `image/*` Content-Type — HTML/JSON error pages rejected |
 | **Download size limit** | Content-Length pre-check + post-download buffer size cap (50 MB) |
 
@@ -45,7 +45,7 @@ We will acknowledge your report within 48 hours and aim to release a fix within 
 |--------|-----------|
 | **Path traversal** | Extension allowlist (`.png`, `.jpg`, `.jpeg`, `.webp` only) |
 | **Symlink attacks** | `lstat()` on the image path before reading — a symlinked file is rejected; a symlinked parent directory is resolved |
-| **File size DoS** | `stat()` check before read — 25 MB limit per image (Ideogram's documented maximum) |
+| **File size DoS** | `stat()` check before read — 25 MB limit per image (Ideogram's documented maximum); `ideogram_edit` refuses image + mask at or over Ideogram's 50 MB request limit before uploading |
 | **Filename injection** | Output filenames are `ideogram-{timestamp}-{random}.{ext}` — no user input |
 | **Output directory escape** | `path.relative()` containment check on all saved files |
 

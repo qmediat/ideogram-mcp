@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { ideogramRequest, downloadImage } from "../client.js";
-import { saveImage } from "../storage.js";
+import { saveImage, MAX_REQUEST_SIZE } from "../storage.js";
 import { RenderingSpeed, MagicPrompt, StyleType, IdeogramResponseSchema } from "../types.js";
 import { loadImageBlob } from "../image-input.js";
 
@@ -23,6 +23,13 @@ export async function handleEdit(
     loadImageBlob(args.image),
     loadImageBlob(args.mask),
   ]);
+
+  const total = imageInput.blob.size + maskInput.blob.size;
+  if (total >= MAX_REQUEST_SIZE) {
+    throw new Error(
+      `Image and mask together are ${(total / 1024 / 1024).toFixed(1)}MB; Ideogram accepts a request under 50MB (each file up to 25MB)`,
+    );
+  }
 
   const form = new FormData();
   form.append("image", imageInput.blob, imageInput.filename);

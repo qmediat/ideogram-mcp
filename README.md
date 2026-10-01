@@ -91,7 +91,7 @@ Add to `claude_desktop_config.json`:
 | `ideogram_replace_background` | Replace background, preserving foreground | `image`, `prompt` |
 | `ideogram_upscale` | Upscale with guided enhancement | `image`, `prompt` (optional), `resemblance` (0-100), `detail` (0-100) |
 
-Every input image is a local file (`.png`, `.jpg`, `.jpeg`, `.webp`) of at most 25 MB — Ideogram's maximum.
+Every input image is a local file (`.png`, `.jpg`, `.jpeg`, `.webp`) of at most 25 MB — Ideogram's maximum per file; `ideogram_edit` sends image and mask in one request, which Ideogram caps at 50 MB in total.
 
 ### Common Parameters
 
