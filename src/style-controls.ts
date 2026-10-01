@@ -1,8 +1,10 @@
-/** The style and character controls every Ideogram 3.0 generation endpoint accepts (generate, remix, inpaint):
- * reference images, style codes, a style preset, a colour palette, an exact resolution, a custom model and the
- * copyright check. One schema, one encoder, one list of the files they add to the request. */
+/** The style and character controls the Ideogram 3.0 generation endpoints accept: reference images, style codes, a
+ * style preset and a colour palette on generate, remix and inpaint; an exact resolution on generate and remix; a custom
+ * model and the copyright check on generate only (developer.ideogram.ai, read 2026-10-01). One encoder, one list of the
+ * files they add to the request, one schema per endpoint built from the shared fields. */
 import { z } from "zod/v4";
 import { loadImageBlob } from "./image-input.js";
+import { ReframeResolution } from "./types.js";
 
 /** Ideogram's named palettes (the `name` form of `color_palette`). */
 export const ColorPalettePreset = z.enum(["EMBER", "FRESH", "JUNGLE", "MAGIC", "MELON", "MOSAIC", "PASTEL", "ULTRAMARINE"]);
@@ -14,20 +16,22 @@ export const ColorPaletteMember = z.object({
   color_weight: z.number().min(0.05).max(1).optional().describe("Its share of the palette (0.05-1)"),
 });
 
-/** Either a preset by name or up to ten explicit members. */
+/** Either a preset by name or up to ten explicit members — never both (the API refuses the pair; strict objects, so
+ * a stray second key is an error, not a silent drop). */
 export const ColorPalette = z.union([
-  z.object({ name: ColorPalettePreset.describe("A preset palette") }),
-  z.object({ members: z.array(ColorPaletteMember).min(1).max(10).describe("Explicit colours, most dominant first") }),
+  z.strictObject({ name: ColorPalettePreset.describe("A preset palette") }),
+  z.strictObject({ members: z.array(ColorPaletteMember).min(1).max(10).describe("Explicit colours, most dominant first") }),
 ]);
 
 export const StyleCode = z.string().regex(/^[0-9A-Fa-f]{8}$/, "an 8-character hexadecimal style code");
 
-/** A resolution as Ideogram lists them, e.g. 1024x1024 or 1536x640; the API refuses one it does not offer. */
-export const Resolution = z.string().regex(/^\d{3,4}x\d{3,4}$/, "WIDTHxHEIGHT");
+/** The 69 resolutions Ideogram 3.0 offers — the same list reframe uses. */
+export const Resolution = ReframeResolution;
 
 export const CustomModelUri = z.string().regex(/^model\/[^/\s]+\/version\/[^/\s]+$/, "model/<name>/version/<version>");
 
-export const styleControlsSchema = z.object({
+/** The controls every 3.0 generation endpoint takes. */
+export const sharedStyleControls = {
   style_reference_images: z
     .array(z.string().min(1))
     .min(1)
@@ -38,7 +42,7 @@ export const styleControlsSchema = z.object({
     .string()
     .min(1)
     .optional()
-    .describe("Local image file of a character to keep consistent (one image)"),
+    .describe("Local image file of a character to keep consistent (one image; Ideogram bills character references at its own rate)"),
   character_reference_mask: z
     .string()
     .min(1)
@@ -46,16 +50,33 @@ export const styleControlsSchema = z.object({
     .describe("Grayscale mask of the character reference (same dimensions); needs character_reference_image"),
   style_codes: z.array(StyleCode).min(1).max(8).optional().describe("8-character hexadecimal style codes from Ideogram"),
   style_preset: z.string().min(1).max(100).optional().describe("A named style preset as Ideogram lists them"),
-  color_palette: ColorPalette.optional().describe("A preset palette by name, or explicit colours with weights"),
-  resolution: Resolution.optional().describe("Exact output resolution (e.g. 1024x1024); replaces aspect_ratio"),
+  color_palette: ColorPalette.optional().describe("A preset palette by name, or explicit colours with weights (not both)"),
+};
+
+/** generate and remix also take an exact resolution instead of an aspect ratio. */
+export const resolutionControl = {
+  resolution: Resolution.optional().describe("Exact output resolution (one of Ideogram's 69 sizes); not with aspect_ratio"),
+};
+
+/** generate alone takes a custom model and the copyright check. */
+export const generateOnlyControls = {
   custom_model_uri: CustomModelUri.optional().describe("A custom (trained) model: model/<name>/version/<version>"),
-  enable_copyright_detection: z.boolean().optional().describe("Run Ideogram's copyright detection on the result"),
-});
+  enable_copyright_detection: z
+    .boolean()
+    .optional()
+    .describe("true runs Ideogram's copyright detection on this request; false leaves the organisation setting in force (it cannot switch an organisation-wide detection off)"),
+};
 
-export type StyleControls = z.infer<typeof styleControlsSchema>;
+/** Every control any endpoint takes; a value a given endpoint does not take is never present in its args. */
+export const styleControlsSchema = z.object({ ...sharedStyleControls, ...resolutionControl, ...generateOnlyControls });
+export type StyleControls = Partial<z.infer<typeof styleControlsSchema>>;
 
-/** The names of every style-control field: a caller can tell whether any was given. */
-export const STYLE_CONTROL_KEYS = Object.keys(styleControlsSchema.shape) as (keyof StyleControls)[];
+/** resolution and aspect_ratio are alternatives: the API refuses the pair, so the tool refuses it before any upload. */
+export function assertOneOfResolutionOrAspect(args: { resolution?: string; aspect_ratio?: string }): void {
+  if (args.resolution !== undefined && args.aspect_ratio !== undefined) {
+    throw new Error("resolution and aspect_ratio cannot be combined; give one");
+  }
+}
 
 /** The local files the controls add to the request, in the order they are sent. */
 export function styleControlFiles(args: StyleControls): string[] {
@@ -76,7 +97,11 @@ export function assertStyleControlsConsistent(args: StyleControls): void {
 export function appendStyleControlFields(form: FormData, args: StyleControls): void {
   for (const code of args.style_codes ?? []) form.append("style_codes", code);
   if (args.style_preset) form.append("style_preset", args.style_preset);
-  if (args.color_palette) form.append("color_palette", JSON.stringify(args.color_palette));
+  if (args.color_palette) {
+    // The OpenAPI spec declares this part as application/json; the encoding is from the spec, not verified against
+    // the live API in this package's tests (they stub fetch).
+    form.append("color_palette", new Blob([JSON.stringify(args.color_palette)], { type: "application/json" }));
+  }
   if (args.resolution) form.append("resolution", args.resolution);
   if (args.custom_model_uri) form.append("custom_model_uri", args.custom_model_uri);
   if (args.enable_copyright_detection !== undefined) {

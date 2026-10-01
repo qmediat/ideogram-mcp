@@ -93,18 +93,18 @@ Add to `claude_desktop_config.json`:
 
 Every input image is a local file (`.png`, `.jpg`, `.jpeg`, `.webp`) of at most 25 MB — Ideogram's maximum per file; a request that carries several files (image + mask, reference images) is capped by Ideogram at 50 MB in total, checked before any file is read.
 
-### Style controls (generate with model 3.0, edit, remix)
+### Style controls
 
-| Parameter | Values |
-|-----------|--------|
-| `style_reference_images` | 1-3 local image files whose style the result follows |
-| `character_reference_image`, `character_reference_mask` | one local image of a character to keep consistent, with an optional grayscale mask of the same size |
-| `style_codes` | 1-8 eight-character hexadecimal codes from Ideogram |
-| `style_preset` | a named preset as Ideogram lists them |
-| `color_palette` | `{"name": "EMBER"}` (presets: `EMBER`, `FRESH`, `JUNGLE`, `MAGIC`, `MELON`, `MOSAIC`, `PASTEL`, `ULTRAMARINE`) or `{"members": [{"color_hex": "#FF0000", "color_weight": 0.7}, …]}` (1-10 colours) |
-| `resolution` | an exact `WIDTHxHEIGHT` Ideogram offers (e.g. `1536x640`); replaces `aspect_ratio` |
-| `custom_model_uri` | `model/<name>/version/<version>` of a trained model |
-| `enable_copyright_detection` | `true` / `false` |
+| Parameter | Tools | Values |
+|-----------|-------|--------|
+| `style_reference_images` | generate (3.0), edit, remix | 1-3 local image files whose style the result follows |
+| `character_reference_image`, `character_reference_mask` | generate (3.0), edit, remix | one local image of a character to keep consistent, with an optional grayscale mask of the same size; Ideogram bills character references at its own rate |
+| `style_codes` | generate (3.0), edit, remix | 1-8 eight-character hexadecimal codes from Ideogram |
+| `style_preset` | generate (3.0), edit, remix | a named preset as Ideogram lists them |
+| `color_palette` | generate (3.0), edit, remix | `{"name": "EMBER"}` (presets: `EMBER`, `FRESH`, `JUNGLE`, `MAGIC`, `MELON`, `MOSAIC`, `PASTEL`, `ULTRAMARINE`) or `{"members": [{"color_hex": "#FF0000", "color_weight": 0.7}, …]}` (1-10 colours), never both; sent as one JSON part as the OpenAPI spec declares (not verified against the live API by this package's tests, which stub `fetch`) |
+| `resolution` | generate, remix | one of Ideogram's 69 sizes (e.g. `1536x640`); not together with `aspect_ratio` |
+| `custom_model_uri` | generate (3.0) | `model/<name>/version/<version>` of a trained model |
+| `enable_copyright_detection` | generate | `true` runs the detection on this request; `false` leaves the organisation setting in force (it cannot switch an organisation-wide detection off) |
 
 `ideogram_generate` with `model: "4.0"` posts to `/v1/ideogram-v4/generate`, which takes the prompt, `resolution`, `rendering_speed` (not `FLASH`) and `enable_copyright_detection`; any other parameter is refused with its name, never dropped.
 

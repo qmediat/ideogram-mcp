@@ -9,9 +9,9 @@ import { after, test } from "node:test";
 process.env.IDEOGRAM_API_KEY = "dummy-key-for-tests";
 process.env.IDEOGRAM_OUTPUT_DIR = await mkdtemp(join(tmpdir(), "ideogram-out-"));
 
-const { handleEdit } = await import("../dist/tools/edit.js");
+const { handleEdit, editInputSchema } = await import("../dist/tools/edit.js");
 const { handleGenerate, generateInputSchema } = await import("../dist/tools/generate.js");
-const { handleRemix } = await import("../dist/tools/remix.js");
+const { handleRemix, remixInputSchema } = await import("../dist/tools/remix.js");
 const { ideogramRequest, downloadImage } = await import("../dist/client.js");
 const { validateFileSize } = await import("../dist/storage.js");
 
@@ -127,21 +127,18 @@ test("the style controls reach every v3 generation endpoint under the API's fiel
   await writeFile(ref, PNG);
   await writeFile(character, PNG);
   await writeFile(charMask, PNG);
-  const controls = {
+  const shared = {
     style_reference_images: [ref],
     character_reference_image: character,
     character_reference_mask: charMask,
     style_codes: ["A1B2C3D4", "ffffffff"],
     style_preset: "VINTAGE_POSTER",
     color_palette: { members: [{ color_hex: "#FF0000", color_weight: 0.7 }, { color_hex: "#00FF00" }] },
-    resolution: "1536x640",
-    custom_model_uri: "model/brand/version/3",
-    enable_copyright_detection: true,
   };
   const calls = await capture(async () => {
-    await handleGenerate({ prompt: "a poster", ...controls });
-    await handleRemix({ image, prompt: "a poster", ...controls });
-    await handleEdit({ image, mask, prompt: "a poster", ...controls });
+    await handleGenerate({ prompt: "a poster", ...shared, resolution: "1536x640", custom_model_uri: "model/brand/version/3", enable_copyright_detection: true });
+    await handleRemix({ image, prompt: "a poster", ...shared, resolution: "1536x640" });
+    await handleEdit({ image, mask, prompt: "a poster", ...shared });
   });
   assert.deepEqual(
     calls.map((c) => c.url),
@@ -155,15 +152,55 @@ test("the style controls reach every v3 generation endpoint under the API's fiel
     const form = call.init.body;
     assert.deepEqual(form.getAll("style_codes"), ["A1B2C3D4", "ffffffff"], "a list is repeated fields");
     assert.equal(form.get("style_preset"), "VINTAGE_POSTER");
-    assert.deepEqual(JSON.parse(form.get("color_palette")), controls.color_palette, "the palette is one JSON field");
-    assert.equal(form.get("resolution"), "1536x640");
-    assert.equal(form.get("custom_model_uri"), "model/brand/version/3");
-    assert.equal(form.get("enable_copyright_detection"), "true");
+    const palette = form.get("color_palette");
+    assert.equal(palette.type, "application/json", "the palette is one JSON part, as the OpenAPI spec declares it");
+    assert.deepEqual(JSON.parse(await palette.text()), shared.color_palette);
     assert.equal(form.getAll("style_reference_images").length, 1);
     assert.ok(form.get("style_reference_images") instanceof Blob);
     assert.ok(form.get("character_reference_images") instanceof Blob);
     assert.ok(form.get("character_reference_images_mask") instanceof Blob);
   }
+  // what only some endpoints take is sent only there
+  const [generate, remix, inpaint] = calls.map((c) => c.init.body);
+  assert.equal(generate.get("resolution"), "1536x640");
+  assert.equal(remix.get("resolution"), "1536x640");
+  assert.equal(inpaint.get("resolution"), null, "inpaint has no resolution parameter");
+  assert.equal(generate.get("custom_model_uri"), "model/brand/version/3");
+  assert.equal(generate.get("enable_copyright_detection"), "true");
+  for (const form of [remix, inpaint]) {
+    assert.equal(form.get("custom_model_uri"), null);
+    assert.equal(form.get("enable_copyright_detection"), null);
+  }
+});
+
+test("the tools refuse what the API refuses: resolution with aspect_ratio, a palette with both forms, a control an endpoint lacks", async () => {
+  const calls = await capture(async () => {
+    await assert.rejects(() => handleGenerate({ prompt: "x", resolution: "1024x1024", aspect_ratio: "1x1" }), /cannot be combined/);
+    await assert.rejects(() => handleRemix({ image, prompt: "x", resolution: "1024x1024", aspect_ratio: "1x1" }), /cannot be combined/);
+  });
+  assert.equal(calls.length, 0);
+  const both = { name: "EMBER", members: [{ color_hex: "#FF0000" }] };
+  assert.equal(generateInputSchema.safeParse({ prompt: "x", color_palette: both }).success, false, "name and members together are refused, never silently reduced");
+  assert.equal(generateInputSchema.safeParse({ prompt: "x", resolution: "9999x9999" }).success, false, "only Ideogram's 69 sizes");
+  assert.equal(editInputSchema.safeParse({ image, mask, prompt: "x", resolution: "1024x1024" }).success, true, "zod drops an unknown key…");
+  assert.equal("resolution" in editInputSchema.shape, false, "…because inpaint has no such parameter in its schema");
+  assert.equal("custom_model_uri" in remixInputSchema.shape, false);
+});
+
+test("remix and edit measure their reference images against the request limit and refuse a mask without its image", async () => {
+  const big1 = join(dir, "rbig1.png");
+  const big2 = join(dir, "rbig2.png");
+  await writeFile(big1, PNG);
+  await writeFile(big2, PNG);
+  await truncate(big1, 25 * 1024 * 1024);
+  await truncate(big2, 25 * 1024 * 1024);
+  const calls = await capture(async () => {
+    await assert.rejects(() => handleRemix({ image: big1, prompt: "x", style_reference_images: [big2] }), /under 50MB/);
+    await assert.rejects(() => handleEdit({ image, mask, prompt: "x", style_reference_images: [big1, big2] }), /under 50MB/);
+    await assert.rejects(() => handleRemix({ image, prompt: "x", character_reference_mask: image }), /needs character_reference_image/);
+    await assert.rejects(() => handleEdit({ image, mask, prompt: "x", character_reference_mask: image }), /needs character_reference_image/);
+  });
+  assert.equal(calls.length, 0, "nothing was uploaded");
 });
 
 test("a character mask without its image, a bad style code and a bad palette colour are refused before any upload", async () => {
@@ -205,5 +242,6 @@ test("model 4.0 posts text_prompt to the v4 endpoint and refuses the 3.0-only pa
     assert.rejects(() => handleGenerate({ prompt: "a cat", model: "4.0", style_type: "REALISTIC", seed: 1 }), /does not take: style_type, seed/),
   );
   assert.equal(refused.length, 0);
-  await assert.rejects(() => handleGenerate({ prompt: "a cat", model: "4.0", rendering_speed: "FLASH" }), /no FLASH/);
+  const flash = await capture(() => assert.rejects(() => handleGenerate({ prompt: "a cat", model: "4.0", rendering_speed: "FLASH" }), /no FLASH/));
+  assert.equal(flash.length, 0, "refused before any request");
 });

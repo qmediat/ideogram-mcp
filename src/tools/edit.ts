@@ -2,7 +2,13 @@ import { z } from "zod/v4";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { ideogramRequest, downloadImage } from "../client.js";
 import { saveImage, assertRequestFits } from "../storage.js";
-import { styleControlsSchema, styleControlFiles, assertStyleControlsConsistent, appendStyleControlFields, appendStyleControlFiles } from "../style-controls.js";
+import {
+  sharedStyleControls,
+  styleControlFiles,
+  assertStyleControlsConsistent,
+  appendStyleControlFields,
+  appendStyleControlFiles,
+} from "../style-controls.js";
 import { RenderingSpeed, MagicPrompt, StyleType, IdeogramResponseSchema } from "../types.js";
 import { loadImageBlob } from "../image-input.js";
 
@@ -15,7 +21,7 @@ export const editInputSchema = z.object({
   magic_prompt: MagicPrompt.optional().describe("Auto-enhance prompts (default: AUTO)"),
   style_type: StyleType.optional().describe("Visual style (the API default is GENERAL when omitted)"),
   seed: z.number().int().min(0).max(2147483647).optional().describe("Reproducibility seed"),
-  ...styleControlsSchema.shape,
+  ...sharedStyleControls,
 });
 
 export async function handleEdit(

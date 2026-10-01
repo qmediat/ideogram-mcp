@@ -1,11 +1,18 @@
 import { z } from "zod/v4";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { ideogramRequest, downloadImage } from "../client.js";
-import { saveImage } from "../storage.js";
 import { AspectRatio, RenderingSpeed, MagicPrompt, StyleType, IdeogramResponseSchema } from "../types.js";
 import { loadImageBlob } from "../image-input.js";
-import { assertRequestFits } from "../storage.js";
-import { styleControlsSchema, styleControlFiles, assertStyleControlsConsistent, appendStyleControlFields, appendStyleControlFiles } from "../style-controls.js";
+import { saveImage, assertRequestFits } from "../storage.js";
+import {
+  sharedStyleControls,
+  resolutionControl,
+  styleControlFiles,
+  assertStyleControlsConsistent,
+  assertOneOfResolutionOrAspect,
+  appendStyleControlFields,
+  appendStyleControlFiles,
+} from "../style-controls.js";
 
 export const remixInputSchema = z.object({
   image: z.string().min(1).describe("Local file path of the source image to remix"),
@@ -18,13 +25,15 @@ export const remixInputSchema = z.object({
   style_type: StyleType.optional().describe("Visual style (the API default is GENERAL when omitted)"),
   negative_prompt: z.string().optional().describe("What to exclude"),
   seed: z.number().int().min(0).max(2147483647).optional().describe("Reproducibility seed"),
-  ...styleControlsSchema.shape,
+  ...sharedStyleControls,
+  ...resolutionControl,
 });
 
 export async function handleRemix(
   args: z.infer<typeof remixInputSchema>,
 ): Promise<CallToolResult> {
   assertStyleControlsConsistent(args);
+  assertOneOfResolutionOrAspect(args);
   await assertRequestFits([args.image, ...styleControlFiles(args)]);
   const imageInput = await loadImageBlob(args.image);
 

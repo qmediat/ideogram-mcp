@@ -32,9 +32,9 @@ Generate images from text prompts.
 | `style_codes` | string[] | No | — | 8-character hexadecimal codes, repeated form fields |
 | `style_preset` | string | No | — | A named preset |
 | `color_palette` | JSON | No | — | `{"name": PRESET}` or `{"members": [{"color_hex", "color_weight"}]}` as one form field |
-| `resolution` | enum | No | — | Exact `WIDTHxHEIGHT`; replaces `aspect_ratio` |
+| `resolution` | enum | No | — | One of the 69 sizes; cannot be combined with `aspect_ratio` |
 | `custom_model_uri` | string | No | — | `model/<name>/version/<version>` |
-| `enable_copyright_detection` | boolean | No | — | Post-generation copyright detection |
+| `enable_copyright_detection` | boolean | No | — | `true` runs the detection on this request; the effective gate is the OR with the organisation setting |
 
 **Aspect Ratios:** `1x1`, `16x9`, `9x16`, `4x3`, `3x4`, `3x2`, `2x3`, `4x5`, `5x4`, `1x2`, `2x1`, `1x3`, `3x1`, `10x16`, `16x10`
 
@@ -72,9 +72,6 @@ Edit specific areas of existing images using mask-based inpainting. (`/v1/ideogr
 | `style_codes` | string[] | No | — | 8-character hexadecimal codes, repeated form fields |
 | `style_preset` | string | No | — | A named preset |
 | `color_palette` | JSON | No | — | `{"name": PRESET}` or `{"members": [{"color_hex", "color_weight"}]}` as one form field |
-| `resolution` | enum | No | — | Exact `WIDTHxHEIGHT`; replaces `aspect_ratio` |
-| `custom_model_uri` | string | No | — | `model/<name>/version/<version>` |
-| `enable_copyright_detection` | boolean | No | — | Post-generation copyright detection |
 
 **Mask requirements:** Same dimensions as source image. PNG/JPEG/WebP.
 
@@ -104,9 +101,7 @@ Transform images with new prompts while preserving characteristics.
 | `style_codes` | string[] | No | — | 8-character hexadecimal codes, repeated form fields |
 | `style_preset` | string | No | — | A named preset |
 | `color_palette` | JSON | No | — | `{"name": PRESET}` or `{"members": [{"color_hex", "color_weight"}]}` as one form field |
-| `resolution` | enum | No | — | Exact `WIDTHxHEIGHT`; replaces `aspect_ratio` |
-| `custom_model_uri` | string | No | — | `model/<name>/version/<version>` |
-| `enable_copyright_detection` | boolean | No | — | Post-generation copyright detection |
+| `resolution` | enum | No | — | One of the 69 sizes; cannot be combined with `aspect_ratio` |
 
 ---
 

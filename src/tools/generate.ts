@@ -1,10 +1,18 @@
 import { z } from "zod/v4";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { ideogramRequest, downloadImage } from "../client.js";
-import { saveImage } from "../storage.js";
 import { AspectRatio, RenderingSpeed, MagicPrompt, StyleType, IdeogramResponseSchema, GenerateModel } from "../types.js";
-import { assertRequestFits } from "../storage.js";
-import { styleControlsSchema, styleControlFiles, assertStyleControlsConsistent, appendStyleControlFields, appendStyleControlFiles } from "../style-controls.js";
+import { saveImage, assertRequestFits } from "../storage.js";
+import {
+  sharedStyleControls,
+  resolutionControl,
+  generateOnlyControls,
+  styleControlFiles,
+  assertStyleControlsConsistent,
+  assertOneOfResolutionOrAspect,
+  appendStyleControlFields,
+  appendStyleControlFiles,
+} from "../style-controls.js";
 
 export const generateInputSchema = z.object({
   prompt: z.string().min(1).max(10000).describe("Image description (1-10,000 characters)"),
@@ -18,7 +26,9 @@ export const generateInputSchema = z.object({
   model: GenerateModel.optional().describe(
     "Ideogram model: 3.0 (default; every parameter below) or 4.0 (text prompt, resolution, rendering_speed except FLASH, enable_copyright_detection — the other parameters are refused)",
   ),
-  ...styleControlsSchema.shape,
+  ...sharedStyleControls,
+  ...resolutionControl,
+  ...generateOnlyControls,
 });
 
 type GenerateArgs = z.infer<typeof generateInputSchema>;
@@ -44,6 +54,7 @@ function buildV4Form(args: GenerateArgs): FormData {
 
 async function buildV3Form(args: GenerateArgs): Promise<FormData> {
   assertStyleControlsConsistent(args);
+  assertOneOfResolutionOrAspect(args);
   await assertRequestFits(styleControlFiles(args));
   const form = new FormData();
   form.append("prompt", args.prompt);
