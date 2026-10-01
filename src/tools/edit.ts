@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { ideogramRequest, downloadImage } from "../client.js";
-import { saveImage, MAX_REQUEST_SIZE } from "../storage.js";
+import { saveImage, inputImageSize, MAX_REQUEST_SIZE, MULTIPART_OVERHEAD } from "../storage.js";
 import { RenderingSpeed, MagicPrompt, StyleType, IdeogramResponseSchema } from "../types.js";
 import { loadImageBlob } from "../image-input.js";
 
@@ -19,17 +19,20 @@ export const editInputSchema = z.object({
 export async function handleEdit(
   args: z.infer<typeof editInputSchema>,
 ): Promise<CallToolResult> {
+  // Both sizes from stat, before either file is read: a pair that cannot fit the request is refused without
+  // allocating up to 50 MB. The multipart overhead (boundaries, part headers, the prompt) is reserved from the limit.
+  const [imageSize, maskSize] = await Promise.all([inputImageSize(args.image), inputImageSize(args.mask)]);
+  const total = imageSize + maskSize;
+  if (total > MAX_REQUEST_SIZE - MULTIPART_OVERHEAD) {
+    throw new Error(
+      `Image and mask together are ${(total / 1024 / 1024).toFixed(1)}MB; Ideogram accepts a request under 50MB including the multipart overhead (each file up to 25MB)`,
+    );
+  }
+
   const [imageInput, maskInput] = await Promise.all([
     loadImageBlob(args.image),
     loadImageBlob(args.mask),
   ]);
-
-  const total = imageInput.blob.size + maskInput.blob.size;
-  if (total >= MAX_REQUEST_SIZE) {
-    throw new Error(
-      `Image and mask together are ${(total / 1024 / 1024).toFixed(1)}MB; Ideogram accepts a request under 50MB (each file up to 25MB)`,
-    );
-  }
 
   const form = new FormData();
   form.append("image", imageInput.blob, imageInput.filename);
@@ -41,7 +44,9 @@ export async function handleEdit(
   if (args.style_type) form.append("style_type", args.style_type);
   if (args.seed !== undefined) form.append("seed", String(args.seed));
 
-  // Ideogram marks /v1/ideogram-v3/edit "Legacy: use /v1/ideogram-v3/inpaint instead" (same image/mask/prompt fields).
+  // Ideogram marks /v1/ideogram-v3/edit "Legacy: use /v1/ideogram-v3/inpaint instead. This endpoint will be removed in
+  // a future release" (https://developer.ideogram.ai/api-reference/api-reference/edit-v3, read 2026-10-01); inpaint
+  // takes the same image/mask/prompt fields (https://developer.ideogram.ai/api-reference/api-reference/inpaint-v3).
   const raw = await ideogramRequest("/v1/ideogram-v3/inpaint", form);
   const response = IdeogramResponseSchema.parse(raw);
 

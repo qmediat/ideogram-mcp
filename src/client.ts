@@ -1,5 +1,5 @@
 import { getConfig } from "./config.js";
-import { IdeogramApiError, isRetryableStatus, isRetryableNetworkError } from "./errors.js";
+import { IdeogramApiError, isRetryableStatus, isRetryableNetworkError, networkErrorText } from "./errors.js";
 
 const BASE_URL = "https://api.ideogram.ai";
 const MAX_RETRIES = 3;
@@ -110,11 +110,7 @@ export async function ideogramRequest(
         await delay(retryMs);
         continue;
       }
-      throw new IdeogramApiError(
-        0,
-        "NETWORK_ERROR",
-        `Network error: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      throw new IdeogramApiError(0, "NETWORK_ERROR", `Network error: ${networkErrorText(error)}`);
     }
 
     if (response.ok) {
@@ -169,7 +165,7 @@ export async function downloadImage(url: string): Promise<{ buffer: Buffer; exte
         redirect: "manual",
       });
     } catch (error) {
-      if (isRetryableNetworkError(error) && attempt < MAX_RETRIES) {
+      if (isRetryableNetworkError(error, true) && attempt < MAX_RETRIES) {
         const retryMs = getRetryDelay(attempt);
         console.error(
           `Image download network error, retry ${attempt + 1}/${MAX_RETRIES} in ${Math.round(retryMs)}ms`,
@@ -177,11 +173,7 @@ export async function downloadImage(url: string): Promise<{ buffer: Buffer; exte
         await delay(retryMs);
         continue;
       }
-      throw new IdeogramApiError(
-        0,
-        "DOWNLOAD_NETWORK_ERROR",
-        `Download network error: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      throw new IdeogramApiError(0, "NETWORK_ERROR", `Download network error: ${networkErrorText(error)}`);
     }
 
     // Block redirects to prevent SSRF via open redirect

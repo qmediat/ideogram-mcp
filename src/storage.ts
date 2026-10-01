@@ -4,8 +4,17 @@ import { randomBytes } from "node:crypto";
 import { getConfig } from "./config.js";
 
 export const MAX_IMAGE_SIZE = 25 * 1024 * 1024; // 25 MB — Ideogram's documented maximum per image file
-/** Ideogram's limit for a whole multipart request (inpaint: image + mask, each up to 25 MB). */
+/** Ideogram's limit for a whole multipart request (inpaint: image + mask, each up to 25 MB). The file bytes may use at
+ * most this much less than the limit: the multipart boundaries, part headers and the prompt take the rest. */
 export const MAX_REQUEST_SIZE = 50 * 1024 * 1024;
+export const MULTIPART_OVERHEAD = 64 * 1024;
+
+/** The size of a validated input image, from stat: a pair of files is checked against the request limit before
+ * either is read into memory. */
+export async function inputImageSize(rawPath: string): Promise<number> {
+  const { resolvedPath } = await validateInputImage(rawPath);
+  return (await stat(resolvedPath)).size;
+}
 
 const ALLOWED_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 

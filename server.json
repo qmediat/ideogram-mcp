@@ -17,7 +17,7 @@
       },
       "environmentVariables": [
         {
-          "description": "Your Ideogram API key (get one at https://ideogram.ai/manage-api)",
+          "description": "Your Ideogram API key (create one at https://ideogram.ai/platform)",
           "isRequired": true,
           "format": "string",
           "isSecret": true,

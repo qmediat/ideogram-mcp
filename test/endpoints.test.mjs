@@ -10,7 +10,7 @@ process.env.IDEOGRAM_API_KEY = "dummy-key-for-tests";
 process.env.IDEOGRAM_OUTPUT_DIR = await mkdtemp(join(tmpdir(), "ideogram-out-"));
 
 const { handleEdit } = await import("../dist/tools/edit.js");
-const { ideogramRequest } = await import("../dist/client.js");
+const { ideogramRequest, downloadImage } = await import("../dist/client.js");
 const { validateFileSize } = await import("../dist/storage.js");
 
 const PNG = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex"); // a PNG signature is enough: the loader checks path and size
@@ -74,6 +74,9 @@ test("image and mask that together reach Ideogram's 50 MB request limit are refu
   await truncate(b, 25 * 1024 * 1024);
   const calls = await capture(() => assert.rejects(() => handleEdit({ image: a, mask: b, prompt: "x" }), /under 50MB/));
   assert.equal(calls.length, 0, "nothing was uploaded");
+  // just under the limit by file bytes alone is refused too: the multipart overhead has no room
+  await truncate(b, 25 * 1024 * 1024 - 1024);
+  await assert.rejects(() => handleEdit({ image: a, mask: b, prompt: "x" }), /under 50MB/);
 });
 
 test("a timed-out request is not retried: the server may have accepted and billed it", async () => {
@@ -89,6 +92,21 @@ test("a timed-out request is not retried: the server may have accepted and bille
     globalThis.fetch = realFetch;
   }
   assert.equal(n, 1, "one attempt");
+});
+
+test("a timed-out image download is retried: a GET is idempotent and the image is already generated", async () => {
+  let n = 0;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    n += 1;
+    throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+  };
+  try {
+    await assert.rejects(() => downloadImage("https://ideogram.ai/api/images/x.png"), /TimeoutError/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  assert.equal(n, 4, "the first attempt and three retries");
 });
 
 test("the per-image cap is Ideogram's 25 MB: 25 MB passes, one byte more is refused by name", async () => {
