@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-01
+
+A comparison with Ideogram's own MCP server and the current API (`docs/COMPETITION-2026-10-01.md`).
+
+### Added
+
+- Style controls on `ideogram_generate` (3.0), `ideogram_edit` and `ideogram_remix`: `style_reference_images` (1-3 files),
+  `character_reference_image` with an optional `character_reference_mask`, `style_codes` (1-8), `style_preset` and
+  `color_palette` (a preset name or 1-10 explicit colours with weights, never both) on all three; an exact `resolution`
+  (one of the 69 sizes, not with `aspect_ratio`) on generate and remix; `custom_model_uri` and
+  `enable_copyright_detection` on generate — each endpoint gets exactly the parameters its documentation lists, sent
+  under the API's field names (a list as repeated fields, the palette as one `application/json` part as the OpenAPI
+  spec declares — a live probe on 2026-10-01 accepted it; the tests stub `fetch`). The three tools' input schemas
+  are strict: a parameter an endpoint does not take (an exact `resolution` on edit) is refused by name, never
+  silently dropped. Every file
+  counts against the 50 MB request limit, checked with `stat` before any file is read. Tests pin the encoding, the
+  per-endpoint fields and the refusals on all three endpoints.
+- `ideogram_generate` with `model: "4.0"` posts to `/v1/ideogram-v4/generate` (`text_prompt`, `resolution`,
+  `rendering_speed` except `FLASH`, `enable_copyright_detection`); a 3.0-only parameter given with 4.0 is refused by
+  name, never dropped. A live probe on 2026-10-01 returned the documented shape (`response_type`, `created`,
+  `data[].url/prompt/resolution/is_image_safe/seed`), which the response schema accepts.
+
+### Changed
+
+- README and `docs/API-REFERENCE.md` said "Ideogram 4.x uses the v2 API": the v1 API has the `ideogram-v4` endpoints too.
+  The v2 API (Ideogram 4.5, Precise Edit, async jobs, usage) is still not called.
+
 ## [1.1.0] - 2026-10-01
 
 An audit of the npm page (2026-10-01, every claim checked against the code and Ideogram's documentation).

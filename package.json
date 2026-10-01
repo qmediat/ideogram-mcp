@@ -1,6 +1,6 @@
 {
   "name": "@qmediat.io/ideogram-mcp",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "mcpName": "io.github.qmediat/ideogram-mcp",
   "files": [
     "dist",
@@ -9,7 +9,7 @@
     "CHANGELOG.md",
     "SECURITY.md"
   ],
-  "description": "MCP server for Ideogram 3.0 (api.ideogram.ai v1): generate, edit (inpaint), remix, reframe, replace background, upscale and describe images — native fetch, two runtime dependencies",
+  "description": "MCP server for Ideogram 3.0 and 4.0 (api.ideogram.ai v1): generate, edit (inpaint), remix, reframe, replace background, upscale and describe images — native fetch, two runtime dependencies",
   "type": "module",
   "main": "dist/index.js",
   "bin": {

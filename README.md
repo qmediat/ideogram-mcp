@@ -9,7 +9,7 @@
 
 # @qmediat.io/ideogram-mcp
 
-MCP server for [Ideogram 3.0](https://developer.ideogram.ai) through Ideogram's v1 API (`api.ideogram.ai/v1/ideogram-v3/*`) — generate, edit (inpaint), remix, reframe, replace background, upscale and describe images from Claude Code, Claude Desktop, or any MCP client over stdio. Ideogram 4.x and the v2 API are not used; Ideogram documents the v1 API as still working, with no announced sunset.
+MCP server for [Ideogram](https://developer.ideogram.ai) through Ideogram's v1 API — generate (Ideogram 3.0 or 4.0), edit (inpaint), remix, reframe, replace background, upscale and describe images from Claude Code, Claude Desktop, or any MCP client over stdio. The 3.0 endpoints take style and character reference images, style codes, presets, colour palettes, exact resolutions and custom models. The v2 API (Ideogram 4.5, Precise Edit, async jobs, usage) is not used yet; Ideogram documents the v1 API as still working, with no announced sunset.
 
 [![npm version](https://img.shields.io/npm/v/@qmediat.io/ideogram-mcp)](https://www.npmjs.com/package/@qmediat.io/ideogram-mcp)
 [![license](https://img.shields.io/npm/l/@qmediat.io/ideogram-mcp)](https://github.com/qmediat/ideogram-mcp/blob/main/LICENSE)
@@ -18,7 +18,7 @@ MCP server for [Ideogram 3.0](https://developer.ideogram.ai) through Ideogram's 
 
 ## Why this server?
 
-- **7 tools** covering the Ideogram 3.0 endpoints — generate, edit (inpaint), remix, reframe, replace background, upscale, describe. Style and character reference images, colour palettes, style presets and custom models are not exposed
+- **7 tools** — generate (Ideogram 3.0, or 4.0 with `model: "4.0"`), edit (inpaint), remix, reframe, replace background, upscale, describe. Generate, remix and edit take style reference images (up to 3), a character reference image with an optional mask, style codes, a style preset and a colour palette (preset or explicit colours); generate and remix also an exact resolution; generate alone a custom model and the copyright check
 - **Guarded I/O** — HTTPS-only downloads from an allowlist with redirects blocked, a symlinked image file rejected, `image/*` Content-Type required, Zod schemas on every success response, output paths contained in the output directory ([details](https://github.com/qmediat/ideogram-mcp/blob/main/SECURITY.md))
 - **2 runtime dependencies** — `@modelcontextprotocol/sdk` + `zod`; native `fetch`, `FormData` and `Blob`
 - **Direct calls to api.ideogram.ai** — not proxied through a third-party service
@@ -83,15 +83,30 @@ Add to `claude_desktop_config.json`:
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
-| `ideogram_generate` | Generate images from text prompts | `prompt`, `aspect_ratio`, `rendering_speed`, `style_type`, `num_images` |
+| `ideogram_generate` | Generate images from text prompts (Ideogram 3.0, or 4.0) | `prompt`, `model` (`3.0` / `4.0`), `aspect_ratio`, `rendering_speed`, `style_type`, `num_images`, the style controls |
 | `ideogram_describe` | Generate text description of an image | `image` (file path), `describe_model_version` (`V_2` / `V_3`) |
-| `ideogram_edit` | Edit the masked areas of an image (Ideogram's inpaint endpoint) | `image`, `mask` (black = edit), `prompt` |
-| `ideogram_remix` | Transform an image with a new prompt | `image`, `prompt`, `image_weight` (0-100, default 50), `negative_prompt` |
+| `ideogram_edit` | Edit the masked areas of an image (Ideogram's inpaint endpoint) | `image`, `mask` (black = edit), `prompt`, the style controls |
+| `ideogram_remix` | Transform an image with a new prompt | `image`, `prompt`, `image_weight` (0-100, default 50), `negative_prompt`, the style controls |
 | `ideogram_reframe` | Extend an image to a new resolution (outpainting) | `image`, `resolution` (69 valid sizes) |
 | `ideogram_replace_background` | Replace background, preserving foreground | `image`, `prompt` |
 | `ideogram_upscale` | Upscale with guided enhancement | `image`, `prompt` (optional), `resemblance` (0-100), `detail` (0-100) |
 
-Every input image is a local file (`.png`, `.jpg`, `.jpeg`, `.webp`) of at most 25 MB — Ideogram's maximum per file; `ideogram_edit` sends image and mask in one request, which Ideogram caps at 50 MB in total.
+Every input image is a local file (`.png`, `.jpg`, `.jpeg`, `.webp`) of at most 25 MB — Ideogram's maximum per file; a request that carries several files (image + mask, reference images) is capped by Ideogram at 50 MB in total, checked before any file is read.
+
+### Style controls
+
+| Parameter | Tools | Values |
+|-----------|-------|--------|
+| `style_reference_images` | generate (3.0), edit, remix | 1-3 local image files whose style the result follows |
+| `character_reference_image`, `character_reference_mask` | generate (3.0), edit, remix | one local image of a character to keep consistent, with an optional grayscale mask of the same size; Ideogram bills character references at its own rate |
+| `style_codes` | generate (3.0), edit, remix | 1-8 eight-character hexadecimal codes from Ideogram |
+| `style_preset` | generate (3.0), edit, remix | a named preset as Ideogram lists them |
+| `color_palette` | generate (3.0), edit, remix | `{"name": "EMBER"}` (presets: `EMBER`, `FRESH`, `JUNGLE`, `MAGIC`, `MELON`, `MOSAIC`, `PASTEL`, `ULTRAMARINE`) or `{"members": [{"color_hex": "#FF0000", "color_weight": 0.7}, …]}` (1-10 colours), never both; sent as one `application/json` part as the OpenAPI spec declares (accepted by the live API in a probe on 2026-10-01; the tests stub `fetch`) |
+| `resolution` | generate, remix | one of Ideogram's 69 sizes (e.g. `1536x640`); not together with `aspect_ratio` |
+| `custom_model_uri` | generate (3.0) | `model/<name>/version/<version>` of a trained model |
+| `enable_copyright_detection` | generate | `true` runs the detection on this request; `false` leaves the organisation setting in force (it cannot switch an organisation-wide detection off) |
+
+`ideogram_generate` with `model: "4.0"` posts to `/v1/ideogram-v4/generate`, which takes the prompt, `resolution`, `rendering_speed` (not `FLASH`) and `enable_copyright_detection`; any other parameter is refused with its name, never dropped.
 
 ### Common Parameters
 
@@ -102,8 +117,8 @@ Every input image is a local file (`.png`, `.jpg`, `.jpeg`, `.webp`) of at most 
 | `style_type` | generate, edit, remix | `AUTO`, `GENERAL`, `REALISTIC`, `DESIGN`, `FICTION` (omitted: the API's default, GENERAL) |
 | `negative_prompt` | generate, remix | free text |
 | `aspect_ratio` | generate, remix | `1x1`, `16x9`, `9x16`, `4x3`, `3x4`, and 10 more |
-| `num_images` | all tools except describe | `1`-`8` |
-| `seed` | all tools except describe | `0`-`2,147,483,647` |
+| `num_images` | all tools except describe (generate with model 3.0 only) | `1`-`8` |
+| `seed` | all tools except describe (generate with model 3.0 only) | `0`-`2,147,483,647` |
 
 ## Security
 

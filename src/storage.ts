@@ -9,11 +9,23 @@ export const MAX_IMAGE_SIZE = 25 * 1024 * 1024; // 25 MB — Ideogram's document
 export const MAX_REQUEST_SIZE = 50 * 1024 * 1024;
 export const MULTIPART_OVERHEAD = 64 * 1024;
 
-/** The size of a validated input image, from stat: a pair of files is checked against the request limit before
- * either is read into memory. */
+/** The size of a validated input image, from stat: a set of files is checked against the request limit before any
+ * is read into memory. */
 export async function inputImageSize(rawPath: string): Promise<number> {
   const { resolvedPath } = await validateInputImage(rawPath);
   return (await stat(resolvedPath)).size;
+}
+
+/** Refuses a set of input files that cannot fit one request (the multipart overhead reserved) before any is read. */
+export async function assertRequestFits(rawPaths: string[]): Promise<void> {
+  if (rawPaths.length < 2) return; // one file is bounded by MAX_IMAGE_SIZE alone
+  const sizes = await Promise.all(rawPaths.map(inputImageSize));
+  const total = sizes.reduce((sum, size) => sum + size, 0);
+  if (total > MAX_REQUEST_SIZE - MULTIPART_OVERHEAD) {
+    throw new Error(
+      `${rawPaths.length} input images together are ${(total / 1024 / 1024).toFixed(1)}MB; Ideogram accepts a request under 50MB including the multipart overhead (each file up to 25MB)`,
+    );
+  }
 }
 
 const ALLOWED_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);

@@ -1,11 +1,20 @@
 import { z } from "zod/v4";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { ideogramRequest, downloadImage } from "../client.js";
-import { saveImage } from "../storage.js";
 import { AspectRatio, RenderingSpeed, MagicPrompt, StyleType, IdeogramResponseSchema } from "../types.js";
 import { loadImageBlob } from "../image-input.js";
+import { saveImage, assertRequestFits } from "../storage.js";
+import {
+  sharedStyleControls,
+  resolutionControl,
+  styleControlFiles,
+  assertStyleControlsConsistent,
+  assertOneOfResolutionOrAspect,
+  appendStyleControlFields,
+  appendStyleControlFiles,
+} from "../style-controls.js";
 
-export const remixInputSchema = z.object({
+export const remixInputSchema = z.strictObject({
   image: z.string().min(1).describe("Local file path of the source image to remix"),
   prompt: z.string().min(1).max(10000).describe("New creative direction"),
   image_weight: z.number().int().min(0).max(100).optional().describe("Original image influence (0-100, default: 50)"),
@@ -16,11 +25,16 @@ export const remixInputSchema = z.object({
   style_type: StyleType.optional().describe("Visual style (the API default is GENERAL when omitted)"),
   negative_prompt: z.string().optional().describe("What to exclude"),
   seed: z.number().int().min(0).max(2147483647).optional().describe("Reproducibility seed"),
+  ...sharedStyleControls,
+  ...resolutionControl,
 });
 
 export async function handleRemix(
   args: z.infer<typeof remixInputSchema>,
 ): Promise<CallToolResult> {
+  assertStyleControlsConsistent(args);
+  assertOneOfResolutionOrAspect(args);
+  await assertRequestFits([args.image, ...styleControlFiles(args)]);
   const imageInput = await loadImageBlob(args.image);
 
   const form = new FormData();
@@ -34,6 +48,8 @@ export async function handleRemix(
   if (args.style_type) form.append("style_type", args.style_type);
   if (args.negative_prompt) form.append("negative_prompt", args.negative_prompt);
   if (args.seed !== undefined) form.append("seed", String(args.seed));
+  appendStyleControlFields(form, args);
+  await appendStyleControlFiles(form, args);
 
   const raw = await ideogramRequest("/v1/ideogram-v3/remix", form);
   const response = IdeogramResponseSchema.parse(raw);

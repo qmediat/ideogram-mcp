@@ -11,6 +11,9 @@ export const StyleType = z.enum(["AUTO", "GENERAL", "REALISTIC", "DESIGN", "FICT
 
 export const MagicPrompt = z.enum(["AUTO", "ON", "OFF"]);
 
+/** The generation models this server calls: 3.0 (`/v1/ideogram-v3/generate`) and 4.0 (`/v1/ideogram-v4/generate`). */
+export const GenerateModel = z.enum(["3.0", "4.0"]);
+
 export const DescribeModelVersion = z.enum(["V_2", "V_3"]);
 
 // All 69 valid resolutions for the reframe endpoint (from Ideogram V3 API spec)
