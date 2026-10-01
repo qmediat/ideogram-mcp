@@ -27,6 +27,8 @@ export const StyleCode = z.string().regex(/^[0-9A-Fa-f]{8}$/, "an 8-character he
 
 /** The 69 resolutions Ideogram 3.0 offers — the same list reframe uses. */
 export const Resolution = ReframeResolution;
+/** Ideogram 4.0's sizes are not enumerated in its reference: any WIDTHxHEIGHT goes through, the API judges it. */
+export const AnyResolution = z.string().regex(/^\d{3,4}x\d{3,4}$/, "WIDTHxHEIGHT");
 
 export const CustomModelUri = z.string().regex(/^model\/[^/\s]+\/version\/[^/\s]+$/, "model/<name>/version/<version>");
 
@@ -58,6 +60,14 @@ export const resolutionControl = {
   resolution: Resolution.optional().describe("Exact output resolution (one of Ideogram's 69 sizes); not with aspect_ratio"),
 };
 
+/** generate's resolution: 3.0's 69 sizes, or any WIDTHxHEIGHT for 4.0 (checked against the model in the handler). */
+export const generateResolutionControl = {
+  resolution: z
+    .union([Resolution, AnyResolution])
+    .optional()
+    .describe("Exact output resolution: one of Ideogram 3.0's 69 sizes, or any WIDTHxHEIGHT for model 4.0; not with aspect_ratio"),
+};
+
 /** generate alone takes a custom model and the copyright check. */
 export const generateOnlyControls = {
   custom_model_uri: CustomModelUri.optional().describe("A custom (trained) model: model/<name>/version/<version>"),
@@ -69,7 +79,11 @@ export const generateOnlyControls = {
 
 /** Every control any endpoint takes (all optional); an endpoint's own schema spreads only the fields it takes, so
  * a value an endpoint lacks is never present in its args. */
-const everyControl = z.object({ ...sharedStyleControls, ...resolutionControl, ...generateOnlyControls });
+const everyControl = z.object({
+  ...sharedStyleControls,
+  resolution: AnyResolution.optional(), // the encoder takes any size; each endpoint's schema narrows it
+  ...generateOnlyControls,
+});
 export type StyleControls = z.infer<typeof everyControl>;
 
 /** resolution and aspect_ratio are alternatives: the API refuses the pair, so the tool refuses it before any upload. */

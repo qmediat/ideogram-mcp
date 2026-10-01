@@ -5,7 +5,8 @@ import { AspectRatio, RenderingSpeed, MagicPrompt, StyleType, IdeogramResponseSc
 import { saveImage, assertRequestFits } from "../storage.js";
 import {
   sharedStyleControls,
-  resolutionControl,
+  generateResolutionControl,
+  Resolution,
   generateOnlyControls,
   styleControlFiles,
   assertStyleControlsConsistent,
@@ -27,7 +28,7 @@ export const generateInputSchema = z.strictObject({
     "Ideogram model: 3.0 (default; every parameter below) or 4.0 (text prompt, resolution, rendering_speed except FLASH, enable_copyright_detection — the other parameters are refused)",
   ),
   ...sharedStyleControls,
-  ...resolutionControl,
+  ...generateResolutionControl,
   ...generateOnlyControls,
 });
 
@@ -55,6 +56,9 @@ function buildV4Form(args: GenerateArgs): FormData {
 async function buildV3Form(args: GenerateArgs): Promise<FormData> {
   assertStyleControlsConsistent(args);
   assertOneOfResolutionOrAspect(args);
+  if (args.resolution !== undefined && !Resolution.safeParse(args.resolution).success) {
+    throw new Error(`resolution ${args.resolution} is not one of Ideogram 3.0's sizes (any WIDTHxHEIGHT is for model 4.0)`);
+  }
   await assertRequestFits(styleControlFiles(args));
   const form = new FormData();
   form.append("prompt", args.prompt);

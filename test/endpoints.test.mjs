@@ -181,7 +181,9 @@ test("the tools refuse what the API refuses: resolution with aspect_ratio, a pal
   assert.equal(calls.length, 0);
   const both = { name: "EMBER", members: [{ color_hex: "#FF0000" }] };
   assert.equal(generateInputSchema.safeParse({ prompt: "x", color_palette: both }).success, false, "name and members together are refused, never silently reduced");
-  assert.equal(generateInputSchema.safeParse({ prompt: "x", resolution: "9999x9999" }).success, false, "only Ideogram's 69 sizes");
+  const odd = await capture(() => assert.rejects(() => handleGenerate({ prompt: "x", resolution: "9999x9999" }), /not one of Ideogram 3.0's sizes/));
+  assert.equal(odd.length, 0, "3.0 refuses a size outside its 69 before any request");
+  assert.equal(generateInputSchema.safeParse({ prompt: "x", resolution: "big" }).success, false, "the shape is always WIDTHxHEIGHT");
   assert.equal(editInputSchema.safeParse({ image, mask, prompt: "x", resolution: "1024x1024" }).success, false, "a control inpaint lacks is refused, never silently dropped");
   assert.equal("resolution" in editInputSchema.shape, false, "inpaint has no such parameter in its schema");
   assert.equal(remixInputSchema.safeParse({ image, prompt: "x", custom_model_uri: "model/a/version/1" }).success, false);
@@ -212,7 +214,6 @@ test("a character mask without its image, a bad style code and a bad palette col
   assert.equal(generateInputSchema.safeParse({ prompt: "x", color_palette: { members: [{ color_hex: "red" }] } }).success, false);
   assert.equal(generateInputSchema.safeParse({ prompt: "x", color_palette: { name: "EMBER" } }).success, true);
   assert.equal(generateInputSchema.safeParse({ prompt: "x", resolution: "1024x1024" }).success, true);
-  assert.equal(generateInputSchema.safeParse({ prompt: "x", resolution: "big" }).success, false);
 });
 
 test("reference images count against the 50 MB request limit before any file is read", async () => {
@@ -236,6 +237,8 @@ test("model 4.0 posts text_prompt to the v4 endpoint and refuses the 3.0-only pa
   assert.equal(calls[0].url, "https://api.ideogram.ai/v1/ideogram-v4/generate");
   const form = calls[0].init.body;
   assert.equal(form.get("text_prompt"), "a cat");
+  const v4size = await capture(() => handleGenerate({ prompt: "a cat", model: "4.0", resolution: "2048x2048" }));
+  assert.equal(v4size[0].init.body.get("resolution"), "2048x2048", "4.0 takes a size outside the 3.0 list");
   assert.equal(form.get("prompt"), null, "the v4 field name, not the v3 one");
   assert.equal(form.get("resolution"), "1024x1024");
   assert.equal(form.get("rendering_speed"), "QUALITY");
