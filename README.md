@@ -18,7 +18,7 @@ MCP server for [Ideogram](https://developer.ideogram.ai) through Ideogram's v1 A
 
 ## Why this server?
 
-- **7 tools** — generate (Ideogram 3.0, or 4.0 with `model: "4.0"`), edit (inpaint), remix, reframe, replace background, upscale, describe. Generate, remix and edit take style reference images (up to 3), a character reference image with an optional mask, style codes, a style preset, a colour palette (preset or explicit colours), an exact resolution, a custom model and the copyright check
+- **7 tools** — generate (Ideogram 3.0, or 4.0 with `model: "4.0"`), edit (inpaint), remix, reframe, replace background, upscale, describe. Generate, remix and edit take style reference images (up to 3), a character reference image with an optional mask, style codes, a style preset and a colour palette (preset or explicit colours); generate and remix also an exact resolution; generate alone a custom model and the copyright check
 - **Guarded I/O** — HTTPS-only downloads from an allowlist with redirects blocked, a symlinked image file rejected, `image/*` Content-Type required, Zod schemas on every success response, output paths contained in the output directory ([details](https://github.com/qmediat/ideogram-mcp/blob/main/SECURITY.md))
 - **2 runtime dependencies** — `@modelcontextprotocol/sdk` + `zod`; native `fetch`, `FormData` and `Blob`
 - **Direct calls to api.ideogram.ai** — not proxied through a third-party service
