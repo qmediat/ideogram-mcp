@@ -3,7 +3,7 @@
 **Base URL:** `https://api.ideogram.ai`
 **Auth:** `Api-Key` header
 **Content-Type:** `multipart/form-data` (all endpoints)
-**API Keys:** https://ideogram.ai/manage-api
+**API Keys:** https://ideogram.ai/platform → API Keys (setup guide: https://developer.ideogram.ai/ideogram-api/api-setup). Checked against developer.ideogram.ai on 2026-10-01; the v1 API keeps working, Ideogram 4.x uses the v2 API, which this server does not call.
 **Official Docs:** https://developer.ideogram.ai
 
 ---
@@ -23,7 +23,7 @@ Generate images from text prompts.
 | `aspect_ratio` | enum | No | "1x1" | Output dimensions |
 | `rendering_speed` | enum | No | "DEFAULT" | Speed/quality tradeoff |
 | `magic_prompt` | enum | No | "AUTO" | Auto-enhance prompts |
-| `style_type` | enum | No | "AUTO" | Visual style |
+| `style_type` | enum | No | "GENERAL" | Visual style (API default when omitted) |
 | `negative_prompt` | string | No | — | What to exclude |
 | `seed` | integer | No | random | Reproducibility seed (0-2,147,483,647) |
 | `character_reference_images` | file[] | No | — | Character consistency (max 5) |
@@ -38,21 +38,21 @@ Generate images from text prompts.
 
 ---
 
-### 2. Edit — `POST /v1/ideogram-v3/edit`
+### 2. Edit — `POST /v1/ideogram-v3/inpaint`
 
-Edit specific areas of existing images using mask-based inpainting.
+Edit specific areas of existing images using mask-based inpainting. (`/v1/ideogram-v3/edit` is marked legacy by Ideogram — "use inpaint instead; this endpoint will be removed in a future release" — the server calls `inpaint` since 1.1.0.)
 
 **Parameters:**
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `image` | file | Yes | — | Source image to edit |
-| `mask` | file | Yes | — | Mask (black=edit, white=keep, min 10% black) |
+| `mask` | file | Yes | — | Mask (black = regions to edit, white = keep) |
 | `prompt` | string | Yes | — | Description of desired changes |
 | `num_images` | integer | No | 1 | Variations (1-8) |
 | `rendering_speed` | enum | No | "DEFAULT" | Speed/quality tradeoff |
 | `magic_prompt` | enum | No | "AUTO" | Auto-enhance prompts |
-| `style_type` | enum | No | "AUTO" | Visual style |
+| `style_type` | enum | No | "GENERAL" | Visual style (API default when omitted) |
 | `seed` | integer | No | random | Reproducibility seed |
 | `character_reference_images` | file[] | No | — | Character consistency (max 5) |
 
@@ -75,7 +75,7 @@ Transform images with new prompts while preserving characteristics.
 | `aspect_ratio` | enum | No | — | Output dimensions |
 | `rendering_speed` | enum | No | "DEFAULT" | Speed/quality tradeoff |
 | `magic_prompt` | enum | No | "AUTO" | Auto-enhance prompts |
-| `style_type` | enum | No | "AUTO" | Visual style |
+| `style_type` | enum | No | "GENERAL" | Visual style (API default when omitted) |
 | `negative_prompt` | string | No | — | What to exclude |
 | `seed` | integer | No | random | Reproducibility seed |
 | `character_reference_images` | file[] | No | — | Character consistency (max 5) |
@@ -145,7 +145,7 @@ Generate text descriptions from images.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `image_file` | file | Yes | — | Image binary (JPEG/PNG/WebP, max 10MB) |
+| `image_file` | file | Yes | — | Image binary (JPEG/PNG/WebP, max 25MB) |
 | `describe_model_version` | enum | No | "V_3" | "V_2" or "V_3" |
 
 **Response:**
@@ -218,7 +218,7 @@ The Ideogram API supports three input formats:
 **Note:** This MCP server currently supports **local file paths only** (option 1). The file is read, validated, and uploaded as multipart binary.
 
 **Constraints:**
-- Max file size: 10 MB
+- Max file size: 25 MB
 - Formats: PNG, JPEG, WebP
 
 ---

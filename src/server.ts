@@ -20,14 +20,14 @@ export function createServer(): McpServer {
   });
 
   server.registerTool("ideogram_generate", {
-    description: "Generate images from text prompts using Ideogram V3. Supports multiple aspect ratios, style types, and quality levels.",
+    description: "Generate images from text prompts with Ideogram 3.0. Supports multiple aspect ratios, style types, and quality levels.",
     inputSchema: generateInputSchema,
   }, async (args) => {
     try { return await handleGenerate(args); } catch (error) { return errorResponse(error); }
   });
 
   server.registerTool("ideogram_describe", {
-    description: "Generate a text description of an image using Ideogram V3. Accepts a local file path.",
+    description: "Generate a text description of an image (Ideogram's describe endpoint). Accepts a local file path.",
     inputSchema: describeInputSchema,
   }, async (args) => {
     try { return await handleDescribe(args); } catch (error) { return errorResponse(error); }

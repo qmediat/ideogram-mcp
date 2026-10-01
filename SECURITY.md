@@ -14,7 +14,7 @@ We will acknowledge your report within 48 hours and aim to release a fix within 
 
 ## Security Model
 
-`ideogram-mcp` is designed with a zero-trust, minimal-dependency approach. Every security decision is documented below.
+`ideogram-mcp` is designed with a defensive, minimal-dependency approach. Every security decision is documented below. One trust boundary to know: the server trusts `api.ideogram.ai`'s success responses after schema parsing, and it uploads any readable local image path the model names (the input path is validated for extension, size and symlinks, not restricted to a directory).
 
 ### Supply Chain
 
@@ -35,7 +35,7 @@ We will acknowledge your report within 48 hours and aim to release a fix within 
 | **SSRF via download URLs** | HTTPS required + hostname allowlist (`ideogram.ai`, `api.ideogram.ai`, known CDN) |
 | **SSRF via redirects** | `redirect: "manual"` — all redirects blocked and reported |
 | **API key exfiltration** | Key sent only to `api.ideogram.ai` (hardcoded base URL), never logged |
-| **Request timeout** | `AbortSignal.timeout(120s)` on every outbound request |
+| **Request timeout** | `AbortSignal.timeout(120s)` on every outbound request; a timed-out request is not retried (the server may have accepted and billed it), only connection failures and 429/5xx are |
 | **Content-Type validation** | Downloads must have `image/*` Content-Type — HTML/JSON error pages rejected |
 | **Download size limit** | Content-Length pre-check + post-download buffer size cap (50 MB) |
 
@@ -44,8 +44,8 @@ We will acknowledge your report within 48 hours and aim to release a fix within 
 | Threat | Protection |
 |--------|-----------|
 | **Path traversal** | Extension allowlist (`.png`, `.jpg`, `.jpeg`, `.webp` only) |
-| **Symlink attacks** | `lstat()` on original path before reading — rejects user-created symlinks |
-| **File size DoS** | `stat()` check before read — 10 MB limit (Ideogram API limit) |
+| **Symlink attacks** | `lstat()` on the image path before reading — a symlinked file is rejected; a symlinked parent directory is resolved |
+| **File size DoS** | `stat()` check before read — 25 MB limit per image (Ideogram's documented maximum); `ideogram_edit` refuses image + mask at or over Ideogram's 50 MB request limit before uploading |
 | **Filename injection** | Output filenames are `ideogram-{timestamp}-{random}.{ext}` — no user input |
 | **Output directory escape** | `path.relative()` containment check on all saved files |
 
@@ -54,7 +54,7 @@ We will acknowledge your report within 48 hours and aim to release a fix within 
 | Layer | Mechanism |
 |-------|-----------|
 | **Input validation** | Zod schemas on all tool parameters (type, range, enum) |
-| **Response validation** | Zod schemas on API responses — no blind `as` type casts |
+| **Response validation** | Zod schemas on every success response; an error body is read as `{code?, message?}` |
 | **Error isolation** | `IdeogramApiError` class — raw stack traces never exposed to MCP clients |
 | **Retry logic** | Exponential backoff with jitter for 429/500/502/503/504 + network errors |
 
@@ -68,10 +68,4 @@ We will acknowledge your report within 48 hours and aim to release a fix within 
 
 ## Code Review History
 
-This codebase has passed **4 rounds of parallel code review** by:
-- GPT-5.3-Codex (OpenAI)
-- Gemini 2.5 Pro (Google)
-- Grok-4 (xAI)
-- GitHub Copilot
-
-All CRITICAL and MAJOR findings were fixed and verified with tests.
+Release 1.0.0 (April 2026) passed 4 rounds of parallel code review by GPT-5.3-Codex, Gemini 2.5 Pro, Grok-4 and GitHub Copilot; all CRITICAL and MAJOR findings were fixed and verified with tests. Later releases are reviewed through the same multi-model pipeline per pull request; the review record lives in each pull request.

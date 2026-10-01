@@ -3,7 +3,18 @@ import { join, resolve, relative, isAbsolute, extname } from "node:path";
 import { randomBytes } from "node:crypto";
 import { getConfig } from "./config.js";
 
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB — Ideogram API limit
+export const MAX_IMAGE_SIZE = 25 * 1024 * 1024; // 25 MB — Ideogram's documented maximum per image file
+/** Ideogram's limit for a whole multipart request (inpaint: image + mask, each up to 25 MB). The file bytes may use at
+ * most this much less than the limit: the multipart boundaries, part headers and the prompt take the rest. */
+export const MAX_REQUEST_SIZE = 50 * 1024 * 1024;
+export const MULTIPART_OVERHEAD = 64 * 1024;
+
+/** The size of a validated input image, from stat: a pair of files is checked against the request limit before
+ * either is read into memory. */
+export async function inputImageSize(rawPath: string): Promise<number> {
+  const { resolvedPath } = await validateInputImage(rawPath);
+  return (await stat(resolvedPath)).size;
+}
 
 const ALLOWED_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 
@@ -42,7 +53,7 @@ export function getImageMeta(filePath: string): { extension: string; mimeType: s
 export async function validateFileSize(filePath: string): Promise<void> {
   const stats = await stat(filePath);
   if (stats.size > MAX_IMAGE_SIZE) {
-    throw new Error(`File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds 10MB limit`);
+    throw new Error(`File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds the 25MB limit (Ideogram's maximum per image)`);
   }
   if (stats.size === 0) {
     throw new Error("File is empty");
