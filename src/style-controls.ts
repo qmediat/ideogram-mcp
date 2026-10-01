@@ -11,7 +11,7 @@ export const ColorPalettePreset = z.enum(["EMBER", "FRESH", "JUNGLE", "MAGIC", "
 
 const ColorHex = z.string().regex(/^#[0-9A-Fa-f]{6}$/, "a colour as #RRGGBB");
 
-export const ColorPaletteMember = z.object({
+export const ColorPaletteMember = z.strictObject({
   color_hex: ColorHex.describe("The colour, #RRGGBB"),
   color_weight: z.number().min(0.05).max(1).optional().describe("Its share of the palette (0.05-1)"),
 });

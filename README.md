@@ -117,8 +117,8 @@ Every input image is a local file (`.png`, `.jpg`, `.jpeg`, `.webp`) of at most 
 | `style_type` | generate, edit, remix | `AUTO`, `GENERAL`, `REALISTIC`, `DESIGN`, `FICTION` (omitted: the API's default, GENERAL) |
 | `negative_prompt` | generate, remix | free text |
 | `aspect_ratio` | generate, remix | `1x1`, `16x9`, `9x16`, `4x3`, `3x4`, and 10 more |
-| `num_images` | all tools except describe | `1`-`8` |
-| `seed` | all tools except describe | `0`-`2,147,483,647` |
+| `num_images` | all tools except describe (generate with model 3.0 only) | `1`-`8` |
+| `seed` | all tools except describe (generate with model 3.0 only) | `0`-`2,147,483,647` |
 
 ## Security
 

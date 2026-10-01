@@ -10,7 +10,7 @@ process.env.IDEOGRAM_API_KEY = "dummy-key-for-tests";
 process.env.IDEOGRAM_OUTPUT_DIR = await mkdtemp(join(tmpdir(), "ideogram-out-"));
 
 const { handleEdit, editInputSchema } = await import("../dist/tools/edit.js");
-const { handleGenerate, generateInputSchema } = await import("../dist/tools/generate.js");
+const { handleGenerate, generateInputSchema, V4_FIELDS } = await import("../dist/tools/generate.js");
 const { handleRemix, remixInputSchema } = await import("../dist/tools/remix.js");
 const { ideogramRequest, downloadImage } = await import("../dist/client.js");
 const { validateFileSize } = await import("../dist/storage.js");
@@ -249,4 +249,20 @@ test("model 4.0 posts text_prompt to the v4 endpoint and refuses the 3.0-only pa
   assert.equal(refused.length, 0);
   const flash = await capture(() => assert.rejects(() => handleGenerate({ prompt: "a cat", model: "4.0", rendering_speed: "FLASH" }), /no FLASH/));
   assert.equal(flash.length, 0, "refused before any request");
+});
+
+test("every generate parameter is either one Ideogram 4.0 takes or one it refuses by name — none is dropped", async () => {
+  const keys = Object.keys(generateInputSchema.shape);
+  for (const key of V4_FIELDS) assert.ok(keys.includes(key), `V4_FIELDS names a real parameter: ${key}`);
+  const refused = keys.filter((k) => !V4_FIELDS.has(k));
+  const sample = { prompt: "x", model: "4.0", num_images: 1, seed: 1, aspect_ratio: "1x1", magic_prompt: "OFF", style_type: "AUTO", negative_prompt: "n", style_codes: ["A1B2C3D4"], style_preset: "p", color_palette: { name: "EMBER" }, custom_model_uri: "model/a/version/1", style_reference_images: [image], character_reference_image: image, character_reference_mask: image };
+  for (const key of refused) {
+    assert.ok(key in sample, `the test knows a value for ${key}`);
+    const calls = await capture(() => assert.rejects(() => handleGenerate({ prompt: "x", model: "4.0", [key]: sample[key] }), new RegExp(`does not take: ${key}`)));
+    assert.equal(calls.length, 0);
+  }
+});
+
+test("a palette member with an unknown key is refused, not silently reduced", () => {
+  assert.equal(generateInputSchema.safeParse({ prompt: "x", color_palette: { members: [{ color_hex: "#FF0000", weight: 0.5 }] } }).success, false);
 });

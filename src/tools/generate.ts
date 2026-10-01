@@ -35,7 +35,7 @@ export const generateInputSchema = z.strictObject({
 type GenerateArgs = z.infer<typeof generateInputSchema>;
 
 /** What Ideogram 4.0 generate accepts besides the prompt; anything else given is refused, never dropped. */
-const V4_FIELDS = new Set<keyof GenerateArgs>(["prompt", "model", "resolution", "rendering_speed", "enable_copyright_detection"]);
+export const V4_FIELDS = new Set<keyof GenerateArgs>(["prompt", "model", "resolution", "rendering_speed", "enable_copyright_detection"]);
 
 function buildV4Form(args: GenerateArgs): FormData {
   const given = (Object.keys(args) as (keyof GenerateArgs)[]).filter((k) => args[k] !== undefined && !V4_FIELDS.has(k));

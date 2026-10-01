@@ -34,14 +34,14 @@ export function createServer(): McpServer {
   });
 
   server.registerTool("ideogram_edit", {
-    description: "Edit specific areas of an image using mask-based inpainting. Requires source image, mask (black=edit, white=keep), and prompt; takes the same style controls as generate.",
+    description: "Edit specific areas of an image using mask-based inpainting. Requires source image, mask (black=edit, white=keep), and prompt; takes the style and character references, style codes, preset and palette (no exact resolution: inpaint keeps the source size).",
     inputSchema: editInputSchema,
   }, async (args) => {
     try { return await handleEdit(args); } catch (error) { return errorResponse(error); }
   });
 
   server.registerTool("ideogram_remix", {
-    description: "Transform an image with a new prompt while preserving characteristics. Control influence with image_weight (0-100); takes the same style controls as generate.",
+    description: "Transform an image with a new prompt while preserving characteristics. Control influence with image_weight (0-100); takes the style and character references, style codes, preset, palette and an exact resolution.",
     inputSchema: remixInputSchema,
   }, async (args) => {
     try { return await handleRemix(args); } catch (error) { return errorResponse(error); }
