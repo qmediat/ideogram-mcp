@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `.github/workflows/mcp-registry.yml` publishes `server.json` to the official MCP Registry when a release is
+  published (GitHub Actions OIDC, no secret; `mcp-publisher` pinned by version and sha256). The registry listed
+  an old version of this server; the next run lists the current one.
+
+### Fixed
+
+- `server.json` `description` within the registry's 100-character limit (the registry refused the longer one).
+
 ## [1.2.0] - 2026-10-01
 
 A comparison with Ideogram's own MCP server and the current API (`docs/COMPETITION-2026-10-01.md`).
