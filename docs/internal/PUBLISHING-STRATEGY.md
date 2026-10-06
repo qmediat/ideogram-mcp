@@ -74,5 +74,6 @@ Flagowy open-source MCP server Quantum Media Technologies dla Ideogram V3 API. B
 
 - **CI/CD:** GitHub Actions — build on push/PR (Node 22+24), stage on release with provenance; a maintainer approves the version on npmjs.com
 - **npm auth:** Trusted Publishing (OIDC) from `publish.yml`, stage-only — `npm stage publish`, then a maintainer approves each version on npmjs.com with 2FA; the granular access token (expired 2026-05-03) is retired and nothing reads NPM_TOKEN
-- **MCP publisher CLI:** `/tmp/mcp-publisher` (reinstall from GitHub releases after reboot)
-- **Registry tokens:** `.mcpregistry_*` files (gitignored)
+- **MCP Registry:** `.github/workflows/mcp-registry.yml` publishes each release npm serves (at a release, at the end of
+  Release, daily, by hand) through GitHub Actions OIDC — no secret, no local `mcp-publisher`; the `.mcpregistry_*`
+  token files of the manual era stay gitignored
