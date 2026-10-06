@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-06
+
 ### Added
 
 - `.github/workflows/mcp-registry.yml` keeps the official MCP Registry in step with the releases: every run (at a
