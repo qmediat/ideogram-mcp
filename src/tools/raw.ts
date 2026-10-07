@@ -99,7 +99,9 @@ async function buildRawRequest(op: Operation, args: RawArgs): Promise<ApiRequest
   check("path", op.schemas.path, params.path ?? {});
   check("query", op.schemas.query, params.query ?? {});
   checkHeaders(op, params.headers ?? {});
-  if (op.body !== "none") check("body", bodySchemaFor(op, media), withFiles);
+  if (op.body === "none") {
+    if (Object.keys(withFiles).length > 0) throw new Error(`body: ${op.id} takes no body; given ${Object.keys(withFiles).join(", ")}`);
+  } else check("body", bodySchemaFor(op, media), withFiles);
   const violations = constraintViolations(op, withFiles);
   if (violations.length > 0) throw new Error(violations.join("\n"));
   const uploads = await loadUploads(op, files);

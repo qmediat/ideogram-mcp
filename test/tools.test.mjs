@@ -263,6 +263,17 @@ test("ideogram_api on get_generation_v2 reads the status it returns: a failed ge
   assert.match(text(result), /gF failed: content_policy_violation/);
 });
 
+test("a 1.x alias and the field it maps to, both given, are refused (quality + rendering_speed on Ideogram 4.5)", async () => {
+  const both = await call("ideogram_generate", { model: "ideogram-4-5", prompt: "x", quality: "very_low", rendering_speed: "QUALITY" }).catch((e) => e);
+  assert.match(both.message, /rendering_speed QUALITY maps to quality, which is also given \("very_low"\); give one/);
+});
+
+test("ideogram_api refuses a body for an operation that takes none (get_generation_v2) instead of dropping it", async () => {
+  const { result, requests } = await call("ideogram_api", { operation: "get_generation_v2", params: { path: { generation_id: "g" }, body: { prompt: "x" } }, wait_s: 0 }).catch((e) => ({ result: { isError: true, content: [{ text: e.message }] }, requests: [] }));
+  assert.match(text(result), /body: get_generation_v2 takes no body; given prompt/);
+  assert.equal(requests.length, 0);
+});
+
 test("ideogram_operations lists a family and details one operation with its fields and limits", async () => {
   const family = await call("ideogram_operations", { family: "generate" });
   assert.equal(text(family.result).split("\n").filter((l) => l.includes("/v2/image/generate/")).length, 18);

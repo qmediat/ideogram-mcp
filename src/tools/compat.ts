@@ -52,6 +52,7 @@ function adaptSpeed(fields: Record<string, unknown>, takes: ReadonlySet<string>,
   const speed = fields.rendering_speed;
   if (typeof speed !== "string" || speed !== speed.toUpperCase() || !(speed in SPEED_TO_QUALITY)) return;
   if (takes.has("quality") && !takes.has("rendering_speed")) {
+    if (fields.quality !== undefined) throw new Error(`rendering_speed ${speed} maps to quality, which is also given (${JSON.stringify(fields.quality)}); give one`);
     delete fields.rendering_speed;
     fields.quality = SPEED_TO_QUALITY[speed];
     notes.push(`rendering_speed ${speed} → quality ${SPEED_TO_QUALITY[speed]}`);
