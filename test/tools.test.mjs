@@ -282,6 +282,13 @@ test("ideogram_quote refuses an unquotable tool before any file is read: describ
   assert.equal(requests.length, 0);
 });
 
+test("ideogram_api on get_generation_v2 with a wait polls a still-pending generation until it completes", async () => {
+  const done = { generation_id: "gW", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "image.generation", url: null, is_image_safe: false, seed: 1, prompt: "p", resolution: "1024x1024" }] };
+  const { requests, result } = await call("ideogram_api", { operation: "get_generation_v2", params: { path: { generation_id: "gW" } }, wait_s: 20 }, (_req, n) => (n < 3 ? pending("gW") : { json: done }));
+  assert.equal(requests.length, 3, "the first lookup, then two polls");
+  assert.match(text(result), /Generation gW completed/);
+});
+
 test("ideogram_operations lists a family and details one operation with its fields and limits", async () => {
   const family = await call("ideogram_operations", { family: "generate" });
   assert.equal(text(family.result).split("\n").filter((l) => l.includes("/v2/image/generate/")).length, 18);

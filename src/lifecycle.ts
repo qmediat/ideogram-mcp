@@ -141,7 +141,13 @@ export async function execute(client: IdeogramClient, req: ApiRequest, options: 
   const started = options.clock.now();
   const result = await client.call(asAsync(req));
   const body = withImageKind(result.body);
-  if (req.op.id === GENERATION_OP?.id) return generationOutcome(String(req.path.generation_id ?? ""), result.status, body); // a lookup, not a job
+  if (req.op.id === GENERATION_OP?.id) {
+    // a lookup, not a job: its status is read as one, and a still-pending generation is polled for the rest of the wait
+    const id = String(req.path.generation_id ?? "");
+    const first = generationOutcome(id, result.status, body);
+    if (first.kind !== "pending") return first;
+    return poll(client, id, started + clampWait(options.waitS) * 1000, POLL_CAP_MS, options.clock);
+  }
   const schema = responseSchemaFor(req.op, false);
   const checked = schema === null ? { success: true as const } : schema.safeParse(body);
   if (!checked.success) return contractMismatch(result.status, body, checked.error);
