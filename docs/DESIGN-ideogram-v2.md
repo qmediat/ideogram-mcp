@@ -1,6 +1,6 @@
 # DESIGN — `@qmediat.io/ideogram-mcp` 2.x: the whole Ideogram platform, one API, delivered by family
 
-Status: proposed (step 0 not started) · Date: 2026-10-07 · Owner: qmt · Decision: operator GO on the RAR of 2026-10-07
+Status: proposed, revised after the consult (step 0 not started) · Date: 2026-10-07 · Owner: qmt · Decision: operator GO on the RAR of 2026-10-07
 ("D — a core generated from the OpenAPI snapshot, curated tools per family, a raw validated call from day one; one
 release per finished family") · Consult: architecture pass before the first line of code (section 12).
 
@@ -60,7 +60,10 @@ OperationClass = "documented" | "spec_only" | "v1_only" | "legacy" | "internal" 
                  v1_only:   a v1 capability v2 lacks (training, magic-prompt, snap-mask, provenance, layerize-logos,
                             ideogram-v45, Flux 2 Klein, Ernie, cfg-distilled/fp8/stable, generate-design, graphic, try-on,
                             image-to-image, p-image tiers) — step 5, raw call first, curated later
-                 legacy:    unversioned Ideogram 1.0/2.0-era paths — never exposed (v2 ideogram-2/2a cover them)
+                 legacy:    unversioned paths whose capability v2 covers (/generate, /edit, /remix, /reframe, /upscale,
+                            /describe, /magic-prompt) — never exposed; /datasets and /models are API-key reachable and
+                            feed training, so they are v1_only, not legacy: class by capability and effective auth,
+                            never by URL age alone (consult F14)
                  internal:  /manage/*, /mini-apps/*, /internal* — never exposed
                  bearer_only: security [BearerAuth] alone — never exposed (not reachable with an API key)
 Operation      = { id: OperationId (the spec's operationId), method, path, class: OperationClass, family: Family,
@@ -76,23 +79,46 @@ Registry       = { [family]: { models: ModelId[] (the spec's order), newest: Mod
                    inpaint/reframe/replace_background/layerize ideogram-3 — validated in CI: every model id of the
                    spec's /v2 paths is in the registry and every registry id is in the spec, or the build fails with the
                    two lists) } }
-Lifecycle      = Sync {result} | Async {generation_id → poll GET /v2/generations/{id} every POLL_MS (2 000, ×1.5 to
-                 10 000) until completed|failed or LIFECYCLE_TIMEOUT_MS (images 600 000, video 1 800 000); failed →
-                 failure_reason; pending at the timeout → the generation_id returned so `ideogram_generation` can finish}
-Result         = { generation_id, seed, images: Saved[] (path, url, resolution, seed, prompt, is_image_safe),
-                   unsafe: number (url null), usage_cost_usd_micros | null (from GenerationResponse when polled; the
-                   sync 200 of a v2 op carries none — a `cost: unknown` field says so), model, operation: OperationId }
+Request        = { path: {…}, query: {…}, headers: {…}, body: {media: "multipart" | "json", fields, files} } — the four
+                 locations kept apart with the spec's serialization rules (repeated query arrays, JSON-encoded multipart
+                 fields, `generation_id` in the path); never one flat object (consult F6)
+Lifecycle      = Accepted {generation_id} is what a tool returns by default the moment the API accepts the job; an
+                 optional bounded wait (`wait_s`, default 45, max 50: the MCP SDK's client timeout is 60 s — consult F3,
+                 Gemini F1) polls GET /v2/generations/{id} (2 s → ×1.5 → 30 s cap, 60 s for video — Gemini F6) and returns
+                 Completed {payload} | Failed {failure_reason} | Pending {generation_id, how to resume}; `ideogram_generation`
+                 resumes any id across restarts (operation ids are kept in the result so the client never resubmits paid
+                 work). Retries: a POST is retried ONLY when the connection failed before the request was sent or the API
+                 rejected it before acceptance (4xx, 429 with Retry-After); never after a possible acceptance (consult F4)
+Outcome        = Completed {payload: Payload, usage_cost_usd_micros | null, credits | null} | Pending {generation_id} |
+                 Failed {failure_reason} | ContractMismatch {status, generation_id?, issues: ZodIssue[] (bounded, redacted),
+                 body_excerpt} — a discriminated union; a paid generation whose body the schema rejects is never passed
+                 off as a success (consult F10)
+Payload        = Images {items: Saved[] (path | url, resolution, seed?, prompt?, is_image_safe), unsafe: number, safety
+                 notes when the response carries them} | Description {description_id, text | json_prompt} |
+                 Video {items: Saved[] (mp4)} | Svg {…} | Layered {…} — by the operation's response kind (consult F7)
 Quote          = PriceQuote (as the spec) + { usd: Decimal string with 6 places, credits: Decimal, operation, model }
 Usage          = GetAccountUsageResponse buckets → { start, end, line_items: {product, endpoint, cost_total, currency,
                    units {unit, quantity, unit_price}, api_key (redacted), source} } — the shape ai-cost will read
 Error          = IdeogramApiError {status, code, message, reject_reason?, retry_after_s?, max_inflight?} (402 and 429
                  typed from GenerationErrorResponse; 4xx validation errors never reach the API: zod refuses first)
-ToolSpec       = { name: "ideogram_<family>", input: ZodObject (one object per family: `model` enum of that family's
-                   ids + the UNION of the family's request fields, each field only on the models whose schema has it —
-                   the handler refuses a field the chosen model does not take, naming the models that do), handler }
-RawCall        = ideogram_api { operation: OperationId (documented | spec_only | v1_only only), params: object, files:
-                   {field: path}[], dry_run?: boolean } → validated by the operation's generated zod schema, the response
-                   returned as the spec types it, images downloaded like a curated tool's
+ToolSpec       = { name: "ideogram_<family>", input: a discriminated union on `model` (JSON Schema `oneOf` per model:
+                   exact fields per model, no hallucinated combinations — Gemini F4; the advertised schema's bytes are
+                   measured in tests/budget.test.mjs), semantic: Constraint[] (reviewed rules the spec states only in
+                   prose: mask ↔ first image, size vs source, file caps per operation — consult F8), handler }
+Constraint     = { operation, rule: (req) => Issue | null, text } — reviewed, versioned, tested with negative cases;
+                 a 400 the API still returns is formatted as a tool error with the API's message (Gemini F3)
+Support        = per release: { operation: OperationId, status: "curated" | "raw" | "planned" } — runtime support is a
+                 separate table from OperationClass (consult F9): `ideogram_api` serves only operations whose status is
+                 curated or raw in the SHIPPED release; a `spec_only` operation needs `allow_undocumented: true`
+FileLimits     = per operation from the spec (describe 10 MB, precise edit 50 MB, generate 25 MB × 5…) — never one cap
+                 (consult F12); downloads streamed to disk with a byte counter, never buffered whole (Gemini F7)
+RawCall        = ideogram_api { operation: OperationId, params: object (free-form in the ADVERTISED schema — a union of
+                   200 request schemas would not fit a client's context, Gemini F2 — validated at call time by the
+                   operation's generated schema), files: {field: path}[], dry_run?, allow_undocumented? } + a discovery
+                   tool ideogram_operations {family?, operation?} → the operation's fields, kinds, limits and docs URL
+QuoteSupport   = the allow-list of operations that declare the `dry_run` parameter (describe and some workflows do not:
+                 a dry_run sent to them could run and bill — consult F1); the quote tool refuses the rest locally; the
+                 dry_run response is PriceQuote by a reviewed overlay (no operation response references it in the spec)
 ```
 
 ## 3. Module map
@@ -105,8 +131,12 @@ scripts/spec-generate.mjs         @hey-api/openapi-ts (modified 2026-09-30; zod 
                                   .include = the documented + spec_only + v1_only paths, exclude = legacy|internal|bearer;
                                   plugins: @hey-api/typescript + zod (NO client plugin: the hardened fetch client stays)
 src/generated/{types,zod}.ts      output, committed (a reviewer reads the diff; the build does not need the network)
-src/spec/operations.ts            Operation[] built from the snapshot at build time (class, family, model, flags, docsUrl,
-                                  toolText) — typed, frozen; src/spec/classify.ts holds the ONE classification rule
+src/spec/operations.ts            Operation[] built from the snapshot at build time (class, family, model, flags, docsUrl)
+                                  — typed, frozen; src/spec/classify.ts holds the ONE classification rule;
+                                  src/spec/overlay.ts the reviewed overlay (dry_run → PriceQuote, quote allow-list,
+                                  per-operation file limits, semantic constraints); src/spec/support.ts the per-release
+                                  support table; provider x-tool-description is SOURCE material for our reviewed tool
+                                  texts, never shipped verbatim (it carries host-specific instructions — consult F11)
 src/registry.ts                   Registry + the newest table + the CI check (tests/registry.test.mjs)
 src/client.ts                     as today (retries, Retry-After, allowed download hosts, 50 MB cap) + json bodies,
                                   dry_run query, typed 402/429, `Api-Key` only (never Bearer)
@@ -140,7 +170,9 @@ major version with a deprecation note, `ideogram_remix`, `ideogram_reframe`, `id
 | a download host outside the allow-list | refused and said (today's rule; the list gains the hosts the spec's examples show) |
 | a `spec_only` operation through `ideogram_api` | runs, the result carries `spec_only: true` and the docs-index note |
 | `legacy` / `internal` / `bearer_only` through `ideogram_api` | refused by class, the message says why |
-| a response the generated zod schema rejects | the raw body is returned with `schema_mismatch: true` and the zod issues — never silently reshaped; counted in the run's stderr line |
+| a response the generated zod schema rejects | `ContractMismatch` outcome (status, the generation_id when present, bounded redacted issues) — never a success, never silently reshaped; counted |
+| a 400 from the API after zod accepted the input | a tool error with the API's message and the field it names (the spec states some rules only in prose) |
+| a retry after a possible acceptance | never (one tool call must not create two billed jobs); the Accepted id is returned instead |
 | the registry disagrees with the snapshot | the build fails (CI) with both lists |
 | the live spec differs from the snapshot | the weekly job opens/updates ONE issue with the diff of exposed operations; the build is untouched |
 
@@ -148,12 +180,13 @@ major version with a deprecation note, `ideogram_remix`, `ideogram_reframe`, `id
 
 | bound | value | why |
 |---|---|---|
-| tool count after step 2 | ≤ 15 | MCP clients degrade with wide tool lists (the RAR's assumption; measured when the first client complains) |
+| tools/list after step 2 | 16 tools, advertised schema ≤ 64 KB serialized, measured in `tests/budget.test.mjs` | the count alone says nothing (consult F15): the bytes and the routing accuracy are what a client pays |
 | generated code | ≤ 600 KB committed (`src/generated/`) | 486 schemas × zod; filtered to the exposed operations |
 | request timeout | images 120 s sync (today), video: async only | the spec says video is acknowledgement-only |
-| poll | 2 s → ×1.5 → 10 s cap; images 10 min, video 30 min | a Quality 4.5 × 4 images takes minutes; video longer |
-| upload | ≤ 25 MB per file, ≤ 10 files (the spec's caps, enforced before the call) | a 413 from the API is a wasted round trip |
-| download | 50 MB cap, allow-listed hosts (today) | unchanged |
+| wait inside a tool call | default 45 s, max 50 s, then Pending {generation_id} | the MCP SDK's client timeout is 60 s (consult F3) |
+| poll | 2 s → ×1.5 → 30 s cap (60 s video); `ideogram_generation` resumes without limit | 180 polls per video would court 429s (Gemini F6) |
+| upload | per operation from the spec (describe 10 MB, precise edit 50 MB, generate 25 MB × 5…), enforced before the call | one cap was wrong for both ends (consult F12) |
+| download | streamed to disk with a byte counter, 50 MB cap, allow-listed hosts | today's downloader buffers the whole body before the cap (consult F12) |
 | live tests | `dry_run` only in CI: 0 USD; real generations by hand, each named with its quote | cost is counted (§0 of the operator's rules) |
 
 ## 6. Test plan
@@ -169,17 +202,27 @@ major version with a deprecation note, `ideogram_remix`, `ideogram_reframe`, `id
 - `tests/live-dry-run.test.mjs` — behind `IDEOGRAM_API_KEY`: every curated operation with `dry_run=true` (0 USD) must
   return a `PriceQuote`; the quotes are written to `docs/PRICES-<date>.md` as the price evidence (labelled "quotes of
   <date>, your account's prices may differ").
-- Each new check must fail on the previous version (Step 1b's rule): the registry/classify tests fail on 1.2.1 by
-  construction (no registry); the lifecycle tests fail on the v1 client (no `generation_id`).
+- `tests/wire.test.mjs` — independently authored wire fixtures (the exact bytes a known-good request produces:
+  multipart boundaries, JSON-encoded multipart fields, repeated query arrays, the path id) and negative semantic cases
+  (a mask without an image, a size with a source, a 60 MB describe upload); mutation-checked (consult F13).
+- `tests/budget.test.mjs` — the serialized tools/list of the shipped release ≤ the budget of section 5.
+- The dry_run suite needs an account with a non-zero balance (Gemini F10: a quote may check the balance) — said in the
+  test's skip message.
+- Each new check must fail on the previous version (Step 1b's rule), by behaviour, not by absence: the lifecycle tests
+  fail on the v1 client because it waits instead of returning an id; the wire tests fail because v1 sends
+  `rendering_speed` where v2 takes `quality`.
 
 ## 7. Versioning and migration (2.0.0)
 
-Breaking: `rendering_speed` → `quality` (`FLASH`→`very_low`, `TURBO`→`low`, `DEFAULT`→`medium`, `QUALITY`→`high`; the old
-values are accepted for one major version with a deprecation note in the result); `model` values are the spec's ids
-(`"3.0"`/`"4.0"` accepted as aliases of `ideogram-3`/`ideogram-4` for one major); `ideogram_edit` becomes an alias of
-`ideogram_inpaint`; v1-only parameters of 3.0 (`style_codes`, `color_palette`, `style_reference_images`, …) move to the v2
-fields of the same meaning where the spec has them — the migration table in `CHANGELOG.md`. The default `generate` model
-is `ideogram-4-5` (the newest; the quote tool tells the price before a call).
+Compatibility is defined per operation and model, not globally (consult F2): in v2 `ideogram-3` and `ideogram-4`
+still take `rendering_speed` (lowercase `turbo|default|quality`), only `ideogram-4-5` takes `quality`
+(`very_low|low|medium|high`); `FLASH` exists nowhere in v2. A 1.x call maps through a compatibility adapter: the
+uppercase value is lowercased for the 3.x/4.0 models, mapped to `quality` for 4.5, refused with the table otherwise; the
+result says what was mapped. `model` values are the spec's ids (`"3.0"` / `"4.0"` accepted as aliases for one major);
+`ideogram_edit` is an alias of `ideogram_inpaint`; the 1.x names and aliases stay through 2.x and leave in 3.x (consult
+Q5). **The default `generate` model stays `ideogram-3`** (cost-neutral for a 1.x call that omits `model` — Gemini F5,
+consult Q5); the README leads with `ideogram-4-5` and `ideogram_quote` tells the price before a call. Switching the
+default is the operator's call, recorded in the CHANGELOG when taken.
 
 ## 8. Steps (one release per finished family — Invariant #15)
 
@@ -197,7 +240,7 @@ is `ideogram-4-5` (the newest; the quote tool tells the price before a call).
 Bearer-only and internal operations (the web app's); remote HTTP transport and OAuth (Ideogram's own MCP owns that
 niche); a local price table (the quote is the price); exposing `legacy` paths.
 
-## 10. Open questions for the consult (section 12 records the answers)
+## 10. Open questions — answered by the consult (section 12)
 
 1. One tool per family with a `model` enum and a union of fields, or one tool per (family, model)? The first keeps ~15
    tools; the second gives exact schemas per model but 60+ tools.
@@ -213,6 +256,21 @@ niche); a local price table (the quote is the price); exposing `legacy` paths.
 (filled when step 0 is implemented: the registry and classify counts, the dry_run suite's quotes, the tool count, the
 generated size, the selftest and CI runs)
 
-## 12. Consult
+## 12. Consult (2026-10-07, before the first line of code)
 
-(the architecture pass's findings and what changed, with the consult's output file)
+Codex gpt-6-astra xhigh (read-only, `docs/consults/2026-10-07-design-v2.codex.json`) and Gemini 3.1 Pro
+(`docs/consults/2026-10-07-design-v2.gemini.json`). Answers: Q1 one tool per family with a `model` enum, exact schemas
+per model (discriminated union, not a flat union) — both; Q2 commit the generated code, the snapshot, the overlay and the
+generator config, deterministic regeneration checked in CI — both; Q3 keep `ideogram_api` from day one as an advanced
+fallback restricted to the shipped support table, with a discovery tool and undocumented operations opt-in — both (Gemini:
+never one giant schema); Q4 a weekly issue with semantic drift, CI tied to the snapshot — both; Q5 keep the 1.x names
+through 2.x with real compatibility adapters (Codex) vs a clean break (Gemini) — Codex's, because aliases without
+behaviour would break callers that omit `model`. Findings taken into the note: F1 quote allow-list (describe and some
+workflows have no `dry_run`), F2 compatibility per model (3.x/4.0 keep `rendering_speed`), F3 return the id at
+acceptance, bounded wait ≤ 50 s, F4 no retry after a possible acceptance, F5 the PriceQuote overlay, F6 the four request
+locations, F7 payload kinds (description, video, svg, layered), F8 semantic constraints apart from structural schemas,
+F9 runtime support apart from class, F10 ContractMismatch, F11 provider texts as source only, F12 per-operation file
+limits and streamed downloads, F13 independent wire fixtures, F14 `/datasets` and `/models` are v1_only (capability and
+auth, not URL age), F15 a measured schema budget; Gemini F5 the default model stays `ideogram-3`, F6 the poll cap, F8
+safety notes, F9 credits beside USD, F10 the balance note. Not taken: Gemini F2's "remove `ideogram_api`" — the raw tool
+advertises a small schema (`operation` + free-form `params`) and validates at call time, which answers the size concern.
