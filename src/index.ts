@@ -3,10 +3,13 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { ZodError } from "zod/v4";
 import { createServer } from "./server.js";
 import { getConfig } from "./config.js";
+import type { Config } from "./config.js";
+import { contextFromConfig } from "./tools/context.js";
 
 async function main(): Promise<void> {
+  let config: Config;
   try {
-    getConfig();
+    config = getConfig();
   } catch (error) {
     const reason =
       error instanceof ZodError
@@ -18,7 +21,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const server = createServer();
+  const server = createServer(contextFromConfig(config));
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

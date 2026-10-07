@@ -51,3 +51,17 @@ export function fakeClock() {
 }
 
 export const PNG = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex");
+
+/** A tool context on the fake API: its client, a fresh output directory, a clock that does not wait. */
+export async function testContext(base, outputDir) {
+  const { IdeogramClient } = await import("../../dist/client.js");
+  return { client: new IdeogramClient(testClientOptions(base).options), outputDir, clock: fakeClock() };
+}
+
+/** Finds a registered tool by name. */
+export async function tool(name) {
+  const { toolDefinitions } = await import("../../dist/server.js");
+  const found = toolDefinitions().find((t) => t.name === name);
+  if (!found) throw new Error(`no tool ${name}`);
+  return found;
+}

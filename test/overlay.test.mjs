@@ -33,6 +33,7 @@ test("every exposable operation has a family and its generated schemas; none out
     if (!isExposable(o)) continue;
     assert.ok(o.schemas.response, `${o.key} has a response schema`);
     if (o.body !== "none") assert.ok(o.schemas.body, `${o.key} has a body schema`);
+    for (const media of o.facts.bodies) assert.ok(o.schemas.bodyByMedia[media], `${o.key} has a ${media} body schema`);
   }
 });
 
@@ -48,6 +49,12 @@ test("families, models, body media and async kinds come from the path and the fa
   assert.equal(op("train_model_v4").family, "training");
   assert.equal(op("post_generate_image_v45").family, "generate");
   assert.equal(op("get_generation_v2").family, "generation");
+});
+
+test("the body schema follows the media sent: remove-background takes a file by multipart, an asset by JSON", () => {
+  const removeBackground = op("post_remove_background_v2");
+  assert.equal(removeBackground.schemas.bodyByMedia.multipart.safeParse({ image: "a.png" }).success, true);
+  assert.equal(removeBackground.schemas.bodyByMedia.json.safeParse({}).success, false, "JSON needs image_asset_identifier");
 });
 
 test("only an operation that declares dry_run may be quoted; describe may not", () => {

@@ -35,7 +35,10 @@ export interface SpecOperationFacts {
   readonly deprecated: boolean;
   readonly bodies: readonly BodyMedia[];
   readonly requiredBody: boolean;
+  /** The request body's component: the multipart one when the operation takes multipart, else the JSON one. */
   readonly requestSchema: string | null;
+  /** The component per media type: they differ for an operation whose multipart and JSON bodies differ. */
+  readonly requestSchemas: { readonly multipart: string | null; readonly json: string | null };
   readonly responseSchema: string | null;
   /** The top-level property names of the 200 response schema. */
   readonly responseProperties: readonly string[];

@@ -40,7 +40,9 @@ export type AsyncKind = "optional" | "only" | "none";
 export const DOCS_INDEX_URL = "https://developer.ideogram.ai/v2/llms.txt";
 
 export interface OperationSchemas {
+  /** The body schema for the media this server prefers (multipart when taken, else JSON). */
   readonly body: ZodType | null;
+  readonly bodyByMedia: { readonly multipart: ZodType | null; readonly json: ZodType | null };
   readonly query: ZodType | null;
   readonly path: ZodType | null;
   readonly response: ZodType | null;
@@ -168,13 +170,35 @@ export function generatedComponent(name: string): ZodType | null {
   return GENERATED_BY_NAME.get(`z${name}`.toLowerCase()) ?? null;
 }
 
-function schemasOf(id: string): OperationSchemas {
+function componentOrNull(name: string | null): ZodType | null {
+  return name === null ? null : generatedComponent(name);
+}
+
+/** The generator emits one body per operation; the body of each media type is read from its component instead. */
+function schemasOf(facts: SpecOperationFacts): OperationSchemas {
+  const id = facts.id;
+  const multipart = componentOrNull(facts.requestSchemas.multipart);
+  const json = componentOrNull(facts.requestSchemas.json);
   return {
-    body: generatedSchema(id, "body"),
+    body: multipart ?? json ?? generatedSchema(id, "body"),
+    bodyByMedia: { multipart, json },
     query: generatedSchema(id, "query"),
     path: generatedSchema(id, "path"),
     response: generatedSchema(id, "response"),
   };
+}
+
+const NO_SCHEMAS: OperationSchemas = {
+  body: null,
+  bodyByMedia: { multipart: null, json: null },
+  query: null,
+  path: null,
+  response: null,
+};
+
+/** The body schema of the media a request is sent with. */
+export function bodySchemaFor(op: Operation, media: BodyMedia): ZodType | null {
+  return op.schemas.bodyByMedia[media] ?? op.schemas.body;
 }
 
 function buildOperation(facts: SpecOperationFacts): Operation {
@@ -195,7 +219,7 @@ function buildOperation(facts: SpecOperationFacts): Operation {
     docsUrl: null,
     summary: facts.summary,
     facts,
-    schemas: exposable ? schemasOf(facts.id) : { body: null, query: null, path: null, response: null },
+    schemas: exposable ? schemasOf(facts) : NO_SCHEMAS,
   });
 }
 

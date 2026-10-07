@@ -49,7 +49,11 @@ function bodyFacts(spec, op) {
   const jsonParts = Object.keys(encoding)
     .filter((field) => encoding[field].contentType === "application/json")
     .sort();
-  return { bodies, requiredBody: op.requestBody?.required === true, schemaRef: first?.schema, jsonParts };
+  const requestSchemas = {
+    multipart: refName(content["multipart/form-data"]?.schema),
+    json: refName(content["application/json"]?.schema),
+  };
+  return { bodies, requiredBody: op.requestBody?.required === true, schemaRef: first?.schema, jsonParts, requestSchemas };
 }
 
 function isBinary(property) {
@@ -124,6 +128,7 @@ function operationFacts(spec, method, path, op) {
     bodies: body.bodies,
     requiredBody: body.requiredBody,
     requestSchema: refName(body.schemaRef),
+    requestSchemas: body.requestSchemas,
     responseSchema: refName(responseRef),
     responseProperties: Object.keys(response?.properties ?? {}),
     dryRun,
