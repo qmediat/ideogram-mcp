@@ -183,6 +183,9 @@ export const CONSTRAINTS: readonly Constraint[] = [
     violated: (f) => given(f, "character_reference_mask") && !given(f, "character_reference_images"),
   },
   {
+    // Stated by the API at run time (400 "A character reference is required: provide a character_reference_collection_id,
+    // character_reference_asset_identifiers, or character_reference_images"), not by the prose: the anchor only pins the
+    // field's presence on the three character operations.
     id: "character-needs-reference",
     operations: new Set([
       "post_generate_image_v2_ideogram_v3_character",

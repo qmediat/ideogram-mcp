@@ -32,7 +32,7 @@ export const FIELD_TEXT: Readonly<Record<string, string>> = {
   style_reference_asset_identifiers: "Ideogram assets (uploads or earlier results) to use as style references",
   style_reference_collection_id: "A saved style collection to apply",
   style_reference_collection_version_id: "A version of the saved style collection",
-  character_reference_images: "Local image file of the character to keep consistent",
+  character_reference_images: "Local image files of the character to keep consistent",
   character_reference_mask: "Local grayscale mask of where the character is in its reference image",
   character_reference_asset_identifiers: "Ideogram assets to use as the character reference",
   image: "Local image file to work on",

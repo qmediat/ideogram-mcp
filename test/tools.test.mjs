@@ -198,6 +198,21 @@ test("ideogram_api checks the body against the operation's schema and runs a ser
   assert.match(text(result), /undocumented \(spec_only\)/);
 });
 
+test("ideogram_api refuses a header parameter the operation does not declare, before any request", async () => {
+  const api = await startFakeApi(() => accepted("h"));
+  try {
+    const ctx = await testContext(api.base, dir);
+    const raw = await tool("ideogram_api");
+    await assert.rejects(
+      () => raw.handler(ctx, { operation: "post_remove_background_v2", params: { headers: { "X-Forwarded-For": "1.2.3.4" }, body: {} }, files: [{ field: "image", path: png }] }),
+      /headers: post_remove_background_v2 takes no header parameters; not X-Forwarded-For/,
+    );
+    assert.equal(api.requests.length, 0);
+  } finally {
+    await api.close();
+  }
+});
+
 test("ideogram_operations lists a family and details one operation with its fields and limits", async () => {
   const family = await call("ideogram_operations", { family: "generate" });
   assert.equal(text(family.result).split("\n").filter((l) => l.includes("/v2/image/generate/")).length, 18);

@@ -74,11 +74,18 @@ export interface SavedFile {
 
 type Attempt = { readonly kind: "response"; readonly response: Response } | { readonly kind: "network"; readonly error: unknown };
 
+/** The longest Retry-After this client waits out; a 429 asking for more is reported with its value instead of retried. */
 const RETRY_AFTER_MAX_S = 300;
 
+/** The Retry-After header as whole seconds, whatever its size; undefined when absent or not a positive number. */
 function retryAfterSeconds(response: Response): number | undefined {
   const seconds = Number.parseInt(response.headers.get("Retry-After") ?? "", 10);
-  return Number.isFinite(seconds) && seconds > 0 && seconds < RETRY_AFTER_MAX_S ? seconds : undefined;
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
+}
+
+function retryAfterTooLong(response: Response): boolean {
+  const after = retryAfterSeconds(response);
+  return after !== undefined && after > RETRY_AFTER_MAX_S;
 }
 
 function backoffMs(attempt: number, response?: Response): number {
@@ -127,7 +134,9 @@ export class IdeogramClient {
 
   private async attempt(method: string, url: string, headers: Record<string, string>, body: Uint8Array<ArrayBuffer> | null): Promise<Attempt> {
     try {
-      const init: RequestInit = { method, headers, signal: AbortSignal.timeout(this.options.requestTimeoutMs) };
+      // redirect manual: a 3xx is returned as a response, never followed — the download host allow-list is checked on
+      // the URL this server asked for, and a hop to another host would skip it.
+      const init: RequestInit = { method, headers, redirect: "manual", signal: AbortSignal.timeout(this.options.requestTimeoutMs) };
       if (body !== null) init.body = body;
       return { kind: "response", response: await fetch(url, init) };
     } catch (error) {
@@ -139,6 +148,7 @@ export class IdeogramClient {
   private retryable(idempotent: boolean, result: Attempt): boolean {
     if (result.kind === "network") return idempotent ? isNetworkFailure(result.error) : failedBeforeSending(result.error);
     const status = result.response.status;
+    if (retryAfterTooLong(result.response)) return false;
     return status === 429 || (idempotent && status >= 500);
   }
 
@@ -231,7 +241,14 @@ async function discard(response: Response): Promise<void> {
 }
 
 async function parseJson(response: Response, req: ApiRequest): Promise<unknown> {
-  const text = await response.text();
+  let text: string;
+  try {
+    text = await response.text();
+  } catch (error) {
+    // The 2xx status arrived, so a POST was accepted; its body (the generation id) is lost with the connection.
+    const note = req.op.method === "GET" ? "" : "; Ideogram answered 2xx, so the job may be running and billed — its id did not arrive";
+    throw new IdeogramApiError(response.status, "RESPONSE_READ_FAILED", `${req.op.id}: the response body could not be read: ${networkErrorText(error)}${note}`);
+  }
   try {
     return JSON.parse(text);
   } catch {

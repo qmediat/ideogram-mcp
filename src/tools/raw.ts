@@ -56,6 +56,15 @@ export function rawRefusal(op: Operation, allowUndocumented: boolean): string | 
   return null;
 }
 
+/** Header parameters are checked by name against the operation's declared ones (the generator emits no header schema). */
+function checkHeaders(op: Operation, headers: Readonly<Record<string, string>>): void {
+  const declared = op.facts.parameters.filter((p) => p.location === "header").map((p) => p.name.toLowerCase());
+  const unknown = Object.keys(headers).filter((name) => !declared.includes(name.toLowerCase()));
+  if (unknown.length > 0) {
+    throw new Error(`headers: ${op.id} takes ${declared.length === 0 ? "no header parameters" : `only ${declared.join(", ")}`}; not ${unknown.join(", ")}`);
+  }
+}
+
 function check(label: string, schema: ZodType | null, value: Readonly<Record<string, unknown>>): void {
   if (schema === null) {
     if (Object.keys(value).length > 0) throw new Error(`${label}: this operation takes no ${label} parameters`);
@@ -81,6 +90,7 @@ async function buildRawRequest(op: Operation, args: RawArgs): Promise<ApiRequest
   const media = files.length === 0 && op.facts.bodies.includes("json") ? "json" : "multipart";
   check("path", op.schemas.path, params.path ?? {});
   check("query", op.schemas.query, params.query ?? {});
+  checkHeaders(op, params.headers ?? {});
   if (op.body !== "none") check("body", bodySchemaFor(op, media), withFiles);
   const violations = constraintViolations(op, withFiles);
   if (violations.length > 0) throw new Error(violations.join("\n"));

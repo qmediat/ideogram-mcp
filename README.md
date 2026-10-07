@@ -148,7 +148,7 @@ cd ideogram-mcp
 npm install
 npm run build
 npm run typecheck
-npm test            # builds, then every test offline against a fake API (no key, no network)
+npm test            # builds, then every test against a fake API (no key, no network); with IDEOGRAM_API_KEY set, the live dry-run suite runs too (below)
 ```
 
 The specification snapshot drives the code: `npm ci --prefix scripts/spec-gen && npm run spec:generate` regenerates

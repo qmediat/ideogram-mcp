@@ -186,6 +186,51 @@ test("a download is saved under the output directory with the extension of its m
   }
 });
 
+test("a download redirect is never followed: the hop would skip the host allow-list (1.x blocked it too)", async () => {
+  const target = await startFakeApi(() => ({ status: 200, headers: { "content-type": "image/png" }, body: PNG }));
+  const api = await startFakeApi(() => ({ status: 302, headers: { location: `${target.base}/elsewhere.png` }, body: "" }));
+  try {
+    const { options } = testClientOptions(api.base);
+    const error = await new IdeogramClient(options).download(`${api.base}/x.png`, join(dir, "redirected")).catch((e) => e);
+    assert.equal(error.code, "REDIRECT_BLOCKED");
+    assert.match(error.message, /302/);
+    assert.equal(target.requests.length, 0, "the redirect target was never fetched");
+  } finally {
+    await api.close();
+    await target.close();
+  }
+});
+
+test("a 429 whose Retry-After is longer than the client waits is not retried, and the error carries the value", async () => {
+  const api = await startFakeApi(() => ({ status: 429, headers: { "retry-after": "900" }, json: INFLIGHT }));
+  try {
+    const { options, sleeps } = testClientOptions(api.base);
+    const error = await new IdeogramClient(options).call(request(generateOp, { prompt: "x" })).catch((e) => e);
+    assert.deepEqual([error.status, error.details.retryAfterS, api.requests.length, sleeps], [429, 900, 1, []]);
+    assert.match(error.toMcpError(), /retry after 900 s/);
+  } finally {
+    await api.close();
+  }
+});
+
+test("a 2xx whose body is cut off is a typed error that says the job may be running, never a bare TypeError", async () => {
+  const api = await startFakeApi(() => (res) => {
+    res.writeHead(200, { "content-type": "application/json", "content-length": "60" });
+    res.write('{"generation_id":"g'); // the headers and the first bytes reach the client before the connection drops
+    setTimeout(() => res.destroy(), 30);
+  });
+  try {
+    const { options } = testClientOptions(api.base);
+    const error = await new IdeogramClient(options).call(request(generateOp, { prompt: "x" })).catch((e) => e);
+    assert.ok(error instanceof IdeogramApiError, `${error?.constructor?.name}: ${error?.message}`);
+    assert.equal(error.code, "RESPONSE_READ_FAILED");
+    assert.match(error.message, /may be running and billed/);
+    assert.equal(api.requests.length, 1, "not sent again");
+  } finally {
+    await api.close();
+  }
+});
+
 test("upload limits are the operation's: describe refuses an 11 MB image before reading it, remix takes it", async () => {
   const big = join(dir, "big.png");
   await writeFile(big, PNG);

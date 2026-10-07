@@ -253,44 +253,60 @@ niche); a local price table (the quote is the price); exposing `legacy` paths.
 
 ## 11. Validation before the PR
 
-(filled when step 0 is implemented: the registry and classify counts, the dry_run suite's quotes, the tool count, the
-generated size, the selftest and CI runs)
+Measured on the PR's head (branch `qmt/v2-foundation`, 2026-10-07):
 
-### Progress 2026-10-07 (step 0 interrupted; branch `qmt/v2-foundation`, not pushed)
+| what | measured | budget / rule |
+|---|---|---|
+| operations in the snapshot | 200 | — |
+| classes (the one rule, `src/spec/classify.ts`) | documented 66 · spec_only 20 · v1_only 41 · legacy 32 · internal 9 · bearer_only 32 | `test/classify.test.mjs` pins the counts |
+| generated code (`src/generated/`) | 438 932 bytes | 614 400 (`scripts/spec-generate.mjs`) |
+| tools/list over a real MCP session | 12 tools, 62 871 bytes | 65 536 (`test/budget.test.mjs`) |
+| support | curated 40 · raw 7 · planned 80 · unsupported 73 | `src/spec/support.ts` |
+| tests | 83, all passing (`npm test`; the live dry-run suite included when a key is set) | — |
+| live dry-run suite (`test/live-dry-run.test.mjs`, funded key) | 33 quotes in `docs/PRICES-2026-10-07.md`, 4 custom-model skips, 0 failures, 0 USD | every curated quotable model |
+
+Commands green at the head: `npm run typecheck`, `npm test` (83), `npm run spec:check` (regeneration byte-identical),
+`node scripts/api-reference.mjs --check`, `actionlint` on both workflows, `npm audit --omit=dev --audit-level=high`
+(0). The generator toolchain (`scripts/spec-gen/`, dev-only, never installed by users) carries js-yaml advisories
+GHSA-52cp-r559-cp3m / GHSA-2883-xcg3-v3hh through openapi-ts; it runs only on a maintainer's machine against the
+committed snapshot.
+
+What the live suite found: the test's own PNG fixture wrote its size as one byte, so a 1024-pixel image had a zero
+IHDR and the API answered "Could not read a source image." (fixed: the size as 32-bit big-endian); and the API refuses
+a character model without a character reference with a 400 the schema does not state → the overlay constraint
+`character-needs-reference`.
 
 Commits: `02f27bf` spec: the OpenAPI snapshot, the classification rule and the generated code · `d3fea91` spec:
 Operation[], the reviewed overlay, the support table and the model registry · `6919a0e` client, lifecycle and cost on
 the v2 API · `11cca3e` tools: the curated families on v2 with a model per call, quote, generation, discovery and the
-raw call · `df245cc` wip(step 0): drift check, generated API reference, README/CHANGELOG/ADR/SECURITY done.
+raw call · `df245cc` drift check, generated API reference, README/CHANGELOG/ADR/SECURITY · `67696ee` this section ·
+`d49e03b` version 2.0.0, the live suite, the character rule · the self-review fixes (below).
 
-Measured: classes documented 66 / spec_only 20 / v1_only 41 / legacy 32 / internal 9 / bearer_only 32 (the rule's
-counts; the note's 58/15 were by URL age, F14 moves /datasets and /models to v1_only and the 41 are the capability
-list in `src/spec/classify.ts`); generated code 438 932 bytes (budget 614 400); tools/list 12 tools, 62 868 bytes
-(budget 65 536); support curated 40 / raw 7 / planned 80 / unsupported 73; tests 79 (78 pass, 1 skipped: the live
-dry-run without IDEOGRAM_API_KEY).
+Self-review of the head (Step 1 of the review pipeline, before the external round): the download client had dropped
+1.x's `redirect: "manual"` — fetch followed redirects, so the host allow-list could be skipped by a hop and the
+`REDIRECT_BLOCKED` branch never ran (P1, a regression against 1.2.1; fixed, with a test that fails on the previous
+head); a `Retry-After` of 300 s or more was dropped from the error and the 429 retried after 1 s (P2: reported
+whatever its size, not retried beyond 300 s); a 2xx whose body the connection cut off surfaced as a bare TypeError
+(P2: typed `RESPONSE_READ_FAILED`, saying the job may be running); `ideogram_api` passed header parameters unchecked
+(P3: refused unless the operation declares them — none does in this snapshot). Each fix has a test that is red on the
+code before it.
 
-Complete: steps 1–4 of the brief, and of step 5 `scripts/spec-pull.mjs` + `.github/workflows/spec-drift.yml`
-(`test/spec-pull.test.mjs`), `scripts/api-reference.mjs` + `docs/API-REFERENCE.md` (`test/api-reference.test.mjs`),
-README, CHANGELOG `[2.0.0]` with the migration table, `docs/adr/0001-…`, SECURITY.md / CONTRIBUTING.md corrected.
-
-Not done — continue here: (1) `package.json` and `server.json` version 2.0.0, both descriptions (server.json ≤ 100
-characters); `test/smoke.test.mjs` reads the version from package.json, so it follows. (2) Fill this section with the
-final numbers, the deviations below, and the commands. (3) The live dry-run suite has never run (no key here); the
-offline half of `test/live-dry-run.test.mjs` passes. (4) Step 1b cross-model review and the PR are not started.
-
-Deviations from the note (to be confirmed in review): the generator runs from its own toolchain `scripts/spec-gen/`
+Deviations from the note, confirmed in review: the generator runs from its own toolchain `scripts/spec-gen/`
 (openapi-ts needs the TypeScript 6 compiler API, TS 7 has none) and `classify.ts` landed in the first commit (the
-generator config imports it); `docsUrl` is null everywhere (the snapshot has no per-operation URL, llms.txt was not
-fetched — `DOCS_INDEX_URL` instead); `/v1/edit`, `/v1/edit-lite`, `/v1/.well-known/jwks.json` added to v1_only and
+generator config imports it); `docsUrl` is null everywhere (the snapshot has no per-operation URL — `DOCS_INDEX_URL`
+instead); `/v1/edit`, `/v1/edit-lite`, `/v1/.well-known/jwks.json` added to v1_only and
 `/integration-assets/{external_ref}` classed legacy; spec_only `/v2/image/*` operations are `raw` behind
 `allow_undocumented` (else the flag could never apply in 2.0.0); curated tools leave `webhook_url` / `private` /
 `target_collection_id` to `ideogram_api` (schema budget); `ideogram_edit` advertises a pointer, not a schema copy;
-FLASH → `quality: very_low`; extra modules `src/wire.ts`, `src/uploads.ts`, `src/counters.ts`, `src/spec/facts.ts`,
-`src/spec/fields.ts`, `src/tools/{family,compat,fields,results,context,curated,discovery}.ts`; a body schema is
-chosen per media type (remove-background's multipart and JSON schemas differ; the generator emits one).
+FLASH → `quality: very_low` on the models that take `quality`, refused on those that take `rendering_speed`; extra
+modules `src/wire.ts`, `src/uploads.ts`, `src/counters.ts`, `src/spec/facts.ts`, `src/spec/fields.ts`,
+`src/tools/{family,compat,fields,results,context,curated,discovery}.ts`; a body schema is chosen per media type
+(remove-background's multipart and JSON schemas differ; the generator emits one).
 
-Commands at `df245cc`: `npm run typecheck` green; `npm test` 79 tests, 0 failing; `npm run spec:check` green
-(regeneration byte-identical); `node scripts/api-reference.mjs --check` green; `actionlint` on the two workflows green.
+Review scope: `spec/openapi.json` (the provider's 1.1 MB document) and `src/generated/*.ts` (generator output, byte-identical
+to what the snapshot generates — CI proves it) are marked `linguist-generated` and `-diff` in `.gitattributes`: GitHub
+collapses them and the review packets list them as not reviewed; what is reviewed instead is `openapi-ts.config.ts`,
+`scripts/spec-generate.mjs` and the classification lists.
 
 ## 12. Consult (2026-10-07, before the first line of code)
 
