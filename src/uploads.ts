@@ -7,7 +7,7 @@
  */
 import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { extname, resolve } from "node:path";
-import { fileLimitsOf, MIB, requestLimitOf } from "./spec/overlay.js";
+import { fileLimitsOf, MB, requestLimitOf } from "./spec/overlay.js";
 import type { FileLimit } from "./spec/overlay.js";
 import type { Operation } from "./spec/operations.js";
 import type { UploadPart } from "./wire.js";
@@ -18,19 +18,13 @@ export interface FileRef {
   readonly path: string;
 }
 
-/** The media types an upload is sent as, by extension. */
+/** The media types an upload is sent as, by extension: the three every file field of the specification names ("JPEG, PNG, and
+ * WebP are supported"); another type would be refused by the API after the upload. */
 export const UPLOAD_TYPES: Readonly<Record<string, string>> = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".webp": "image/webp",
-  ".gif": "image/gif",
-  ".bmp": "image/bmp",
-  ".tif": "image/tiff",
-  ".tiff": "image/tiff",
-  ".heic": "image/heic",
-  ".heif": "image/heif",
-  ".avif": "image/avif",
 };
 
 interface CheckedFile {
@@ -40,7 +34,7 @@ interface CheckedFile {
   readonly contentType: string;
 }
 
-const mb = (bytes: number): string => `${(bytes / MIB).toFixed(1)} MB`;
+const mb = (bytes: number): string => `${(bytes / MB).toFixed(1)} MB`;
 
 async function checkFile(ref: FileRef, limit: FileLimit): Promise<CheckedFile> {
   const resolved = resolve(ref.path);

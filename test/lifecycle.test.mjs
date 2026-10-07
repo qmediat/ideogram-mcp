@@ -103,16 +103,31 @@ test("a 2xx body the generated schema rejects is a ContractMismatch, never a suc
   assert.equal(COUNTERS.contractMismatches, before + 1);
 });
 
-test("resume polls an id from a previous call; a failing poll keeps the id as pending with the error", async () => {
-  const api = await startFakeApi(() => ({ status: 404, json: { message: "no such generation" } }));
+test("a completed poll in the API's real shape (created with a +00:00 offset and microseconds, asset_id null) is Completed", async () => {
+  // Captured live 2026-10-07 (values anonymised): the spec's example and the generator's z.iso.datetime() disagree on the offset form.
+  const real = {
+    created: "2026-10-07T15:09:24.239178+00:00", generation_id: "gReal", status: "completed", response_type: "url",
+    data: [{ asset_id: null, is_image_safe: true, object_type: "image.generation", prompt: "p", resolution: "1024x1024", seed: 7, url: "https://ideogram.ai/api/images/a.png" }],
+  };
+  const handler = (req) => (req.method === "POST" ? { json: { generation_id: "gReal", seed: 7 } } : { json: real });
+  const { outcome } = await run(handler, jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x" }));
+  assert.equal(outcome.kind, "completed", JSON.stringify(outcome).slice(0, 300));
+  assert.equal(outcome.payload.items[0].seed, 7);
+});
+
+test("a poll answered 503 keeps the id as pending with the error; a 404 is the answer about the id and is thrown", async () => {
+  const flaky = await startFakeApi(() => ({ status: 503, json: { message: "upstream" } }));
+  const gone = await startFakeApi(() => ({ status: 404, json: { message: "no such generation" } }));
   try {
-    const client = new IdeogramClient(testClientOptions(api.base).options);
-    const outcome = await resume(client, "gX", { waitS: 10, clock: fakeClock() });
-    assert.equal(outcome.kind, "pending");
-    assert.equal(outcome.generationId, "gX");
-    assert.match(outcome.note, /no such generation/);
+    const pending = await resume(new IdeogramClient(testClientOptions(flaky.base).options), "gX", { waitS: 10, clock: fakeClock() });
+    assert.equal(pending.kind, "pending");
+    assert.match(pending.note, /upstream/);
+    const error = await resume(new IdeogramClient(testClientOptions(gone.base).options), "gX", { waitS: 10, clock: fakeClock() }).catch((e) => e);
+    assert.equal(error.status, 404, "a 404 is never 'still running'");
+    assert.match(error.message, /no such generation/);
   } finally {
-    await api.close();
+    await flaky.close();
+    await gone.close();
   }
   assert.equal(POLL_CAP_MS, 30_000);
 });

@@ -52,6 +52,7 @@ async function completedResult(ctx: ToolContext, outcome: Extract<Outcome, { kin
   const payload = outcome.payload;
   if (payload.kind === "description") return { lines: [...head, ...descriptionLines(payload)], isError: false };
   if (payload.kind === "record") return { lines: [...head, jsonText(payload.body)], isError: false };
+  if (payload.items.length === 0) return { lines: [...head, "Ideogram listed no image for this generation (nothing to save)."], isError: true };
   const images = await saveImages(ctx, payload.items);
   const summary = `${images.saved} of ${payload.items.length} image(s) saved.`;
   return { lines: [...head, summary, ...images.lines], isError: images.saved === 0 };

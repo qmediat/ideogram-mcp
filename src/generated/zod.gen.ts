@@ -32,7 +32,7 @@ export const zDatasetCoverAssetIdentifier = zAssetIdentifier.nullable();
 
 export const zDataset = z.object({
     cover_asset_identifier: zDatasetCoverAssetIdentifier.optional(),
-    creation_time: z.iso.datetime(),
+    creation_time: z.iso.datetime({ offset: true }),
     dataset_id: z.string(),
     name: z.string(),
     user_id: z.string()
@@ -122,9 +122,9 @@ export const zTrainingRunStatus = z.enum([
 ]);
 
 export const zTrainingRun = z.object({
-    creation_time: z.iso.datetime(),
+    creation_time: z.iso.datetime({ offset: true }),
     ema: z.number().nullish(),
-    last_update_time: z.iso.datetime().nullish(),
+    last_update_time: z.iso.datetime({ offset: true }).nullish(),
     learning_rate: z.number().nullish(),
     lora_rank: z.int().nullish(),
     num_chips: z.int().nullish(),
@@ -134,12 +134,12 @@ export const zTrainingRun = z.object({
 });
 
 export const zCustomModel = z.object({
-    creation_time: z.iso.datetime(),
+    creation_time: z.iso.datetime({ offset: true }),
     custom_model_uri: z.string().nullish(),
     dataset_id: z.string().nullish(),
     is_available_for_generation: z.boolean(),
     is_owned: z.boolean(),
-    last_update_time: z.iso.datetime().nullish(),
+    last_update_time: z.iso.datetime({ offset: true }).nullish(),
     model_id: z.string(),
     name: z.string(),
     status: zModelStatus,
@@ -301,7 +301,7 @@ export const zV1EditImageObject = z.object({
 });
 
 export const zV1EditImagesResponse = z.object({
-    created: z.iso.datetime(),
+    created: z.iso.datetime({ offset: true }),
     data: z.array(zV1EditImageObject)
 });
 
@@ -368,7 +368,7 @@ export const zImageGenerationObject = z.object({
 });
 
 export const zImageGenerationResponse = z.object({
-    created: z.iso.datetime(),
+    created: z.iso.datetime({ offset: true }),
     data: z.array(zImageGenerationObject)
 });
 
@@ -620,7 +620,7 @@ export const zLayeredImageGenerationObjectV3 = zImageGenerationObjectV3.and(z.ob
 }));
 
 export const zLayeredImageGenerationResponseV3 = z.object({
-    created: z.iso.datetime(),
+    created: z.iso.datetime({ offset: true }),
     data: z.array(zLayeredImageGenerationObjectV3),
     response_type: z.enum(['layered']).optional()
 });
@@ -681,7 +681,7 @@ export const zTryOnRequestV3 = z.object({
 });
 
 export const zImageGenerationResponseV3 = z.object({
-    created: z.iso.datetime(),
+    created: z.iso.datetime({ offset: true }),
     data: z.array(zImageGenerationObjectV3)
 });
 
@@ -796,7 +796,7 @@ export const zImageGenerationObjectV4 = z.object({
 });
 
 export const zImageGenerationResponseV4 = z.object({
-    created: z.iso.datetime(),
+    created: z.iso.datetime({ offset: true }),
     data: z.array(zImageGenerationObjectV4),
     response_type: z.enum(['url']).optional()
 });
@@ -921,7 +921,7 @@ export const zImageGenerationObjectV4Layout = z.object({
 });
 
 export const zImageGenerationResponseV4Layout = z.object({
-    created: z.iso.datetime(),
+    created: z.iso.datetime({ offset: true }),
     data: z.array(zImageGenerationObjectV4Layout),
     response_type: z.enum(['url']).optional()
 });
@@ -948,7 +948,7 @@ export const zImageGenerationObjectV4ImageToImage = z.object({
 });
 
 export const zImageGenerationResponseV4ImageToImage = z.object({
-    created: z.iso.datetime(),
+    created: z.iso.datetime({ offset: true }),
     data: z.array(zImageGenerationObjectV4ImageToImage),
     response_type: z.enum(['url']).optional()
 });
@@ -1061,7 +1061,7 @@ export const zAccountApiKeyStatus = z.enum([
 
 export const zAccountApiKey = z.object({
     api_key_id: z.string(),
-    creation_time: z.iso.datetime(),
+    creation_time: z.iso.datetime({ offset: true }),
     creator_display_label: z.string().nullish(),
     label: z.string().nullish(),
     redacted_api_key: z.string(),
@@ -1096,11 +1096,11 @@ export const zAccountInvoiceStatus = z.enum([
 
 export const zAccountInvoice = z.object({
     currency_code: z.string(),
-    end_time: z.iso.datetime(),
-    issued_time: z.iso.datetime().nullish(),
+    end_time: z.iso.datetime({ offset: true }),
+    issued_time: z.iso.datetime({ offset: true }).nullish(),
     line_items: z.array(zAccountInvoiceLineItem),
-    paid_time: z.iso.datetime().nullish(),
-    start_time: z.iso.datetime(),
+    paid_time: z.iso.datetime({ offset: true }).nullish(),
+    start_time: z.iso.datetime({ offset: true }),
     status: zAccountInvoiceStatus,
     total: z.string()
 });
@@ -1129,9 +1129,9 @@ export const zAccountUsageLineItem = z.object({
 });
 
 export const zAccountUsageBucket = z.object({
-    end_time: z.iso.datetime(),
+    end_time: z.iso.datetime({ offset: true }),
     line_items: z.array(zAccountUsageLineItem),
-    start_time: z.iso.datetime()
+    start_time: z.iso.datetime({ offset: true })
 });
 
 export const zGetAccountUsageResponse = z.object({
@@ -1142,7 +1142,7 @@ export const zAttributeValueType = z.enum(['TEXT', 'NUMBER']);
 
 export const zAttributeInfo = z.object({
     attribute_key: z.string(),
-    creation_time: z.iso.datetime().optional(),
+    creation_time: z.iso.datetime({ offset: true }).optional(),
     value: z.string(),
     value_type: zAttributeValueType
 });
@@ -1299,7 +1299,7 @@ export const zGenerationResponseDataInner = z.discriminatedUnion('object_type', 
 ]);
 
 export const zGenerationResponse = z.object({
-    created: z.iso.datetime(),
+    created: z.iso.datetime({ offset: true }),
     data: z.array(zGenerationResponseDataInner).optional(),
     failure_reason: z.string().optional(),
     generation_id: z.string(),
@@ -1322,7 +1322,7 @@ export const zGeneratedDescription = z.object({
 });
 
 export const zDescribeImageIdeogramV3Response = z.object({
-    created: z.iso.datetime(),
+    created: z.iso.datetime({ offset: true }),
     description_id: z.string(),
     descriptions: z.array(zGeneratedDescription)
 });
@@ -1340,7 +1340,7 @@ export const zDescribeImageIdeogramV4Request = z.object({
 });
 
 export const zDescribeImageIdeogramV4Response = z.object({
-    created: z.iso.datetime(),
+    created: z.iso.datetime({ offset: true }),
     description_id: z.string(),
     json_prompt: zV4JsonPrompt
 });
@@ -3020,7 +3020,7 @@ export const zLivingImageRequest = z.object({
 });
 
 export const zLivingImageResponse = z.object({
-    created: z.iso.datetime(),
+    created: z.iso.datetime({ offset: true }),
     generation_id: z.string()
 });
 
@@ -3140,7 +3140,7 @@ export const zProduct360VideoRequest = z.object({
 });
 
 export const zGenerateVideoSeedDance25Response = z.object({
-    created: z.iso.datetime(),
+    created: z.iso.datetime({ offset: true }),
     generation_id: z.string()
 });
 
@@ -3356,7 +3356,7 @@ export const zEditVideoSeedDance2Request = z.object({
 });
 
 export const zGenerateVideoSeedDance2Response = z.object({
-    created: z.iso.datetime(),
+    created: z.iso.datetime({ offset: true }),
     generation_id: z.string()
 });
 
@@ -3379,7 +3379,7 @@ export const zGenerateVideoKlingV3StandardImageToVideoRequest = z.object({
 });
 
 export const zGenerateVideoKlingV3Response = z.object({
-    created: z.iso.datetime(),
+    created: z.iso.datetime({ offset: true }),
     generation_id: z.string()
 });
 
@@ -3423,7 +3423,7 @@ export const zGenerateVideoMinimaxH3ImageToVideoRequest = z.object({
 });
 
 export const zGenerateVideoMinimaxH3Response = z.object({
-    created: z.iso.datetime(),
+    created: z.iso.datetime({ offset: true }),
     generation_id: z.string()
 });
 
@@ -3832,8 +3832,8 @@ export const zGetAccountApiKeysResponse = zListAccountApiKeysResponse;
 export const zGetAccountInvoicesResponse = zListAccountInvoicesResponse;
 
 export const zGetAccountUsageQuery = z.object({
-    start_time: z.iso.datetime(),
-    end_time: z.iso.datetime().optional(),
+    start_time: z.iso.datetime({ offset: true }),
+    end_time: z.iso.datetime({ offset: true }).optional(),
     bucket_width: z.enum(['1d', '1h']).optional().default('1d'),
     sources: z.array(z.enum(['api', 'app'])).optional().default(['api', 'app'])
 });

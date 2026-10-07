@@ -10,6 +10,7 @@ import type { ZodType } from "zod/v4";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { ApiRequest } from "../client.js";
 import { quote } from "../cost.js";
+import { quoteText } from "./quote.js";
 import { execute, WAIT_DEFAULT_S, WAIT_MAX_S } from "../lifecycle.js";
 import type { OperationClass } from "../spec/classify.js";
 import { constraintViolations } from "../spec/overlay.js";
@@ -88,6 +89,7 @@ async function buildRawRequest(op: Operation, args: RawArgs): Promise<ApiRequest
   const body = params.body ?? {};
   const withFiles = { ...body, ...Object.fromEntries(files.map((f) => [f.field, f.path])) };
   const media = files.length === 0 && op.facts.bodies.includes("json") ? "json" : "multipart";
+  if ("dry_run" in (params.query ?? {})) throw new Error("query.dry_run: use the dry_run argument of ideogram_api (the quote path checks the answer as a PriceQuote)");
   check("path", op.schemas.path, params.path ?? {});
   check("query", op.schemas.query, params.query ?? {});
   checkHeaders(op, params.headers ?? {});
@@ -118,8 +120,7 @@ async function runRaw(ctx: ToolContext, input: ToolArguments): Promise<CallToolR
   if (args.dry_run === true) {
     const priced = await quote(ctx.client, req);
     if (priced.kind !== "quote") return outcomeResult(ctx, priced, notes);
-    const q = priced.quote;
-    return textResult(`Quote for ${q.operation}: ${q.usd} USD ${q.qualifier}${q.upperBoundUsd === null ? "" : ` (at most ${q.upperBoundUsd} USD)`}; ${q.credits} credits. Nothing was generated or billed.`);
+    return textResult([quoteText(priced.quote), ...notes].join("\n"));
   }
   const outcome = await execute(ctx.client, req, { waitS: args.wait_s ?? WAIT_DEFAULT_S, clock: ctx.clock });
   return outcomeResult(ctx, outcome, notes);

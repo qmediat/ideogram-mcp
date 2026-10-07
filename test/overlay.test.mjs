@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const { OPERATIONS, operationById, isExposable } = await import("../dist/spec/operations.js");
-const { quoteAllowed, quoteRefusal, responseSchemaFor, fileLimitsOf, CONSTRAINTS, constraintViolations, MIB, UNSTATED_FILE_BYTES } =
+const { quoteAllowed, quoteRefusal, responseSchemaFor, fileLimitsOf, CONSTRAINTS, constraintViolations, MB, UNSTATED_FILE_BYTES } =
   await import("../dist/spec/overlay.js");
 const { supportOf, servedByRawCall } = await import("../dist/spec/support.js");
 
@@ -62,8 +62,11 @@ test("only an operation that declares dry_run may be quoted; describe may not", 
   assert.equal(quoteAllowed(op("post_describe_image_ideogram_v3")), false);
   assert.match(quoteRefusal(op("post_describe_image_ideogram_v3")), /does not declare dry_run/);
   assert.match(quoteRefusal(op("post_add_credits_for_api")), /not exposed/);
-  const declared = OPERATIONS.filter((o) => isExposable(o) && o.dryRun).length;
-  assert.equal(OPERATIONS.filter(quoteAllowed).length, declared);
+  // the specification's own fact, read from the document: the exposable operations whose parameters include query dry_run
+  const declaresDryRun = (o) => (spec.paths[o.path][o.method.toLowerCase()].parameters ?? []).some((p) => (p.$ref ? spec.components.parameters[p.$ref.split("/").pop()] : p).name === "dry_run");
+  const fromSpec = OPERATIONS.filter((o) => isExposable(o) && declaresDryRun(o)).map((o) => o.id).sort();
+  assert.ok(fromSpec.length >= 40, `${fromSpec.length} operations declare dry_run`);
+  assert.deepEqual(OPERATIONS.filter(quoteAllowed).map((o) => o.id).sort(), fromSpec);
 });
 
 test("a dry run is validated against PriceQuote, a real call against the operation's response", () => {
@@ -76,9 +79,9 @@ test("a dry run is validated against PriceQuote, a real call against the operati
 
 test("file limits are per operation and field, as the descriptions state them", () => {
   const limit = (id, field) => fileLimitsOf(op(id)).find((l) => l.field === field);
-  assert.equal(limit("post_describe_image_ideogram_v3", "image").maxBytes, 10 * MIB, "describe: max 10MB");
-  assert.equal(limit("post_remix_image_v2_ideogram_v3", "image").maxBytes, 50 * MIB, "remix: max 50MB");
-  assert.equal(limit("post_generate_image_v2_ideogram45", "images").maxBytes, 25 * MIB, "4.5: max 25MB each");
+  assert.equal(limit("post_describe_image_ideogram_v3", "image").maxBytes, 10 * MB, "describe: max 10MB (decimal)");
+  assert.equal(limit("post_remix_image_v2_ideogram_v3", "image").maxBytes, 50 * MB, "remix: max 50MB");
+  assert.equal(limit("post_generate_image_v2_ideogram45", "images").maxBytes, 25 * MB, "4.5: max 25MB each");
   assert.equal(limit("post_generate_image_v2_ideogram45", "images").maxItems, 5);
   const mask = limit("post_inpaint_image_v2_ideogram_v3", "mask");
   assert.deepEqual([mask.stated, mask.maxBytes], [false, UNSTATED_FILE_BYTES], "an unstated limit is said to be unstated");

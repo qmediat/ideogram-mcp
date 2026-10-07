@@ -43,7 +43,7 @@ We will acknowledge your report within 48 hours and aim to release a fix within 
 
 | Threat | Protection |
 |--------|-----------|
-| **Path traversal** | Extension allowlist for uploads (`.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.bmp`, `.tif`, `.tiff`, `.heic`, `.heif`, `.avif`); the local file name is never sent (a file goes as `<field>.<ext>`) |
+| **Path traversal** | Extension allowlist for uploads (`.png`, `.jpg`, `.jpeg`, `.webp` — the types the specification names); the local file name is never sent (a file goes as `<field>.<ext>`) |
 | **Symlink attacks** | `lstat()` on the image path before reading — a symlinked file is rejected; a symlinked parent directory is resolved |
 | **File size DoS** | `stat()` check of every file before any is read, against its operation and field's own limit as Ideogram's specification states it (describe 10 MB, remix 50 MB, 25 MB × 5 for Ideogram 4.5's images, …; 50 MB where none is stated), the number of files per field and any whole-request cap |
 | **Filename injection** | Output filenames are `ideogram-{timestamp}-{random}.{ext}` — no user input |

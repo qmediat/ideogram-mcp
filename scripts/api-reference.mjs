@@ -20,7 +20,7 @@ async function load() {
   return { ...ops, ...classify, ...overlay, ...support, ...fields, toolDefinitions: server.toolDefinitions };
 }
 
-const mb = (bytes) => `${Math.round(bytes / 1024 / 1024)} MB`;
+const mb = (bytes) => `${Math.round(bytes / 1_000_000)} MB`;
 
 function classTable(m) {
   const rows = m.OPERATION_CLASSES.map((cls) => {

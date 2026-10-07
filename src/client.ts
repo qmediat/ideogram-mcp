@@ -74,8 +74,10 @@ export interface SavedFile {
 
 type Attempt = { readonly kind: "response"; readonly response: Response } | { readonly kind: "network"; readonly error: unknown };
 
-/** The longest Retry-After this client waits out; a 429 asking for more is reported with its value instead of retried. */
-const RETRY_AFTER_MAX_S = 300;
+/** The longest a retry sleeps: inside one tool call (≤ 50 s wait, 60 s client timeout), so a POST is never resent after the
+ * caller has given up (the job would run and bill with its id reaching nobody). A 429 asking for more is reported with its
+ * Retry-After instead of retried. */
+const RETRY_AFTER_MAX_S = 30;
 
 /** The Retry-After header as whole seconds, whatever its size; undefined when absent or not a positive number. */
 function retryAfterSeconds(response: Response): number | undefined {

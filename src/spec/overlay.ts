@@ -17,9 +17,10 @@ import type { Operation } from "./operations.js";
 /** A request body's fields as the caller gave them, after the operation's generated schema accepted them. */
 export type BodyFields = Readonly<Record<string, unknown>>;
 
-export const MIB = 1024 * 1024;
+/** A megabyte as the specification states limits ("max 10MB"): decimal, the smaller reading. */
+export const MB = 1_000_000;
 /** The per-file limit of a file field whose description states none: the largest one the specification states. */
-export const UNSTATED_FILE_BYTES = 50 * MIB;
+export const UNSTATED_FILE_BYTES = 50 * MB;
 
 export function quoteAllowed(op: Operation): boolean {
   return isExposable(op) && op.dryRun;

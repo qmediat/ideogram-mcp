@@ -44,7 +44,7 @@ sells through an API key is reachable, priced before a call, and collected by id
 - Every call goes to `/v2/…`; images are downloaded by streaming to disk with a byte counter (50 MB cap) instead of
   buffering whole bodies.
 - Upload limits are each operation's own, as the specification states them (describe 10 MB, remix 50 MB, 4.5's
-  images 25 MB × 5, …), checked before any file is read; JPEG, PNG, WebP, GIF, BMP, TIFF, HEIC/HEIF and AVIF are sent.
+  images 25 MB × 5, …), checked before any file is read ("MB" read as decimal megabytes); JPEG, PNG and WebP, the types the specification names.
 - A request is sent again only when it never left the machine or the API rejected it with 429; a 5xx, a timeout or a
   reset after sending is reported, never repeated (one tool call never creates two billed jobs). Polls and downloads
   (GET) keep retrying network failures, 429 and 5xx.

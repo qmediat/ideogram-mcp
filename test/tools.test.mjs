@@ -213,6 +213,30 @@ test("ideogram_api refuses a header parameter the operation does not declare, be
   }
 });
 
+test("a model that is not a string is refused, never silently the default (quote arguments and the edit alias bypass the SDK schema)", async () => {
+  const quote = await call("ideogram_quote", { tool: "ideogram_generate", arguments: { model: 4.5, prompt: "x" } }).catch((e) => e);
+  assert.match(quote.message, /model must be a string, got 4\.5/);
+  const edit = await call("ideogram_edit", { model: 3, image: png, mask: png, prompt: "x" }).catch((e) => e);
+  assert.match(edit.message, /model must be a string/);
+});
+
+test("ideogram_api: dry_run inside params.query is refused (the dry_run argument is the quote path); a .gif upload is refused", async () => {
+  const q = await call("ideogram_api", { operation: "post_remove_background_v2", params: { query: { dry_run: true }, body: {} }, files: [{ field: "image", path: png }] }).catch((e) => e);
+  assert.match(q.message, /query\.dry_run: use the dry_run argument/);
+  const gif = join(dir, "a.gif");
+  await writeFile(gif, PNG);
+  const g = await call("ideogram_remix", { image: gif, prompt: "x" }).catch((e) => e);
+  assert.match(g.message, /unsupported file type \.gif; one of \.png, \.jpg, \.jpeg, \.webp/);
+});
+
+test("a completed generation that lists no image says so instead of '0 of 0 saved'", async () => {
+  const { result } = await call("ideogram_generate", { prompt: "x" }, (req) =>
+    req.method === "POST" ? accepted("g0") : { json: { generation_id: "g0", status: "completed", created: "2026-10-07T00:00:00Z", data: [] } },
+  );
+  assert.equal(result.isError, true);
+  assert.match(text(result), /listed no image for this generation/);
+});
+
 test("ideogram_operations lists a family and details one operation with its fields and limits", async () => {
   const family = await call("ideogram_operations", { family: "generate" });
   assert.equal(text(family.result).split("\n").filter((l) => l.includes("/v2/image/generate/")).length, 18);

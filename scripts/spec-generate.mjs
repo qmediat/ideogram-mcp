@@ -60,18 +60,19 @@ function isBinary(property) {
   return property?.type === "string" && property.format === "binary";
 }
 
-const MIB = 1024 * 1024;
+/** A megabyte as the specification's "MB": decimal (the smaller reading, so a file this server passes is never one the API refuses). */
+const MB = 1_000_000;
 
 /** The first size a description states ("max 25MB", "up to 50 MB"), in bytes; null when it states none. */
 function statedBytes(description) {
   const match = /(\d+)\s?MB/i.exec(description ?? "");
-  return match ? Number(match[1]) * MIB : null;
+  return match ? Number(match[1]) * MB : null;
 }
 
 /** The whole-request cap a description states ("the whole request must stay under 50MB"), in bytes. */
 function statedRequestBytes(description) {
   const match = /whole request must stay under (\d+)\s?MB/i.exec(description ?? "");
-  return match ? Number(match[1]) * MIB : null;
+  return match ? Number(match[1]) * MB : null;
 }
 
 function fileField(name, property) {
@@ -168,10 +169,18 @@ function operationsModule(spec) {
   ].join("\n");
 }
 
+/** The one edit of the generator's output: `format: date-time` becomes `z.iso.datetime({ offset: true })` — the API writes
+ * `created` as `2026-10-07T15:09:24.239178+00:00` (measured live), which zod's default (Z only) rejects. */
+function acceptOffsets(dir) {
+  const file = join(dir, "zod.gen.ts");
+  writeFileSync(file, readFileSync(file, "utf8").replaceAll("z.iso.datetime()", "z.iso.datetime({ offset: true })"));
+}
+
 async function generateInto(dir) {
   const spec = JSON.parse(readFileSync(SPEC_PATH, "utf8"));
   const { createClient } = await loadGenerator();
   await createClient(generatorConfig(structuredClone(spec), dir));
+  acceptOffsets(dir);
   writeFileSync(join(dir, "operations.gen.ts"), operationsModule(spec));
   const produced = readdirSync(dir).sort();
   if (produced.join(",") !== GENERATED_FILES.join(",")) {

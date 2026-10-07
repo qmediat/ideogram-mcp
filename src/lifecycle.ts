@@ -160,22 +160,38 @@ export async function resume(client: IdeogramClient, generationId: string, optio
 
 const GENERATION_OP = operationById("get_generation_v2");
 
-/** One poll; a failed poll keeps the id (pending, with the error as its note) and is counted. */
+/** A poll failure that says nothing about the generation (the network, a 5xx, a 429): the id stays pending. A 4xx is an
+ * answer about the id (404 unknown, 401/403 not this account) and is reported as the error it is. */
+function transientPollFailure(error: IdeogramApiError): boolean {
+  return error.status === 0 || error.status === 429 || error.status >= 500;
+}
+
+/** One poll; a transient failure keeps the id (pending, with the error as its note) and is counted. */
 export async function fetchGeneration(client: IdeogramClient, generationId: string): Promise<Outcome> {
   if (GENERATION_OP === null) throw new Error("the snapshot lacks get_generation_v2");
   let result;
   try {
     result = await client.call({ op: GENERATION_OP, path: { generation_id: generationId }, query: {}, headers: {}, body: null, dryRun: false });
   } catch (error) {
-    if (!(error instanceof IdeogramApiError)) throw error;
+    if (!(error instanceof IdeogramApiError) || !transientPollFailure(error)) throw error;
     COUNTERS.pollErrors += 1;
     return { kind: "pending", generationId, note: `the last poll failed: ${error.toMcpError()}` };
   }
   return generationOutcome(generationId, result.status, result.body);
 }
 
+/** The specification states in prose what its discriminator does not: "entries without an object_type are images". */
+export function withImageKind(body: unknown): unknown {
+  const parsed = BodyShape.safeParse(body);
+  if (!parsed.success || parsed.data.data === undefined) return body;
+  const data = parsed.data.data.map((item) =>
+    item !== null && typeof item === "object" && !("object_type" in item) ? { ...item, object_type: "image.generation" } : item,
+  );
+  return { ...(body as Record<string, unknown>), data };
+}
+
 function generationOutcome(generationId: string, status: number, body: unknown): Outcome {
-  const parsed = zGetGenerationV2Response.safeParse(body);
+  const parsed = zGetGenerationV2Response.safeParse(withImageKind(body));
   if (!parsed.success) return contractMismatch(status, body, parsed.error);
   const g = parsed.data;
   if (g.status === "failed") return { kind: "failed", generationId, failureReason: g.failure_reason ?? "(no reason given)" };

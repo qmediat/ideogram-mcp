@@ -31,6 +31,7 @@ const LOWERCASED_ENUMS: readonly string[] = ["magic_prompt", "style_type"];
 /** The model a call asks for: its alias resolved, or describe's 1.x version field read. */
 export function resolveModel(family: string, args: ToolArguments, fallback: string): { model: string; notes: string[] } {
   const notes: string[] = [];
+  if (args.model !== undefined && typeof args.model !== "string") throw new Error(`model must be a string, got ${JSON.stringify(args.model)}`);
   let model = typeof args.model === "string" ? args.model : fallback;
   const alias = MODEL_ALIASES[family]?.[model];
   if (alias !== undefined) {
