@@ -21,6 +21,8 @@ export interface FileFieldFacts {
   /** Several files under one field name. */
   readonly array: boolean;
   readonly maxItems: number | null;
+  /** The per-file limit the field's description states, in bytes (MB read as MiB); null when it states none. */
+  readonly maxBytes: number | null;
 }
 
 export interface SpecOperationFacts {
@@ -43,6 +45,8 @@ export interface SpecOperationFacts {
   readonly asyncField: boolean;
   readonly parameters: readonly ParameterFacts[];
   readonly fileFields: readonly FileFieldFacts[];
+  /** The whole-request cap a field description states, in bytes; null when none does. */
+  readonly requestMaxBytes: number | null;
   /** Multipart fields the specification encodes as `application/json` parts. */
   readonly jsonParts: readonly string[];
 }

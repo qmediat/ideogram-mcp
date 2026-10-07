@@ -56,15 +56,40 @@ function isBinary(property) {
   return property?.type === "string" && property.format === "binary";
 }
 
-function fileFields(requestSchema) {
-  const fields = [];
-  for (const [name, property] of Object.entries(requestSchema?.properties ?? {})) {
-    if (isBinary(property)) fields.push({ name, array: false, maxItems: null });
-    else if (property.type === "array" && isBinary(property.items)) {
-      fields.push({ name, array: true, maxItems: property.maxItems ?? null });
-    }
+const MIB = 1024 * 1024;
+
+/** The first size a description states ("max 25MB", "up to 50 MB"), in bytes; null when it states none. */
+function statedBytes(description) {
+  const match = /(\d+)\s?MB/i.exec(description ?? "");
+  return match ? Number(match[1]) * MIB : null;
+}
+
+/** The whole-request cap a description states ("the whole request must stay under 50MB"), in bytes. */
+function statedRequestBytes(description) {
+  const match = /whole request must stay under (\d+)\s?MB/i.exec(description ?? "");
+  return match ? Number(match[1]) * MIB : null;
+}
+
+function fileField(name, property) {
+  if (isBinary(property)) return { name, array: false, maxItems: null, maxBytes: statedBytes(property.description) };
+  if (property.type === "array" && isBinary(property.items)) {
+    const maxBytes = statedBytes(property.description ?? property.items.description);
+    return { name, array: true, maxItems: property.maxItems ?? null, maxBytes };
   }
-  return fields;
+  return null;
+}
+
+function fileFields(requestSchema) {
+  return Object.entries(requestSchema?.properties ?? {})
+    .map(([name, property]) => fileField(name, property))
+    .filter((field) => field !== null);
+}
+
+function requestMaxBytes(requestSchema) {
+  const caps = Object.values(requestSchema?.properties ?? {})
+    .map((property) => statedRequestBytes(property.description))
+    .filter((cap) => cap !== null);
+  return caps.length === 0 ? null : Math.min(...caps);
 }
 
 function parameterFacts(spec, op) {
@@ -105,6 +130,7 @@ function operationFacts(spec, method, path, op) {
     asyncField: Boolean(request?.properties?.async),
     parameters,
     fileFields: fileFields(request),
+    requestMaxBytes: requestMaxBytes(request),
     jsonParts: body.jsonParts,
   };
 }
