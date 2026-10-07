@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { ideogramRequest } from "../client.js";
+import { ideogramRequest } from "../v1-client.js";
 import { DescribeModelVersion, IdeogramDescribeResponseSchema } from "../types.js";
 import { loadImageBlob } from "../image-input.js";
 

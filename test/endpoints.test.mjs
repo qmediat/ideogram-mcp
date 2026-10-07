@@ -12,7 +12,7 @@ process.env.IDEOGRAM_OUTPUT_DIR = await mkdtemp(join(tmpdir(), "ideogram-out-"))
 const { handleEdit, editInputSchema } = await import("../dist/tools/edit.js");
 const { handleGenerate, generateInputSchema, V4_FIELDS } = await import("../dist/tools/generate.js");
 const { handleRemix, remixInputSchema } = await import("../dist/tools/remix.js");
-const { ideogramRequest, downloadImage } = await import("../dist/client.js");
+const { ideogramRequest, downloadImage } = await import("../dist/v1-client.js");
 const { validateFileSize } = await import("../dist/storage.js");
 
 const PNG = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex"); // a PNG signature is enough: the loader checks path and size

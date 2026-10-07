@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { ideogramRequest, downloadImage } from "../client.js";
+import { ideogramRequest, downloadImage } from "../v1-client.js";
 import { saveImage, assertRequestFits } from "../storage.js";
 import {
   sharedStyleControls,
