@@ -289,6 +289,7 @@ File limits: `character_reference_images` 25 MB × 1; `character_reference_mask`
 Rules:
 - resolution and aspect_ratio cannot be combined; give one
 - character_reference_mask needs character_reference_images
+- a character model needs a character reference: character_reference_images, character_reference_asset_identifiers or character_reference_collection_id
 
 #### ideogram-3-custom-model — `POST /v2/image/generate/ideogram-3-custom-model`
 
@@ -623,6 +624,7 @@ File limits: `character_reference_images` 25 MB × 1; `character_reference_mask`
 Rules:
 - inpaint needs the source (image or image_asset_identifier) and the mask (mask or mask_asset_identifier)
 - character_reference_mask needs character_reference_images
+- a character model needs a character reference: character_reference_images, character_reference_asset_identifiers or character_reference_collection_id
 
 #### ideogram-3-custom-model — `POST /v2/image/inpaint/ideogram-3-custom-model`
 
@@ -781,6 +783,7 @@ Rules:
 - resolution and aspect_ratio cannot be combined; give one
 - image and image_asset_identifier are alternatives; give one
 - character_reference_mask needs character_reference_images
+- a character model needs a character reference: character_reference_images, character_reference_asset_identifiers or character_reference_collection_id
 
 #### ideogram-3-custom-model — `POST /v2/image/remix/ideogram-3-custom-model`
 

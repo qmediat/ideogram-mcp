@@ -98,7 +98,9 @@ test("the constraints refuse what the API refuses and pass what it takes", () =>
     ["post_precise_edit_image_v2_ideogram45", { prompt: "x", mask: "m.png" }, /mask needs the source image/],
     ["post_generate_image_v2_ideogram_v3", { prompt: "x", style_preset: "BRIGHT_ART", style_codes: ["ABCD1234"] }, /style_preset/],
     ["post_inpaint_image_v2_ideogram_v3", { prompt: "x", image: "a.png" }, /inpaint needs/],
-    ["post_generate_image_v2_ideogram_v3_character", { prompt: "x", character_reference_mask: "m.png" }, /character_reference_images/],
+    ["post_generate_image_v2_ideogram_v3_character", { prompt: "x", character_reference_mask: "m.png", character_reference_collection_id: "c" }, /character_reference_images/],
+    ["post_generate_image_v2_ideogram_v3_character", { prompt: "x" }, /character model needs a character reference/],
+    ["post_remix_image_v2_ideogram_v3_character", { prompt: "x", image: "a.png" }, /character model needs a character reference/],
     ["post_generate_image_v2_ideogram45", { prompt: "x", size: "source" }, /size "source"/],
   ];
   for (const [id, fields, message] of cases) {
@@ -111,6 +113,8 @@ test("the constraints refuse what the API refuses and pass what it takes", () =>
     ["post_inpaint_image_v2_ideogram_v3", { prompt: "x", image: "a.png", mask_asset_identifier: { asset_type: "UPLOAD", asset_id: "m" } }],
     ["post_generate_image_v2_ideogram45", { prompt: "x", size: "source", images: ["a.png"] }],
     ["post_generate_image_v2_ideogram_v4", { prompt: "x", resolution: "1024x1024", aspect_ratio: "1x1" }],
+    ["post_generate_image_v2_ideogram_v3_character", { prompt: "x", character_reference_collection_id: "c" }],
+    ["post_inpaint_image_v2_ideogram_v3_character", { prompt: "x", image: "a.png", mask: "m.png", character_reference_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "a" }] }],
   ];
   for (const [id, fields] of passing) assert.deepEqual(constraintViolations(op(id), fields), [], id);
 });

@@ -183,6 +183,17 @@ export const CONSTRAINTS: readonly Constraint[] = [
     violated: (f) => given(f, "character_reference_mask") && !given(f, "character_reference_images"),
   },
   {
+    id: "character-needs-reference",
+    operations: new Set([
+      "post_generate_image_v2_ideogram_v3_character",
+      "post_inpaint_image_v2_ideogram_v3_character",
+      "post_remix_image_v2_ideogram_v3_character",
+    ]),
+    anchor: { field: "character_reference_images", phrase: /character/ },
+    text: "a character model needs a character reference: character_reference_images, character_reference_asset_identifiers or character_reference_collection_id",
+    violated: (f) => !anyGiven(f, ["character_reference_images", "character_reference_asset_identifiers", "character_reference_collection_id"]),
+  },
+  {
     id: "source-size-needs-images",
     operations: new Set(["post_generate_image_v2_ideogram45"]),
     anchor: { field: "size", phrase: /"source" is rejected/ },
