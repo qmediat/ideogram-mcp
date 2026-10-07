@@ -97,7 +97,7 @@ Add to `claude_desktop_config.json`:
 | `ideogram_operations` | What the API offers: families, operations, fields, limits | — |
 | `ideogram_api` | Any served operation by id (precise edit, remove background, remove object, …) | — |
 
-Each model's fields are listed in the tool's schema (one variant per model) and in [docs/API-REFERENCE.md](https://github.com/qmediat/ideogram-mcp/blob/main/docs/API-REFERENCE.md), generated from the specification. Image inputs are local file paths (or Ideogram asset identifiers where a model takes them); each operation's own upload limits apply, checked before anything is read or sent.
+Each model's fields are listed in the tool's schema (one variant per model) and in [docs/API-REFERENCE.md](https://github.com/qmediat/ideogram-mcp/blob/main/docs/API-REFERENCE.md), generated from the specification. Image inputs are local file paths (or Ideogram asset identifiers where a model takes them); each operation's own upload limits apply, checked each file against its field's limit before any is read, the whole encoded request against the request cap before it is sent.
 
 ### Waiting, and collecting later
 

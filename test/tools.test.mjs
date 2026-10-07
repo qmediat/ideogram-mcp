@@ -163,8 +163,9 @@ test("ideogram_quote prices exactly the tool's call with dry_run and refuses des
   assert.deepEqual(sentJson(requests), { prompt: "x", rendering_speed: "turbo", async: true }, "exactly the request the tool would send");
   assert.match(text(result), /0\.030000 USD exact/);
   assert.match(text(result), /Nothing was generated or billed/);
-  const describe = await call("ideogram_quote", { tool: "ideogram_describe", arguments: { image: png } }).catch((e) => e);
-  assert.match(describe.message, /does not declare dry_run/);
+  const describe = await call("ideogram_quote", { tool: "ideogram_describe", arguments: { image: png } });
+  assert.equal(describe.result.isError, true);
+  assert.match(text(describe.result), /does not declare dry_run/);
 });
 
 test("ideogram_api refuses by class, by the support table and undocumented operations without the opt-in", async () => {
@@ -271,6 +272,13 @@ test("a 1.x alias and the field it maps to, both given, are refused (quality + r
 test("ideogram_api refuses a body for an operation that takes none (get_generation_v2) instead of dropping it", async () => {
   const { result, requests } = await call("ideogram_api", { operation: "get_generation_v2", params: { path: { generation_id: "g" }, body: { prompt: "x" } }, wait_s: 0 }).catch((e) => ({ result: { isError: true, content: [{ text: e.message }] }, requests: [] }));
   assert.match(text(result), /body: get_generation_v2 takes no body; given prompt/);
+  assert.equal(requests.length, 0);
+});
+
+test("ideogram_quote refuses an unquotable tool before any file is read: describe with a missing file gets the dry_run refusal", async () => {
+  const { result, requests } = await call("ideogram_quote", { tool: "ideogram_describe", arguments: { image: join(dir, "does-not-exist.png") } });
+  assert.equal(result.isError, true);
+  assert.match(text(result), /does not declare dry_run/);
   assert.equal(requests.length, 0);
 });
 

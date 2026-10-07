@@ -61,7 +61,8 @@ export interface ApiRequest {
   readonly headers: Readonly<Record<string, string>>;
   readonly body: BodyInput | null;
   readonly dryRun: boolean;
-  /** A shorter timeout than the client's for this request (a poll bounded by the tool's remaining wait). */
+  /** The whole budget of this request — every attempt and every retry sleep together — when shorter than the client's
+   * per-attempt timeout (a poll bounded by the tool's remaining wait); a retry never starts past it. */
   readonly timeoutMs?: number;
 }
 
@@ -138,7 +139,7 @@ export class IdeogramClient {
     try {
       // redirect manual: a 3xx is returned as a response, never followed — the download host allow-list is checked on
       // the URL this server asked for, and a hop to another host would skip it.
-      const timeout = Math.min(this.options.requestTimeoutMs, timeoutMs ?? this.options.requestTimeoutMs);
+      const timeout = Math.max(1, Math.min(this.options.requestTimeoutMs, timeoutMs ?? this.options.requestTimeoutMs));
       const init: RequestInit = { method, headers, redirect: "manual", signal: AbortSignal.timeout(timeout) };
       if (body !== null) init.body = body;
       return { kind: "response", response: await fetch(url, init) };
@@ -170,12 +171,16 @@ export class IdeogramClient {
     const headers: Record<string, string> = { ...req.headers, "Api-Key": this.options.apiKey, Accept: "application/json" };
     if (body !== null) headers["Content-Type"] = body.contentType;
     const idempotent = req.op.method === "GET";
+    const started = Date.now();
+    const remaining = (): number | undefined => (req.timeoutMs === undefined ? undefined : req.timeoutMs - (Date.now() - started));
     let slept = 0;
     for (let attempt = 0; ; attempt++) {
-      const result = await this.attempt(req.op.method, url, headers, body?.bytes ?? null, req.timeoutMs);
+      const result = await this.attempt(req.op.method, url, headers, body?.bytes ?? null, remaining());
       if (result.kind === "response" && result.response.ok) return { status: result.response.status, body: await parseJson(result.response, req) };
       const wait = backoffMs(attempt, result.kind === "response" ? result.response : undefined);
-      if (attempt < this.options.maxRetries && slept + wait <= RETRY_BUDGET_MS && this.retryable(idempotent, result)) {
+      const left = remaining();
+      const inBudget = slept + wait <= RETRY_BUDGET_MS && (left === undefined || wait < left);
+      if (attempt < this.options.maxRetries && inBudget && this.retryable(idempotent, result)) {
         COUNTERS.retries += 1;
         if (result.kind === "response") await discard(result.response);
         slept += wait;

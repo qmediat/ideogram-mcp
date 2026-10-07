@@ -272,6 +272,22 @@ test("a 2xx POST answered with a non-JSON body is INVALID_JSON and says the job 
   }
 });
 
+test("the request-level timeout is the whole budget: a hanging poll is not retried past it", async () => {
+  const api = await startFakeApi(() => () => {});
+  try {
+    const { options, sleeps } = testClientOptions(api.base, { maxRetries: 3, requestTimeoutMs: 60_000 });
+    const op = operationById("get_generation_v2");
+    const started = Date.now();
+    const error = await new IdeogramClient(options).call(request(op, null, { path: { generation_id: "g" }, timeoutMs: 300 })).catch((e) => e);
+    assert.equal(error.code, "NETWORK_ERROR");
+    assert.ok(Date.now() - started < 3_000, `${Date.now() - started} ms: no second 300 ms attempt after the first used the budget`);
+    assert.ok(api.requests.length <= 2, `${api.requests.length} attempts`);
+    assert.deepEqual(sleeps, [], "no retry sleep: the budget was spent");
+  } finally {
+    await api.close();
+  }
+});
+
 test("upload limits are the operation's: describe refuses an 11 MB image before reading it, remix takes it", async () => {
   const big = join(dir, "big.png");
   await writeFile(big, PNG);
