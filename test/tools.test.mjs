@@ -160,7 +160,7 @@ test("ideogram_quote prices exactly the tool's call with dry_run and refuses des
   const priceQuote = { object: "price_quote", billing_identifier: "ideogram-3-turbo", quantity: 1, usd_micros: 30000, credit_millis: 30, qualifier: "exact" };
   const { requests, result } = await call("ideogram_quote", { tool: "ideogram_generate", arguments: { prompt: "x", rendering_speed: "TURBO" } }, () => ({ json: priceQuote }));
   assert.equal(requests[0].url, "/v2/image/generate/ideogram-3?dry_run=true");
-  assert.deepEqual(sentJson(requests), { prompt: "x", rendering_speed: "turbo" }, "no async on a dry run");
+  assert.deepEqual(sentJson(requests), { prompt: "x", rendering_speed: "turbo", async: true }, "exactly the request the tool would send");
   assert.match(text(result), /0\.030000 USD exact/);
   assert.match(text(result), /Nothing was generated or billed/);
   const describe = await call("ideogram_quote", { tool: "ideogram_describe", arguments: { image: png } }).catch((e) => e);
@@ -235,6 +235,32 @@ test("a completed generation that lists no image says so instead of '0 of 0 save
   );
   assert.equal(result.isError, true);
   assert.match(text(result), /listed no image for this generation/);
+});
+
+test("a legacy input of another tool is a foreign field: describe_model_version on ideogram_generate is refused by name", async () => {
+  const error = await call("ideogram_generate", { prompt: "x", describe_model_version: "V_3" }).catch((e) => e);
+  assert.match(error.message, /`describe_model_version` is not a parameter of ideogram-3; no ideogram_generate model takes it/);
+});
+
+test("ideogram_api: a misspelled location is refused, and several files of one array field are checked as an array and sent as parts", async () => {
+  const typo = await call("ideogram_api", { operation: "post_remove_background_v2", params: { bodyy: {} }, files: [{ field: "image", path: png }] });
+  assert.equal(typo.result.isError, true);
+  assert.match(text(typo.result), /params: Unrecognized key.*bodyy/);
+  const two = await call("ideogram_api", {
+    operation: "post_generate_image_v2_gpt_image2", params: { body: { prompt: "x" } }, files: [{ field: "images", path: png }, { field: "images", path: png }], wait_s: 0,
+  });
+  assert.equal(two.requests[0].url, "/v2/image/generate/gpt-image-2");
+  const body = two.requests[0].body.toString("latin1");
+  assert.equal(body.split('name="images"; filename="images.png"').length - 1, 2, "two file parts under images");
+});
+
+test("ideogram_api on get_generation_v2 reads the status it returns: a failed generation is Failed, not 'still running'", async () => {
+  const { requests, result } = await call("ideogram_api", { operation: "get_generation_v2", params: { path: { generation_id: "gF" } }, wait_s: 0 }, () => ({
+    json: { generation_id: "gF", status: "failed", created: "2026-10-07T00:00:00Z", failure_reason: "content_policy_violation" },
+  }));
+  assert.equal(requests[0].url, "/v2/generations/gF");
+  assert.equal(result.isError, true);
+  assert.match(text(result), /gF failed: content_policy_violation/);
 });
 
 test("ideogram_operations lists a family and details one operation with its fields and limits", async () => {

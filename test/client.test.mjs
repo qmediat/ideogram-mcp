@@ -13,6 +13,7 @@ const { IdeogramApiError } = await import("../dist/errors.js");
 const { operationById } = await import("../dist/spec/operations.js");
 const { loadUploads } = await import("../dist/uploads.js");
 const { COUNTERS } = await import("../dist/counters.js");
+const { RETRY_BUDGET_MS } = await import("../dist/client.js");
 
 const dir = await mkdtemp(join(tmpdir(), "ideogram-client-"));
 after(() => rm(dir, { recursive: true, force: true }));
@@ -226,6 +227,46 @@ test("a 2xx whose body is cut off is a typed error that says the job may be runn
     assert.equal(error.code, "RESPONSE_READ_FAILED");
     assert.match(error.message, /may be running and billed/);
     assert.equal(api.requests.length, 1, "not sent again");
+  } finally {
+    await api.close();
+  }
+});
+
+test("retries share one 30 s budget: 429s with Retry-After 20 are retried once, then reported with the value", async () => {
+  const api = await startFakeApi(() => ({ status: 429, headers: { "retry-after": "20" }, json: INFLIGHT }));
+  try {
+    const { options, sleeps } = testClientOptions(api.base);
+    const error = await new IdeogramClient(options).call(request(generateOp, { prompt: "x" })).catch((e) => e);
+    assert.equal(RETRY_BUDGET_MS, 30_000);
+    assert.deepEqual(sleeps, [20000], "a second 20 s sleep would pass the budget");
+    assert.deepEqual([error.status, error.details.retryAfterS, api.requests.length], [429, 20, 2]);
+  } finally {
+    await api.close();
+  }
+});
+
+test("a request-level timeout bounds one call below the client's: a hanging poll fails within it", async () => {
+  const api = await startFakeApi(() => () => {}); // never answers
+  try {
+    const { options } = testClientOptions(api.base, { maxRetries: 0, requestTimeoutMs: 60_000 });
+    const op = operationById("get_generation_v2");
+    const started = Date.now();
+    const error = await new IdeogramClient(options).call(request(op, null, { path: { generation_id: "g" }, timeoutMs: 150 })).catch((e) => e);
+    assert.equal(error.code, "NETWORK_ERROR");
+    assert.match(error.message, /TimeoutError/);
+    assert.ok(Date.now() - started < 5_000, "failed on the request's own timeout, not the client's");
+  } finally {
+    await api.close();
+  }
+});
+
+test("a 2xx POST answered with a non-JSON body is INVALID_JSON and says the job may be billed", async () => {
+  const api = await startFakeApi(() => ({ status: 200, headers: { "content-type": "text/html" }, body: "<html>gateway</html>" }));
+  try {
+    const { options } = testClientOptions(api.base);
+    const error = await new IdeogramClient(options).call(request(generateOp, { prompt: "x" })).catch((e) => e);
+    assert.equal(error.code, "INVALID_JSON");
+    assert.match(error.message, /may be running and billed/);
   } finally {
     await api.close();
   }

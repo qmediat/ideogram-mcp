@@ -21,6 +21,15 @@ export type BodyFields = Readonly<Record<string, unknown>>;
 export const MB = 1_000_000;
 /** The per-file limit of a file field whose description states none: the largest one the specification states. */
 export const UNSTATED_FILE_BYTES = 50 * MB;
+/** This server's cap on a whole request when the specification states none for the operation (no v2 operation does):
+ * the files are read into memory and sent in one body, so a request is bounded here, not by the machine's memory. */
+export const UNSTATED_REQUEST_BYTES = 100 * MB;
+
+export interface RequestLimit {
+  readonly maxBytes: number;
+  /** false when the specification states no cap for this operation and UNSTATED_REQUEST_BYTES applies. */
+  readonly stated: boolean;
+}
 
 export function quoteAllowed(op: Operation): boolean {
   return isExposable(op) && op.dryRun;
@@ -67,9 +76,18 @@ export function fileLimitsOf(op: Operation): readonly FileLimit[] {
   return op.facts.fileFields.map(fileLimit);
 }
 
-/** The whole-request cap the specification states for the operation, or null. */
-export function requestLimitOf(op: Operation): number | null {
-  return op.facts.requestMaxBytes;
+/** The whole-request cap: the specification's when it states one, else this server's. */
+export function requestLimitOf(op: Operation): RequestLimit {
+  const stated = op.facts.requestMaxBytes;
+  return stated === null ? { maxBytes: UNSTATED_REQUEST_BYTES, stated: false } : { maxBytes: stated, stated: true };
+}
+
+/** Why an encoded request body may not be sent, or null: the whole body (fields, part headers and files) against the cap. */
+export function requestBytesRefusal(op: Operation, bodyBytes: number): string | null {
+  const limit = requestLimitOf(op);
+  if (bodyBytes <= limit.maxBytes) return null;
+  const source = limit.stated ? "the limit Ideogram states for this request" : "this server's cap for a request Ideogram states no limit for";
+  return `the request body is ${(bodyBytes / MB).toFixed(1)} MB; ${op.id} takes at most ${(limit.maxBytes / MB).toFixed(0)} MB (${source})`;
 }
 
 export interface Constraint {

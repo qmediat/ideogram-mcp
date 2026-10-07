@@ -26,12 +26,12 @@ open-source packages, so the standard is Invariant #14 (typed boundaries, small 
   the spec. The other 134: 20 undocumented v2 operations (reframe `auto`/`bria-expand`/`gpt-image-2-5-flare`/
   `nano-banana-pro`, tools `living-image`, `product-360-video`, `packshots`, `vectorizer`, `text-layerizer`, `model-swap`,
   `swap-product`, `sole-swap`, `skechers-style-editor`, `swan-s-logo-design`/`-install`, workflows `lookbook`,
-  `precise-masked-edit`, `virtual-try-on`, video edit `seedance-2`, `GET /v2/assets/reference-usage`), 58 v1 operations
-  (among them capabilities v2 lacks: custom-model training `/v1/ideogram-v{3,4}/train-model[-advanced]`, `/v1/ideogram-v4/
+  `precise-masked-edit`, `virtual-try-on`, video edit `seedance-2`, `GET /v2/assets/reference-usage`), 73 v1 and
+  unversioned operations — by the shipped rule 41 `v1_only` (capabilities v2 lacks: custom-model training `/v1/ideogram-v{3,4}/train-model[-advanced]`, `/v1/ideogram-v4/
   magic-prompt`, `/v1/layerize-logos`, `/v1/snap-mask`, `/v1/provenance/verify`, `/v1/ideogram-v45/generate`, Flux 2 Klein,
-  Ernie, 4.0 cfg-distilled / fp8 / stable, generate-design, graphic, try-on, image-to-image), 15 unversioned legacy
-  operations (`/generate`, `/edit`, `/describe`, `/datasets`, `/models`…: Ideogram 1.0/2.0-era, superseded by v2
-  `ideogram-2` / `ideogram-2a`), 9 internal (`/manage/*` web-app and organization administration, `/mini-apps/*`,
+  Ernie, 4.0 cfg-distilled / fp8 / stable, generate-design, graphic, try-on, image-to-image, the training datasets and
+  models) and 32 `legacy` (`/generate`, `/edit`, `/describe`, `/v1/ideogram-v3/*`…: paths whose capability v2 covers;
+  the first reading by URL age, 58 + 15, is superseded by the rule in `src/spec/classify.ts`) —, 9 internal (`/manage/*` web-app and organization administration, `/mini-apps/*`,
   `/internal-testing`, `/internal/batch`) and 32 Bearer-only (organization, billing portal, subscriptions).
 - **Every v2 generation operation has the same envelope**: `multipart/form-data` or `application/json` body; `dry_run`
   query parameter ("validated and priced but not run: nothing is generated, stored, or billed" — the response is a

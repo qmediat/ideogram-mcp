@@ -78,7 +78,7 @@ function statedRequestBytes(description) {
 function fileField(name, property) {
   if (isBinary(property)) return { name, array: false, maxItems: null, maxBytes: statedBytes(property.description) };
   if (property.type === "array" && isBinary(property.items)) {
-    const maxBytes = statedBytes(property.description ?? property.items.description);
+    const maxBytes = statedBytes(property.description) ?? statedBytes(property.items.description); // either text may state it
     return { name, array: true, maxItems: property.maxItems ?? null, maxBytes };
   }
   return null;

@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { startFakeApi, testClientOptions, fakeClock } from "./support/fake-api.mjs";
 
 const { IdeogramClient } = await import("../dist/client.js");
-const { execute, resume, POLL_CAP_MS } = await import("../dist/lifecycle.js");
+const { execute, resume, asAsync, fetchGeneration, POLL_CAP_MS } = await import("../dist/lifecycle.js");
 const { operationById } = await import("../dist/spec/operations.js");
 const { COUNTERS } = await import("../dist/counters.js");
 
@@ -130,4 +130,25 @@ test("a poll answered 503 keeps the id as pending with the error; a 404 is the a
     await gone.close();
   }
   assert.equal(POLL_CAP_MS, 30_000);
+});
+
+test("asAsync adds async: true only when the caller left it unset; an explicit async: false (ideogram_api) is kept", () => {
+  const req = jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x" });
+  assert.equal(asAsync(req).body.fields.async, true);
+  const explicit = jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x", async: false });
+  assert.equal(asAsync(explicit).body.fields.async, false);
+});
+
+test("a poll carries the wait's remaining time as its timeout: a hanging API ends the poll as pending with the timeout noted", async () => {
+  const api = await startFakeApi(() => () => {});
+  try {
+    const client = new IdeogramClient(testClientOptions(api.base, { maxRetries: 0, requestTimeoutMs: 60_000 }).options);
+    const started = Date.now();
+    const outcome = await fetchGeneration(client, "gHang", 200);
+    assert.equal(outcome.kind, "pending");
+    assert.match(outcome.note, /TimeoutError/);
+    assert.ok(Date.now() - started < 5_000);
+  } finally {
+    await api.close();
+  }
 });

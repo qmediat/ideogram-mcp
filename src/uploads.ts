@@ -73,7 +73,10 @@ export async function loadUploads(op: Operation, files: readonly FileRef[]): Pro
   const checked = await Promise.all(files.map((f) => checkFile(f, limits.get(f.field) as FileLimit)));
   const total = checked.reduce((sum, f) => sum + f.bytes, 0);
   const cap = requestLimitOf(op);
-  if (cap !== null && total > cap) throw new Error(`the files together are ${mb(total)}; ${op.id} takes a request under ${mb(cap)}`);
+  if (total > cap.maxBytes) {
+    const source = cap.stated ? "the limit Ideogram states for this request" : "this server's cap for a request Ideogram states no limit for";
+    throw new Error(`the files together are ${mb(total)}; ${op.id} takes a request under ${mb(cap.maxBytes)} (${source})`);
+  }
   return Promise.all(
     checked.map(async (f) => ({
       field: f.ref.field,

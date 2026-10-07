@@ -121,9 +121,10 @@ export function payloadOf(body: unknown): Payload | null {
   return items === null ? { kind: "record", body } : { kind: "images", items };
 }
 
-/** The request with `async: true` when the operation takes it, so the API answers at acceptance. */
+/** The request with `async: true` when the operation takes it, so the API answers at acceptance; a caller who set `async`
+ * explicitly (ideogram_api) keeps their value. */
 export function asAsync(req: ApiRequest): ApiRequest {
-  if (req.op.async !== "optional" || req.body === null) return req;
+  if (req.op.async !== "optional" || req.body === null || req.body.fields.async !== undefined) return req;
   return { ...req, body: { ...req.body, fields: { ...req.body.fields, async: true } } };
 }
 
@@ -139,11 +140,13 @@ function isVideo(op: Operation): boolean {
 export async function execute(client: IdeogramClient, req: ApiRequest, options: WaitOptions): Promise<Outcome> {
   const started = options.clock.now();
   const result = await client.call(asAsync(req));
+  const body = withImageKind(result.body);
+  if (req.op.id === GENERATION_OP?.id) return generationOutcome(String(req.path.generation_id ?? ""), result.status, body); // a lookup, not a job
   const schema = responseSchemaFor(req.op, false);
-  const checked = schema === null ? { success: true as const } : schema.safeParse(result.body);
-  if (!checked.success) return contractMismatch(result.status, result.body, checked.error);
-  const payload = payloadOf(result.body);
-  const generationId = generationIdOf(result.body);
+  const checked = schema === null ? { success: true as const } : schema.safeParse(body);
+  if (!checked.success) return contractMismatch(result.status, body, checked.error);
+  const payload = payloadOf(body);
+  const generationId = generationIdOf(body);
   if (payload !== null) return { kind: "completed", generationId, payload, usageCostUsdMicros: null };
   if (generationId === null) throw new Error(`${req.op.id} answered without a payload or a generation id`);
   const deadline = started + clampWait(options.waitS) * 1000;
@@ -167,11 +170,11 @@ function transientPollFailure(error: IdeogramApiError): boolean {
 }
 
 /** One poll; a transient failure keeps the id (pending, with the error as its note) and is counted. */
-export async function fetchGeneration(client: IdeogramClient, generationId: string): Promise<Outcome> {
+export async function fetchGeneration(client: IdeogramClient, generationId: string, timeoutMs?: number): Promise<Outcome> {
   if (GENERATION_OP === null) throw new Error("the snapshot lacks get_generation_v2");
   let result;
   try {
-    result = await client.call({ op: GENERATION_OP, path: { generation_id: generationId }, query: {}, headers: {}, body: null, dryRun: false });
+    result = await client.call({ op: GENERATION_OP, path: { generation_id: generationId }, query: {}, headers: {}, body: null, dryRun: false, timeoutMs });
   } catch (error) {
     if (!(error instanceof IdeogramApiError) || !transientPollFailure(error)) throw error;
     COUNTERS.pollErrors += 1;
@@ -205,7 +208,8 @@ async function poll(client: IdeogramClient, generationId: string, deadline: numb
   for (;;) {
     if (clock.now() + delay > deadline) return { kind: "pending", generationId, note: null };
     await clock.sleep(delay);
-    const outcome = await fetchGeneration(client, generationId);
+    // the poll may not outlive the wait: its timeout is what remains of the deadline (at least one second)
+    const outcome = await fetchGeneration(client, generationId, Math.max(1_000, deadline - clock.now()));
     if (outcome.kind !== "pending" || outcome.note !== null) return outcome;
     delay = Math.min(delay * POLL_FACTOR, capMs);
   }

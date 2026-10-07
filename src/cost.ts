@@ -5,7 +5,7 @@
  * thousandths (3 places), as decimal strings — never through a float.
  */
 import type { ApiRequest, IdeogramClient } from "./client.js";
-import { contractMismatch } from "./lifecycle.js";
+import { asAsync, contractMismatch } from "./lifecycle.js";
 import type { ContractMismatch } from "./lifecycle.js";
 import { quoteRefusal } from "./spec/overlay.js";
 import { zPriceQuote } from "./generated/zod.gen.js";
@@ -42,7 +42,7 @@ export const millisToCredits = (millis: number | bigint): string => decimalStrin
 export async function quote(client: IdeogramClient, req: ApiRequest): Promise<QuoteOutcome> {
   const refusal = quoteRefusal(req.op);
   if (refusal !== null) throw new Error(refusal);
-  const result = await client.call({ ...req, dryRun: true });
+  const result = await client.call({ ...asAsync(req), dryRun: true }); // the very request execute() would send
   const checked = zPriceQuote.safeParse(result.body);
   if (!checked.success) return contractMismatch(result.status, result.body, checked.error);
   const q = checked.data;

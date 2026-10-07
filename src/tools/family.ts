@@ -102,10 +102,11 @@ function variantJsonSchemas(spec: FamilyToolSpec): { oneOf: unknown[]; definitio
     return z.object({ model, ...v.schema.shape });
   });
   const json = z.toJSONSchema(z.union(variants), { io: "input", reused: "ref", target: "draft-7", unrepresentable: "any" }) as {
-    anyOf: JsonObject[];
+    anyOf?: JsonObject[];
     definitions?: JsonObject;
   };
   const definitions = json.definitions ?? {};
+  if (!Array.isArray(json.anyOf)) throw new Error(`${spec.name}: the variants did not render as a union (${variants.length} model(s))`);
   for (const v of json.anyOf) {
     const props = v.properties as JsonObject;
     for (const key of Object.keys(props)) props[key] = unwrapRef(props[key]);
@@ -186,7 +187,8 @@ export async function prepare(spec: FamilyToolSpec, args: ToolArguments): Promis
   }
   const wait = WaitInput.safeParse(args.wait_s);
   if (!wait.success) throw new Error(`wait_s must be a whole number of seconds from 0 to ${WAIT_MAX_S}`);
-  const requestFields = Object.fromEntries(Object.entries(args).filter(([name]) => !CONTROL_FIELDS.has(name)));
+  const legacy = new Set(Object.keys(spec.legacyInputs ?? {})); // a legacy input of ANOTHER tool is a foreign field, refused by name
+  const requestFields = Object.fromEntries(Object.entries(args).filter(([name]) => !CONTROL_FIELDS.has(name) && !legacy.has(name)));
   const adapted = adaptFields(requestFields, variant.fields);
   checkFields(spec, variant, adapted.fields);
   const req = await buildRequest(variant.op, adapted.fields);

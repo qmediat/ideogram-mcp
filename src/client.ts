@@ -10,12 +10,14 @@
  */
 import { randomBytes } from "node:crypto";
 import { mkdir, open, rename, rm } from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { COUNTERS } from "./counters.js";
 import { zGenerationErrorResponse } from "./generated/zod.gen.js";
 import { failedBeforeSending, IdeogramApiError, isNetworkFailure, networkErrorText } from "./errors.js";
 import type { ApiErrorDetails } from "./errors.js";
 import type { Operation } from "./spec/operations.js";
+import { requestBytesRefusal } from "./spec/overlay.js";
 import { buildUrl, encodeBody } from "./wire.js";
 import type { BodyInput, EncodedBody, QueryValue, Scalar } from "./wire.js";
 
@@ -59,6 +61,8 @@ export interface ApiRequest {
   readonly headers: Readonly<Record<string, string>>;
   readonly body: BodyInput | null;
   readonly dryRun: boolean;
+  /** A shorter timeout than the client's for this request (a poll bounded by the tool's remaining wait). */
+  readonly timeoutMs?: number;
 }
 
 export interface ApiResult {
@@ -74,10 +78,10 @@ export interface SavedFile {
 
 type Attempt = { readonly kind: "response"; readonly response: Response } | { readonly kind: "network"; readonly error: unknown };
 
-/** The longest a retry sleeps: inside one tool call (≤ 50 s wait, 60 s client timeout), so a POST is never resent after the
- * caller has given up (the job would run and bill with its id reaching nobody). A 429 asking for more is reported with its
- * Retry-After instead of retried. */
-const RETRY_AFTER_MAX_S = 30;
+/** The most one call spends sleeping between attempts, in total: inside one tool call (≤ 50 s wait, 60 s client timeout),
+ * so a POST is never resent after the caller has given up (the job would run and bill with its id reaching nobody). A 429
+ * whose Retry-After does not fit the remaining budget is reported with its value instead of retried. */
+export const RETRY_BUDGET_MS = 30_000;
 
 /** The Retry-After header as whole seconds, whatever its size; undefined when absent or not a positive number. */
 function retryAfterSeconds(response: Response): number | undefined {
@@ -85,10 +89,6 @@ function retryAfterSeconds(response: Response): number | undefined {
   return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
 }
 
-function retryAfterTooLong(response: Response): boolean {
-  const after = retryAfterSeconds(response);
-  return after !== undefined && after > RETRY_AFTER_MAX_S;
-}
 
 function backoffMs(attempt: number, response?: Response): number {
   const after = response === undefined ? undefined : retryAfterSeconds(response);
@@ -134,11 +134,12 @@ export class IdeogramClient {
     return { url, body: req.body === null ? null : encodeBody(req.body, this.options.boundary?.()) };
   }
 
-  private async attempt(method: string, url: string, headers: Record<string, string>, body: Uint8Array<ArrayBuffer> | null): Promise<Attempt> {
+  private async attempt(method: string, url: string, headers: Record<string, string>, body: Uint8Array<ArrayBuffer> | null, timeoutMs?: number): Promise<Attempt> {
     try {
       // redirect manual: a 3xx is returned as a response, never followed — the download host allow-list is checked on
       // the URL this server asked for, and a hop to another host would skip it.
-      const init: RequestInit = { method, headers, redirect: "manual", signal: AbortSignal.timeout(this.options.requestTimeoutMs) };
+      const timeout = Math.min(this.options.requestTimeoutMs, timeoutMs ?? this.options.requestTimeoutMs);
+      const init: RequestInit = { method, headers, redirect: "manual", signal: AbortSignal.timeout(timeout) };
       if (body !== null) init.body = body;
       return { kind: "response", response: await fetch(url, init) };
     } catch (error) {
@@ -150,7 +151,6 @@ export class IdeogramClient {
   private retryable(idempotent: boolean, result: Attempt): boolean {
     if (result.kind === "network") return idempotent ? isNetworkFailure(result.error) : failedBeforeSending(result.error);
     const status = result.response.status;
-    if (retryAfterTooLong(result.response)) return false;
     return status === 429 || (idempotent && status >= 500);
   }
 
@@ -163,16 +163,23 @@ export class IdeogramClient {
   /** Sends one request; resolves with the parsed 2xx body, rejects with a typed IdeogramApiError. */
   async call(req: ApiRequest): Promise<ApiResult> {
     const { url, body } = this.encode(req);
+    if (body !== null && req.body?.files.length) {
+      const refusal = requestBytesRefusal(req.op, body.bytes.byteLength);
+      if (refusal !== null) throw new Error(refusal);
+    }
     const headers: Record<string, string> = { ...req.headers, "Api-Key": this.options.apiKey, Accept: "application/json" };
     if (body !== null) headers["Content-Type"] = body.contentType;
     const idempotent = req.op.method === "GET";
+    let slept = 0;
     for (let attempt = 0; ; attempt++) {
-      const result = await this.attempt(req.op.method, url, headers, body?.bytes ?? null);
+      const result = await this.attempt(req.op.method, url, headers, body?.bytes ?? null, req.timeoutMs);
       if (result.kind === "response" && result.response.ok) return { status: result.response.status, body: await parseJson(result.response, req) };
-      if (attempt < this.options.maxRetries && this.retryable(idempotent, result)) {
+      const wait = backoffMs(attempt, result.kind === "response" ? result.response : undefined);
+      if (attempt < this.options.maxRetries && slept + wait <= RETRY_BUDGET_MS && this.retryable(idempotent, result)) {
         COUNTERS.retries += 1;
         if (result.kind === "response") await discard(result.response);
-        await this.options.sleep(backoffMs(attempt, result.kind === "response" ? result.response : undefined));
+        slept += wait;
+        await this.options.sleep(wait);
         continue;
       }
       throw result.kind === "network" ? this.networkError(idempotent, result.error) : await errorFromResponse(result.response);
@@ -215,6 +222,7 @@ export class IdeogramClient {
   }
 
   private async fetchDownload(url: string): Promise<Response> {
+    let slept = 0;
     for (let attempt = 0; ; attempt++) {
       const result = await this.attempt("GET", url, {}, null);
       if (result.kind === "response" && result.response.status >= 300 && result.response.status < 400) {
@@ -223,10 +231,12 @@ export class IdeogramClient {
         throw new IdeogramApiError(result.response.status, "REDIRECT_BLOCKED", `Download redirect blocked (${result.response.status} → ${location})`);
       }
       if (result.kind === "response" && result.response.ok) return result.response;
-      if (attempt < this.options.maxRetries && this.retryable(true, result)) {
+      const wait = backoffMs(attempt);
+      if (attempt < this.options.maxRetries && slept + wait <= RETRY_BUDGET_MS && this.retryable(true, result)) {
         COUNTERS.retries += 1;
         if (result.kind === "response") await discard(result.response);
-        await this.options.sleep(backoffMs(attempt));
+        slept += wait;
+        await this.options.sleep(wait);
         continue;
       }
       if (result.kind === "network") throw new IdeogramApiError(0, "NETWORK_ERROR", `Download network error: ${networkErrorText(result.error)}`);
@@ -254,7 +264,8 @@ async function parseJson(response: Response, req: ApiRequest): Promise<unknown> 
   try {
     return JSON.parse(text);
   } catch {
-    throw new IdeogramApiError(response.status, "INVALID_JSON", `${req.op.id} answered ${response.status} with a non-JSON body: ${excerpt(text)}`);
+    const note = req.op.method === "GET" ? "" : "; Ideogram answered 2xx, so the job may be running and billed — its id is not in this answer";
+    throw new IdeogramApiError(response.status, "INVALID_JSON", `${req.op.id} answered ${response.status} with a non-JSON body: ${excerpt(text)}${note}`);
   }
 }
 
@@ -278,6 +289,16 @@ export function outputFileName(extension: string): string {
   return `ideogram-${Date.now()}-${randomBytes(4).toString("hex")}.${extension}`;
 }
 
+/** Writes the whole chunk: a write may take fewer bytes than offered (FileHandle.write returns bytesWritten). */
+async function writeAll(handle: FileHandle, chunk: Uint8Array): Promise<void> {
+  let offset = 0;
+  while (offset < chunk.byteLength) {
+    const { bytesWritten } = await handle.write(chunk, offset, chunk.byteLength - offset);
+    if (bytesWritten === 0) throw new Error("the file system accepted no bytes");
+    offset += bytesWritten;
+  }
+}
+
 async function streamToFile(response: Response, outputDir: string, extension: string, cap: number, contentType: string): Promise<SavedFile> {
   const dir = resolve(outputDir);
   await mkdir(dir, { recursive: true });
@@ -292,7 +313,7 @@ async function streamToFile(response: Response, outputDir: string, extension: st
         await reader.cancel();
         throw tooLarge(bytes, cap);
       }
-      await handle.write(chunk.value);
+      await writeAll(handle, chunk.value);
     }
     await handle.close();
     const path = join(dir, outputFileName(extension));

@@ -32,7 +32,7 @@ const CLASS_REFUSAL: Readonly<Partial<Record<OperationClass, string>>> = {
 const RawInput = z.object({
   operation: z.string().min(1),
   params: z
-    .object({
+    .strictObject({
       path: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
       query: z.record(z.string(), z.unknown()).optional(),
       headers: z.record(z.string(), z.string()).optional(),
@@ -87,7 +87,13 @@ async function buildRawRequest(op: Operation, args: RawArgs): Promise<ApiRequest
   const params = args.params ?? {};
   const files = args.files ?? [];
   const body = params.body ?? {};
-  const withFiles = { ...body, ...Object.fromEntries(files.map((f) => [f.field, f.path])) };
+  const arrayFields = new Set(op.facts.fileFields.filter((f) => f.array).map((f) => f.name));
+  const grouped: Record<string, unknown> = {};
+  for (const f of files) {
+    if (arrayFields.has(f.field)) grouped[f.field] = [...((grouped[f.field] as string[] | undefined) ?? []), f.path];
+    else grouped[f.field] = f.path;
+  }
+  const withFiles = { ...body, ...grouped };
   const media = files.length === 0 && op.facts.bodies.includes("json") ? "json" : "multipart";
   if ("dry_run" in (params.query ?? {})) throw new Error("query.dry_run: use the dry_run argument of ideogram_api (the quote path checks the answer as a PriceQuote)");
   check("path", op.schemas.path, params.path ?? {});
@@ -109,7 +115,7 @@ async function buildRawRequest(op: Operation, args: RawArgs): Promise<ApiRequest
 
 async function runRaw(ctx: ToolContext, input: ToolArguments): Promise<CallToolResult> {
   const parsed = RawInput.safeParse(input);
-  if (!parsed.success) return textResult(`ideogram_api: ${parsed.error.issues.map((i) => i.message).join("; ")}`, true);
+  if (!parsed.success) return textResult(`ideogram_api: ${parsed.error.issues.map((i) => `${i.path.join(".") || "(input)"}: ${i.message}`).join("; ")}`, true);
   const args = parsed.data;
   const op = operationById(args.operation);
   if (op === null) return textResult(`No operation ${args.operation}; ideogram_operations lists them`, true);

@@ -74,7 +74,6 @@ function adaptPalette(fields: Record<string, unknown>, takes: ReadonlySet<string
 /** Maps the 1.x spellings in `fields` for a model that takes the fields in `takes`. */
 export function adaptFields(input: ToolArguments, takes: ReadonlySet<string>): Adapted {
   const fields: Record<string, unknown> = { ...input };
-  delete fields.describe_model_version;
   const notes: string[] = [];
   adaptSpeed(fields, takes, notes);
   adaptPalette(fields, takes, notes);

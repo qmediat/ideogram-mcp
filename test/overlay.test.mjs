@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const { OPERATIONS, operationById, isExposable } = await import("../dist/spec/operations.js");
-const { quoteAllowed, quoteRefusal, responseSchemaFor, fileLimitsOf, CONSTRAINTS, constraintViolations, MB, UNSTATED_FILE_BYTES } =
+const { quoteAllowed, quoteRefusal, responseSchemaFor, fileLimitsOf, CONSTRAINTS, constraintViolations, MB, requestLimitOf, requestBytesRefusal, UNSTATED_REQUEST_BYTES, UNSTATED_FILE_BYTES } =
   await import("../dist/spec/overlay.js");
 const { supportOf, servedByRawCall } = await import("../dist/spec/support.js");
 
@@ -134,4 +134,16 @@ test("the support table: the seven families' documented models and the generatio
   const counts = {};
   for (const o of OPERATIONS) counts[supportOf(o)] = (counts[supportOf(o)] ?? 0) + 1;
   assert.deepEqual(counts, { curated: 40, raw: 7, planned: 80, unsupported: 73 });
+});
+
+test("the whole request is bounded: the specification's cap where it states one, this server's 100 MB where it does not", () => {
+  const v2 = op("post_generate_image_v2_gpt_image2"); // 16 × 25 MB by field, no stated request cap
+  assert.deepEqual(requestLimitOf(v2), { maxBytes: UNSTATED_REQUEST_BYTES, stated: false });
+  assert.equal(UNSTATED_REQUEST_BYTES, 100 * MB);
+  assert.equal(requestBytesRefusal(v2, 100 * MB), null);
+  assert.match(requestBytesRefusal(v2, 100 * MB + 1), /100\.0 MB; post_generate_image_v2_gpt_image2 takes at most 100 MB \(this server's cap/);
+  const stated = OPERATIONS.find((o) => o.facts.requestMaxBytes !== null);
+  assert.ok(stated, "the snapshot states a request cap somewhere (the v1 style-reference prose)");
+  assert.deepEqual(requestLimitOf(stated), { maxBytes: 50 * MB, stated: true });
+  assert.match(requestBytesRefusal(stated, 50 * MB + 1), /the limit Ideogram states for this request/);
 });

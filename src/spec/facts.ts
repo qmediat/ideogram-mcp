@@ -21,7 +21,7 @@ export interface FileFieldFacts {
   /** Several files under one field name. */
   readonly array: boolean;
   readonly maxItems: number | null;
-  /** The per-file limit the field's description states, in bytes (MB read as MiB); null when it states none. */
+  /** The per-file limit the field's description states, in bytes ("MB" read as decimal megabytes); null when it states none. */
   readonly maxBytes: number | null;
 }
 

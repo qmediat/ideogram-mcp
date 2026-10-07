@@ -18,7 +18,7 @@ import {
   SPEC_PATH,
   SPEC_SOURCE_URL,
 } from "./spec-lib.mjs";
-import { exposedOperationKeys } from "../openapi-ts.config.ts";
+import { exposedOperationKeys, SCHEMAS_KEPT } from "../openapi-ts.config.ts";
 
 const FETCH_TIMEOUT_MS = 60_000;
 
@@ -29,15 +29,15 @@ async function readLive(from) {
   return response.text();
 }
 
-/** The names of every component schema `value` references, transitively. */
-function referencedSchemas(spec, value, seen = new Set()) {
+/** Every component `value` references, transitively, as "kind/name" (schemas, parameters, responses, …). */
+function referencedComponents(spec, value, seen = new Set()) {
   const visit = (node) => {
     if (Array.isArray(node)) return node.forEach(visit);
     if (node === null || typeof node !== "object") return;
-    const ref = typeof node.$ref === "string" ? node.$ref.split("/").pop() : null;
-    if (ref !== null && !seen.has(ref)) {
-      seen.add(ref);
-      visit(spec.components?.schemas?.[ref]);
+    const m = typeof node.$ref === "string" ? /^#\/components\/([^/]+)\/(.+)$/.exec(node.$ref) : null;
+    if (m !== null && !seen.has(`${m[1]}/${m[2]}`)) {
+      seen.add(`${m[1]}/${m[2]}`);
+      visit(spec.components?.[m[1]]?.[m[2]]);
     }
     for (const child of Object.values(node)) visit(child);
   };
@@ -45,14 +45,22 @@ function referencedSchemas(spec, value, seen = new Set()) {
   return seen;
 }
 
-/** One fingerprint per exposed operation: the operation and every schema it references, in normal form. */
+const componentOf = (spec, key) => spec.components?.[key.split("/")[0]]?.[key.slice(key.indexOf("/") + 1)];
+
+/** One fingerprint per exposed operation (the operation and every component it references, in normal form), plus one per
+ * schema kept without a referrer (PriceQuote: every dry run answers with it, no operation names it). */
 function fingerprints(spec) {
   const ops = operationMap(spec);
   const prints = new Map();
   for (const key of exposedOperationKeys(spec)) {
     const op = ops.get(key);
-    const schemas = [...referencedSchemas(spec, op)].sort().map((name) => [name, spec.components.schemas[name]]);
-    prints.set(key, sha256(normalizeSpec(JSON.stringify({ op, schemas }))));
+    const components = [...referencedComponents(spec, op)].sort().map((name) => [name, componentOf(spec, name)]);
+    prints.set(key, sha256(normalizeSpec(JSON.stringify({ op, components }))));
+  }
+  for (const name of SCHEMAS_KEPT) {
+    const schema = spec.components?.schemas?.[name];
+    const components = [...referencedComponents(spec, schema)].sort().map((n) => [n, componentOf(spec, n)]);
+    prints.set(`schema ${name}`, sha256(normalizeSpec(JSON.stringify({ schema: schema ?? null, components }))));
   }
   return prints;
 }

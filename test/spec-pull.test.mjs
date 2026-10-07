@@ -41,6 +41,14 @@ test("an exposed operation removed, one added, one changed through a referenced 
   assert.doesNotMatch(run.stdout, /`POST \/v2\/image\/generate\/ideogram-4-5`/, "4.5 does not reference ResolutionV3");
 });
 
+test("a change to PriceQuote is drift although no operation references it: every dry run answers with it", async () => {
+  const run = await pull((spec) => {
+    spec.components.schemas.PriceQuote.properties.usd_micros.description = "changed";
+  });
+  assert.equal(run.status, 1, run.stdout);
+  assert.match(run.stdout, /- `schema PriceQuote`/);
+});
+
 test("a change to an operation the server never exposes (Bearer-only, internal) is not drift", async () => {
   const run = await pull((spec) => {
     spec.paths["/manage/api/usage"].get.summary = "changed";
