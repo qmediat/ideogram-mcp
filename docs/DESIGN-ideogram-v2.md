@@ -256,6 +256,42 @@ niche); a local price table (the quote is the price); exposing `legacy` paths.
 (filled when step 0 is implemented: the registry and classify counts, the dry_run suite's quotes, the tool count, the
 generated size, the selftest and CI runs)
 
+### Progress 2026-10-07 (step 0 interrupted; branch `qmt/v2-foundation`, not pushed)
+
+Commits: `02f27bf` spec: the OpenAPI snapshot, the classification rule and the generated code · `d3fea91` spec:
+Operation[], the reviewed overlay, the support table and the model registry · `6919a0e` client, lifecycle and cost on
+the v2 API · `11cca3e` tools: the curated families on v2 with a model per call, quote, generation, discovery and the
+raw call · `df245cc` wip(step 0): drift check, generated API reference, README/CHANGELOG/ADR/SECURITY done.
+
+Measured: classes documented 66 / spec_only 20 / v1_only 41 / legacy 32 / internal 9 / bearer_only 32 (the rule's
+counts; the note's 58/15 were by URL age, F14 moves /datasets and /models to v1_only and the 41 are the capability
+list in `src/spec/classify.ts`); generated code 438 932 bytes (budget 614 400); tools/list 12 tools, 62 868 bytes
+(budget 65 536); support curated 40 / raw 7 / planned 80 / unsupported 73; tests 79 (78 pass, 1 skipped: the live
+dry-run without IDEOGRAM_API_KEY).
+
+Complete: steps 1–4 of the brief, and of step 5 `scripts/spec-pull.mjs` + `.github/workflows/spec-drift.yml`
+(`test/spec-pull.test.mjs`), `scripts/api-reference.mjs` + `docs/API-REFERENCE.md` (`test/api-reference.test.mjs`),
+README, CHANGELOG `[2.0.0]` with the migration table, `docs/adr/0001-…`, SECURITY.md / CONTRIBUTING.md corrected.
+
+Not done — continue here: (1) `package.json` and `server.json` version 2.0.0, both descriptions (server.json ≤ 100
+characters); `test/smoke.test.mjs` reads the version from package.json, so it follows. (2) Fill this section with the
+final numbers, the deviations below, and the commands. (3) The live dry-run suite has never run (no key here); the
+offline half of `test/live-dry-run.test.mjs` passes. (4) Step 1b cross-model review and the PR are not started.
+
+Deviations from the note (to be confirmed in review): the generator runs from its own toolchain `scripts/spec-gen/`
+(openapi-ts needs the TypeScript 6 compiler API, TS 7 has none) and `classify.ts` landed in the first commit (the
+generator config imports it); `docsUrl` is null everywhere (the snapshot has no per-operation URL, llms.txt was not
+fetched — `DOCS_INDEX_URL` instead); `/v1/edit`, `/v1/edit-lite`, `/v1/.well-known/jwks.json` added to v1_only and
+`/integration-assets/{external_ref}` classed legacy; spec_only `/v2/image/*` operations are `raw` behind
+`allow_undocumented` (else the flag could never apply in 2.0.0); curated tools leave `webhook_url` / `private` /
+`target_collection_id` to `ideogram_api` (schema budget); `ideogram_edit` advertises a pointer, not a schema copy;
+FLASH → `quality: very_low`; extra modules `src/wire.ts`, `src/uploads.ts`, `src/counters.ts`, `src/spec/facts.ts`,
+`src/spec/fields.ts`, `src/tools/{family,compat,fields,results,context,curated,discovery}.ts`; a body schema is
+chosen per media type (remove-background's multipart and JSON schemas differ; the generator emits one).
+
+Commands at `df245cc`: `npm run typecheck` green; `npm test` 79 tests, 0 failing; `npm run spec:check` green
+(regeneration byte-identical); `node scripts/api-reference.mjs --check` green; `actionlint` on the two workflows green.
+
 ## 12. Consult (2026-10-07, before the first line of code)
 
 Codex gpt-6-astra xhigh (read-only, `docs/consults/2026-10-07-design-v2.codex.json`) and Gemini 3.1 Pro
