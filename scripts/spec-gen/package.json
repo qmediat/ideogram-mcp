@@ -1,0 +1,10 @@
+{
+  "name": "ideogram-mcp-spec-gen",
+  "private": true,
+  "description": "The code generator's own toolchain: @hey-api/openapi-ts drives the TypeScript compiler API, which TypeScript 7 (the package's build compiler) does not ship.",
+  "type": "module",
+  "devDependencies": {
+    "@hey-api/openapi-ts": "0.99.0",
+    "typescript": "6.0.3"
+  }
+}

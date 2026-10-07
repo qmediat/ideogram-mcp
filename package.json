@@ -24,7 +24,9 @@
     "pretest": "npm run build",
     "test": "node --test",
     "prepack": "npm run build",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "spec:generate": "node scripts/spec-generate.mjs",
+    "spec:check": "node scripts/spec-generate.mjs --check"
   },
   "keywords": [
     "mcp",
