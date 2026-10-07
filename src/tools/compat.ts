@@ -1,10 +1,10 @@
 /**
  * The 1.x compatibility adapter (docs/DESIGN-ideogram-v2.md section 7). Compatibility is defined per model: v1's
- * uppercase `rendering_speed` is lowercased for a model that takes `rendering_speed` (Ideogram 3.x / 4.0), mapped to
- * `quality` for a model that takes `quality` (4.5), and left to the field check otherwise; FLASH exists nowhere in v2's
- * speed ladder. Uppercase `magic_prompt` / `style_type` values and palette preset names are lowercased; the 1.x model
- * names "3.0" / "4.0" and describe's `describe_model_version` name the v2 model ids. Every mapping is said in the
- * tool's result.
+ * uppercase `rendering_speed` is lowercased for a model that takes `rendering_speed` (Ideogram 2.x / 3.x / 4.0),
+ * mapped to `quality` for a model that takes `quality` instead (Ideogram 4.5, GPT Image 2.5, P-Image), and left to the
+ * field check otherwise; FLASH exists nowhere in v2's speed ladder. Uppercase `magic_prompt` / `style_type` values
+ * and palette preset names are lowercased; the 1.x model names "3.0" / "4.0" and describe's `describe_model_version`
+ * name the v2 model ids. Every mapping is said in the tool's result.
  */
 import type { ToolArguments } from "./family.js";
 

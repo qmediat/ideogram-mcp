@@ -4,39 +4,24 @@
  */
 import { z } from "zod/v4";
 import { countersLine } from "../counters.js";
+import { fieldSummaries } from "../spec/fields.js";
 import { CONSTRAINTS, fileLimitsOf, MIB, quoteAllowed } from "../spec/overlay.js";
-import { DOCS_INDEX_URL, isExposable, operationById, OPERATIONS } from "../spec/operations.js";
+import { DOCS_INDEX_URL, FAMILIES, isExposable, operationById, OPERATIONS } from "../spec/operations.js";
 import type { Family, Operation } from "../spec/operations.js";
 import { supportOf } from "../spec/support.js";
 import type { ToolDefinition } from "./context.js";
 import { textResult } from "./results.js";
 
-const FAMILIES = [...new Set(OPERATIONS.filter(isExposable).map((op) => op.family as Family))] as [Family, ...Family[]];
+const LISTED: readonly Family[] = FAMILIES.filter((family) => OPERATIONS.some((op) => op.family === family && isExposable(op)));
 
 function opLine(op: Operation): string {
   const model = op.model === null ? "" : ` · model ${op.model}`;
   return `${op.id} — ${op.method} ${op.path}${model} · ${op.class} · ${supportOf(op)}${quoteAllowed(op) ? " · quotable" : ""}`;
 }
 
-interface JsonProperty {
-  readonly type?: string;
-  readonly enum?: readonly unknown[];
-  readonly $ref?: string;
-  readonly items?: JsonProperty;
-}
-
 function fieldLines(op: Operation): string[] {
   if (op.schemas.body === null) return ["  (no body)"];
-  const json = z.toJSONSchema(op.schemas.body, { io: "input", unrepresentable: "any" }) as {
-    properties?: Record<string, JsonProperty>;
-    required?: string[];
-  };
-  const required = new Set(json.required ?? []);
-  const files = new Set(op.facts.fileFields.map((f) => f.name));
-  return Object.entries(json.properties ?? {}).map(([name, p]) => {
-    const kind = files.has(name) ? "local file path" : p.enum ? `one of ${p.enum.slice(0, 12).join(", ")}${p.enum.length > 12 ? ", …" : ""}` : (p.type ?? "object");
-    return `  ${name}${required.has(name) ? " (required)" : ""}: ${kind}`;
-  });
+  return fieldSummaries(op).map((f) => `  ${f.name}${f.required ? " (required)" : ""}: ${f.kind}`);
 }
 
 function detail(op: Operation): string {
@@ -55,7 +40,7 @@ function detail(op: Operation): string {
 }
 
 function overview(): string {
-  const lines = FAMILIES.map((family) => {
+  const lines = LISTED.map((family) => {
     const ops = OPERATIONS.filter((op) => op.family === family);
     const served = ops.filter((op) => ["curated", "raw"].includes(supportOf(op))).length;
     return `${family}: ${ops.length} operation(s), ${served} served in this release`;

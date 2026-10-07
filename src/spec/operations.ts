@@ -11,27 +11,31 @@ import { classify, EXPOSABLE_CLASSES, operationKey } from "./classify.js";
 import type { HttpMethod, OperationClass } from "./classify.js";
 import type { BodyMedia, SpecOperationFacts } from "./facts.js";
 
-export type Family =
-  | "generate"
-  | "precise_edit"
-  | "inpaint"
-  | "remix"
-  | "reframe"
-  | "upscale"
-  | "replace_background"
-  | "remove_background"
-  | "remove_object"
-  | "describe"
-  | "layerize"
-  | "video_text"
-  | "video_image"
-  | "video_reference"
-  | "video_edit"
-  | "tool"
-  | "workflow"
-  | "generation"
-  | "account"
-  | "training";
+/** The families, in the order the documentation and the discovery tool list them. */
+export const FAMILIES = [
+  "generate",
+  "precise_edit",
+  "inpaint",
+  "remix",
+  "reframe",
+  "upscale",
+  "replace_background",
+  "remove_background",
+  "remove_object",
+  "describe",
+  "layerize",
+  "video_text",
+  "video_image",
+  "video_reference",
+  "video_edit",
+  "tool",
+  "workflow",
+  "generation",
+  "account",
+  "training",
+] as const;
+
+export type Family = (typeof FAMILIES)[number];
 
 /** optional: the body takes `async`; only: the 200 is an acknowledgement (a generation id, no payload); none. */
 export type AsyncKind = "optional" | "only" | "none";

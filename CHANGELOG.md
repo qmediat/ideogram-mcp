@@ -7,6 +7,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-07
+
+The server moves to Ideogram's v2 API and is built from its OpenAPI specification: every image model the platform
+sells through an API key is reachable, priced before a call, and collected by id when it runs long
+(`docs/DESIGN-ideogram-v2.md`, `docs/adr/0001-openapi-snapshot-as-the-source-of-truth.md`).
+
+### Added
+
+- `spec/openapi.json`: the specification snapshot of 2026-10-07 (200 operations), classified by one rule into
+  documented 66 / spec_only 20 / v1_only 41 / legacy 32 / internal 9 / bearer_only 32; the types and zod schemas
+  generated from it (`src/generated/`, `@hey-api/openapi-ts`), regenerated and compared in CI.
+- `model` on every family tool, with the exact fields of each model (one variant per model in the advertised schema).
+  `ideogram_generate` reaches 18 models: auto, Ideogram 4.5, 4.0 (+ custom model, transparent), 3.0 (+ character,
+  custom model, transparent), 2a, 2.0, GPT Image 2 / 2.5 Flare / 2.5 Sunburst, Nano Banana 2 / Pro, P-Image, Z-Image.
+  Remix adds Ideogram 4.0 and auto; reframe Nano Banana 2; replace background GPT Image 2; upscale the Topaz models,
+  Nano Banana Pro and auto; describe Ideogram 4.0 (a structured JSON prompt). A field the chosen model does not take is
+  refused, naming the models that take it.
+- `ideogram_inpaint` (the v2 name of `ideogram_edit`, which stays as its alias through 2.x).
+- `ideogram_quote`: the price of exactly the call a tool would make, from the API's own `dry_run` (USD and credits as
+  decimal strings, exact or an estimate with its upper bound; nothing generated or billed). Operations without
+  `dry_run` (describe) are refused locally — a quote request could run them.
+- `ideogram_generation`: collect a generation by id. Every generation is sent asynchronously and returned at
+  acceptance; the tool waits up to `wait_s` (default 45, at most 50 — the MCP client times out at 60) and otherwise
+  answers with the id.
+- `ideogram_operations` (discovery) and `ideogram_api`: any operation this release serves, by id, with its path,
+  query, header and body parameters checked against the operation's generated schemas and the reviewed constraints;
+  undocumented operations need `allow_undocumented: true`; legacy, internal and Bearer-only operations are refused.
+- Typed 402 / 429 errors (`reject_reason` and what to do about it, `Retry-After`, the in-flight limit).
+- A weekly drift check of the live specification (`scripts/spec-pull.mjs`, `.github/workflows/spec-drift.yml`): one
+  issue, updated, never a failed build.
+- `docs/API-REFERENCE.md` generated from the snapshot (family × model × fields).
+
+### Changed
+
+- Every call goes to `/v2/…`; images are downloaded by streaming to disk with a byte counter (50 MB cap) instead of
+  buffering whole bodies.
+- Upload limits are each operation's own, as the specification states them (describe 10 MB, remix 50 MB, 4.5's
+  images 25 MB × 5, …), checked before any file is read; JPEG, PNG, WebP, GIF, BMP, TIFF, HEIC/HEIF and AVIF are sent.
+- A request is sent again only when it never left the machine or the API rejected it with 429; a 5xx, a timeout or a
+  reset after sending is reported, never repeated (one tool call never creates two billed jobs). Polls and downloads
+  (GET) keep retrying network failures, 429 and 5xx.
+- A 2xx body the specification's schema rejects is reported as a contract mismatch with the generation id, never as a
+  success.
+
+### Migration from 1.x
+
+The 1.x tool names keep working; a 1.x call is mapped and the result says what was mapped.
+
+| 1.x | 2.0.0 |
+|---|---|
+| `ideogram_generate` default (Ideogram 3.0) | the same model, `ideogram-3` (cost-neutral; `ideogram-4-5` is the newest) |
+| `model: "3.0"` / `"4.0"` | `ideogram-3` / `ideogram-4` (aliases through 2.x) |
+| `rendering_speed: "TURBO" \| "DEFAULT" \| "QUALITY"` | lowercase on the models that take `rendering_speed` (Ideogram 2.x, 3.x, 4.0); `quality: "low" \| "medium" \| "high"` on those that take `quality` (Ideogram 4.5, GPT Image 2.5, P-Image) |
+| `rendering_speed: "FLASH"` | refused where `rendering_speed` is taken (v2 has no FLASH); `quality: "very_low"` where `quality` is (GPT Image 2.5 has no `very_low`: refused there by its schema) |
+| `magic_prompt`, `style_type` uppercase; `color_palette.name: "EMBER"` | lowercase (`auto`, `realistic`, `ember`) |
+| `ideogram_edit` | `ideogram_inpaint` (the alias stays through 2.x) |
+| `ideogram_describe` `describe_model_version: "V_3"` | `model: "ideogram-3"`; `"V_2"` is refused (no v2 model) |
+| `character_reference_image` (one file) on generate / remix / edit | `model: "ideogram-3-character"` with `character_reference_images` |
+| `custom_model_uri` on generate | `model: "ideogram-3-custom-model"` or `"ideogram-4-custom-model"` |
+| `ideogram_upscale` (default model `auto`) `prompt` / `detail` | taken by other upscale models (`prompt`: nano-banana-pro, topaz-bloom-2, topaz-redefine; `detail`: topaz-redefine) — refused on auto, naming them |
+| `ideogram_upscale` `resemblance` / `magic_prompt` | no v2 upscale model takes them: refused; `upscale_factor` sets the size |
+| `ideogram_replace_background` `magic_prompt` / `seed` | not taken by v2's replace-background models: refused by name |
+| `ideogram_generate` with model 4.0 refusing 3.0 fields | each model's own fields, refused naming the models that take them |
+
+`webhook_url`, `private` and `target_collection_id` are reachable through `ideogram_api`; the curated tools poll and
+save locally instead.
+
+### Removed
+
+- The v1 client, the hand-written schemas of the 1.x tools and their endpoint tests.
+
 ## [1.2.1] - 2026-10-06
 
 ### Added
