@@ -426,3 +426,17 @@ test("a cancelled sleep on the system clock leaves no timer behind", async () =>
   await sleeping;
   assert.equal(timers(), before, "the timer was cleared with the sleep");
 });
+
+test("a lagging clock cannot mistype a budget cut: with 100 ms left on the fake clock and a 150 ms real timer, a hanging GET is CALL_TIMEOUT", async () => {
+  const api = await startFakeApi(() => () => {});
+  try {
+    const { options, clock } = testClientOptions(api.base, { maxRetries: 0, requestTimeoutMs: 10_000 });
+    const budget = toolCallBudget(clock, undefined, 150); // its real timer fires at 150 ms; the fake clock says 100 ms are left
+    clock.t += 50;
+    const op = operationById("get_generation_v2");
+    const error = await new IdeogramClient(options).call(request(op, null, { path: { generation_id: "g" } }), budget).catch((e) => e);
+    assert.equal(error.code, "CALL_TIMEOUT", `${error.code}: ${error.message}`);
+  } finally {
+    await api.close();
+  }
+});

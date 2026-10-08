@@ -216,11 +216,15 @@ async function poll(client: IdeogramClient, generationId: string, waitDeadline: 
   const bounded = boundedBy(budget, waitDeadline);
   const clock = bounded.clock;
   let delay = POLL_FIRST_MS;
-  for (;;) {
-    if (clock.now() + delay > bounded.deadline) return { kind: "pending", generationId, note };
-    await sleepWithin(bounded, delay); // a cancelled call does not finish its sleep
-    const outcome = await fetchGeneration(client, generationId, bounded);
-    if (outcome.kind !== "pending" || outcome.note !== null) return outcome;
-    delay = Math.min(delay * POLL_FACTOR, capMs);
+  try {
+    for (;;) {
+      if (clock.now() + delay > bounded.deadline) return { kind: "pending", generationId, note };
+      await sleepWithin(bounded, delay); // a cancelled call does not finish its sleep
+      const outcome = await fetchGeneration(client, generationId, bounded);
+      if (outcome.kind !== "pending" || outcome.note !== null) return outcome;
+      delay = Math.min(delay * POLL_FACTOR, capMs);
+    }
+  } finally {
+    bounded.end(); // the wait's timer does not outlive the poll
   }
 }

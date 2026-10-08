@@ -14,7 +14,7 @@
  * is resent only when the time left also covers the duration of the attempt that was just rejected.
  */
 import { randomBytes } from "node:crypto";
-import { remainingMs, sleepWithin } from "./budget.js";
+import { remainingMs, sleepWithin, WaitEnded } from "./budget.js";
 import type { CallBudget } from "./budget.js";
 import { mkdir, open, rename, rm } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
@@ -136,17 +136,20 @@ export class IdeogramClient {
     return { url, body: req.body === null ? null : encodeBody(req.body, this.options.boundary?.()) };
   }
 
-  /** One HTTP attempt within the budget: its timeout is the client's or what remains of the call, whichever is less; the
-   * caller's cancellation aborts it too. */
+  /** One HTTP attempt within the budget. One timer per bound: when the budget's remainder is the shorter bound, the
+   * budget's own signal is the only thing that ends the attempt (it fires at that very instant — a second timer for the
+   * same instant would race it); the client's attempt cap gets a timer of its own only when it is the shorter one. The
+   * caller's cancellation is part of the budget's signal. */
   private async attempt(method: string, url: string, headers: Record<string, string>, body: Uint8Array<ArrayBuffer> | null, budget: CallBudget): Promise<Attempt> {
     const left = remainingMs(budget);
-    if (left <= 0) return { kind: "network", error: new BudgetEnded("timeout", false) };
     if (budget.signal.aborted) return { kind: "network", error: budgetEnded(budget.signal, false) };
+    if (left <= 0) return { kind: "network", error: new BudgetEnded(budget.bound === "wait" ? "wait" : "timeout", false) };
     try {
       // redirect manual: a 3xx is returned as a response, never followed — the download host allow-list is checked on
       // the URL this server asked for, and a hop to another host would skip it.
-      const timeout = Math.max(1, Math.ceil(Math.min(this.options.requestTimeoutMs, left))); // AbortSignal.timeout takes an integer
-      const init: RequestInit = { method, headers, redirect: "manual", signal: AbortSignal.any([budget.signal, AbortSignal.timeout(timeout)]) };
+      const cap = this.options.requestTimeoutMs;
+      const signal = left <= cap ? budget.signal : AbortSignal.any([budget.signal, AbortSignal.timeout(Math.max(1, Math.ceil(cap)))]);
+      const init: RequestInit = { method, headers, redirect: "manual", signal };
       if (body !== null) init.body = body;
       return { kind: "response", response: await fetch(url, init) };
     } catch (error) {
@@ -154,15 +157,13 @@ export class IdeogramClient {
     }
   }
 
-  /** The budget's end behind a failed attempt or body read, or null when the failure is the attempt's own. The budget's
-   * signal ends an attempt with whatever reason it was aborted with (the SDK passes a string on a client's cancel, the
-   * server's limit a TimeoutError), so the signal's state is read, never the error's shape; and the attempt's own timer is
-   * the budget's remainder whenever that is the shorter, so a timeout past the deadline is the budget's too (the two
-   * timers fire at the same instant: which one wins must not decide the type). */
+  /** The budget's end behind a failed attempt or body read, or null when the failure is the attempt's own (its cap). The
+   * budget's signal ends an attempt with whatever reason it was aborted with (the SDK passes a string on a client's
+   * cancel, the server's limit and a bounded wait a TimeoutError), so the signal's state is read, never the error's shape. */
   private budgetCut(budget: CallBudget, error: unknown): BudgetEnded | null {
     if (budget.signal.aborted) return budgetEnded(budget.signal, true);
-    // an abort of any name (undici reports a TimeoutError; a body read may report an AbortError) past the deadline
-    if (isAbort(error) && remainingMs(budget) <= 0) return new BudgetEnded("timeout", true);
+    // a belt under the signal rule: an abort of any name past the deadline is the budget's
+    if (isAbort(error) && remainingMs(budget) <= 0) return new BudgetEnded(budget.bound === "wait" ? "wait" : "timeout", true);
     return null;
   }
 
@@ -287,13 +288,17 @@ export class IdeogramClient {
   }
 }
 
-/** The call's budget ended — its own limit ran out, or the caller cancelled — before an attempt or during one. */
+const BUDGET_END_TEXT = { timeout: "the call's time ran out", cancel: "the call was cancelled by the caller", wait: "the wait ran out" } as const;
+const BUDGET_END_CODE = { timeout: "CALL_TIMEOUT", cancel: "CANCELLED", wait: "WAIT_TIMEOUT" } as const;
+
+/** The budget ended — the call's limit ran out, the caller cancelled, or the tool's wait ran out — before an attempt or
+ * during one. */
 class BudgetEnded extends Error {
   constructor(
-    readonly why: "timeout" | "cancel",
+    readonly why: keyof typeof BUDGET_END_TEXT,
     readonly inFlight: boolean,
   ) {
-    super(why === "timeout" ? "the call's time ran out" : "the call was cancelled by the caller");
+    super(BUDGET_END_TEXT[why]);
     this.name = "BudgetEnded";
   }
 
@@ -304,13 +309,15 @@ class BudgetEnded extends Error {
       : idempotent
         ? " while the request was in flight"
         : "; the request was in flight and may have reached Ideogram, so it was not sent again (it could be billed twice)";
-    return new IdeogramApiError(0, this.why === "timeout" ? "CALL_TIMEOUT" : "CANCELLED", `${this.message}${when}`);
+    return new IdeogramApiError(0, BUDGET_END_CODE[this.why], `${this.message}${when}`);
   }
 }
 
-/** Which end the budget's signal reports: the server's own limit aborts with a TimeoutError, anything else is the caller. */
+/** Which end the budget's signal reports: a bounded wait aborts with WaitEnded, the server's own limit with a TimeoutError,
+ * anything else is the caller. */
 function budgetEnded(signal: AbortSignal, inFlight: boolean): BudgetEnded {
-  return new BudgetEnded(isTimeout(signal.reason) ? "timeout" : "cancel", inFlight);
+  const reason: unknown = signal.reason;
+  return new BudgetEnded(reason instanceof WaitEnded ? "wait" : isTimeout(reason) ? "timeout" : "cancel", inFlight);
 }
 
 function isTimeout(error: unknown): boolean {

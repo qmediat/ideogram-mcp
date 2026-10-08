@@ -217,3 +217,36 @@ test("a poll answered 200 whose body is cut off keeps the id as pending with the
     await api.close();
   }
 });
+
+test("a budget bounded by a nearer deadline has a signal of its own that fires at that deadline with its own reason; end() clears it", async () => {
+  const { boundedBy, SYSTEM_CLOCK, toolCallBudget, WaitEnded } = await import("../dist/budget.js");
+  const call = toolCallBudget(SYSTEM_CLOCK, undefined, 10_000);
+  const bounded = boundedBy(call, SYSTEM_CLOCK.now() + 150);
+  assert.notEqual(bounded.signal, call.signal);
+  assert.equal(bounded.bound, "wait");
+  const started = Date.now();
+  await new Promise((done) => bounded.signal.addEventListener("abort", done, { once: true }));
+  assert.ok(Date.now() - started >= 100 && Date.now() - started < 1_000, `${Date.now() - started} ms`);
+  assert.ok(bounded.signal.reason instanceof WaitEnded, "a wait cut, not the call's timeout");
+  assert.equal(call.signal.aborted, false, "the call's own signal is untouched");
+  assert.equal(boundedBy(call, call.deadline + 1), call, "a later deadline changes nothing");
+  const ended = boundedBy(call, SYSTEM_CLOCK.now() + 100);
+  ended.end();
+  await new Promise((done) => setTimeout(done, 200));
+  assert.equal(ended.signal.aborted, false, "end() cleared the wait's timer");
+});
+
+test("a poll cut in flight by the WAIT is Pending with 'the wait ran out' noted — not the call's timeout (wait 3 s, the poll at 2 s hangs)", async () => {
+  const api = await startFakeApi((req) => (req.method === "POST" ? { json: { generation_id: "gW", seed: 1 } } : () => {}));
+  try {
+    const client = new IdeogramClient(testClientOptions(api.base, { maxRetries: 0 }).options);
+    const { SYSTEM_CLOCK } = await import("../dist/budget.js");
+    const started = Date.now();
+    const outcome = await execute(client, jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x" }), { waitS: 3, clock: SYSTEM_CLOCK, budget: realBudget(30_000) });
+    assert.equal(outcome.kind, "pending");
+    assert.match(outcome.note, /WAIT_TIMEOUT.*the wait ran out while the request was in flight/);
+    assert.ok(Date.now() - started >= 2_900 && Date.now() - started < 4_500, `${Date.now() - started} ms: cut at the wait's 3 s, not at the call's 30 s`);
+  } finally {
+    await api.close();
+  }
+});

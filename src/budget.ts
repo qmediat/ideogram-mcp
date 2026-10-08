@@ -31,29 +31,68 @@ export const SYSTEM_CLOCK: Clock = {
 /** This server's limit on one tool call: the MCP client's default 60 s minus a margin. */
 export const TOOL_CALL_MS = 55_000;
 
-export interface CallBudget {
-  /** The instant (on `clock`) after which nothing of this call may still run. */
-  readonly deadline: number;
-  /** Aborts every attempt of the call: the caller's cancellation, or this server's limit. */
-  readonly signal: AbortSignal;
-  readonly clock: Clock;
+/** The reason a bounded budget's signal aborts with: the tool's wait ran out (not the call's limit, not a cancel). */
+export class WaitEnded extends Error {
+  constructor() {
+    super("the wait ran out");
+    this.name = "WaitEnded";
+  }
+}
+
+/** Built only by the factories below: an attempt whose remaining budget is the shorter bound has no timer of its own and
+ * ends through `signal`, so every budget's signal MUST abort at its deadline — the private constructor keeps a literal or
+ * a spread from standing in for one. */
+export class CallBudget {
+  private constructor(
+    /** The instant (on `clock`) after which nothing of this call may still run. */
+    readonly deadline: number,
+    /** Aborts every attempt of the call: the caller's cancellation, this server's limit, or (bounded) the tool's wait. */
+    readonly signal: AbortSignal,
+    readonly clock: Clock,
+    /** What this budget's deadline is: the call's limit, or a wait inside it. */
+    readonly bound: "call" | "wait",
+    /** Releases what the budget holds (a bounded budget's timer); a no-op for a call's own budget. */
+    readonly end: () => void,
+  ) {}
+
+  /** The budget of one tool call: `cancel` is the caller's signal when the transport gives one. */
+  static ofToolCall(clock: Clock, cancel?: AbortSignal, ms: number = TOOL_CALL_MS): CallBudget {
+    const own = AbortSignal.timeout(ms);
+    const signal = cancel === undefined ? own : AbortSignal.any([cancel, own]);
+    return new CallBudget(clock.now() + ms, signal, clock, "call", () => undefined);
+  }
+
+  /** A budget without a limit, for a caller outside a tool call (a script, a test of one request). */
+  static open(clock: Clock): CallBudget {
+    return new CallBudget(Number.POSITIVE_INFINITY, new AbortController().signal, clock, "call", () => undefined);
+  }
+
+  /** The same call, ending no later than `deadline` (a poll ends with the tool's wait, never after the call): the nearer
+   * deadline gets a signal of its own with its own reason (WaitEnded), so a cut at it arrives through the signal like a cut
+   * at the call's end — one timer per bound, never two timers for one instant. `end()` clears the timer. */
+  boundedBy(deadline: number): CallBudget {
+    if (deadline >= this.deadline) return this;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new WaitEnded()), Math.max(1, Math.ceil(deadline - this.clock.now())));
+    timer.unref();
+    const signal = AbortSignal.any([this.signal, controller.signal]);
+    return new CallBudget(deadline, signal, this.clock, "wait", () => clearTimeout(timer));
+  }
 }
 
 /** The budget of one tool call: `cancel` is the caller's signal when the transport gives one. */
 export function toolCallBudget(clock: Clock, cancel?: AbortSignal, ms: number = TOOL_CALL_MS): CallBudget {
-  const own = AbortSignal.timeout(ms);
-  const signal = cancel === undefined ? own : AbortSignal.any([cancel, own]);
-  return { deadline: clock.now() + ms, signal, clock };
+  return CallBudget.ofToolCall(clock, cancel, ms);
 }
 
 /** A budget without a limit, for a caller outside a tool call (a script, a test of one request). */
 export function openBudget(clock: Clock = SYSTEM_CLOCK): CallBudget {
-  return { deadline: Number.POSITIVE_INFINITY, signal: new AbortController().signal, clock };
+  return CallBudget.open(clock);
 }
 
-/** The same call, ending no later than `deadline` (a poll ends with the tool's wait, never after the call). */
+/** The same call, ending no later than `deadline`: see CallBudget.boundedBy. */
 export function boundedBy(budget: CallBudget, deadline: number): CallBudget {
-  return deadline < budget.deadline ? { ...budget, deadline } : budget;
+  return budget.boundedBy(deadline);
 }
 
 export function remainingMs(budget: CallBudget): number {
