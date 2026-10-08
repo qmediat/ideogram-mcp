@@ -47,3 +47,17 @@ export function boundedBy(budget: CallBudget, deadline: number): CallBudget {
 export function remainingMs(budget: CallBudget): number {
   return budget.deadline - budget.clock.now();
 }
+
+/** Sleeps `ms` on the budget's clock, or less: the budget's signal (the caller's cancellation, the call's own limit) ends
+ * the sleep at once, so a cancelled call does not keep its handler waiting. */
+export function sleepWithin(budget: CallBudget, ms: number): Promise<void> {
+  if (budget.signal.aborted) return Promise.resolve();
+  return new Promise((done) => {
+    const onAbort = (): void => done();
+    budget.signal.addEventListener("abort", onAbort, { once: true });
+    void budget.clock.sleep(ms).then(() => {
+      budget.signal.removeEventListener("abort", onAbort);
+      done();
+    });
+  });
+}

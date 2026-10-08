@@ -4,7 +4,6 @@
  * generated schemas parse int64 as bigint) until they are printed: USD from millionths (6 places), credits from
  * thousandths (3 places), as decimal strings — never through a float.
  */
-import { openBudget } from "./budget.js";
 import type { CallBudget } from "./budget.js";
 import type { ApiRequest, IdeogramClient } from "./client.js";
 import { asAsync, contractMismatch } from "./lifecycle.js";
@@ -41,7 +40,7 @@ export const microsToUsd = (micros: number | bigint): string => decimalString(mi
 export const millisToCredits = (millis: number | bigint): string => decimalString(millis, 3);
 
 /** Asks the API for the price of a request; refuses an operation that cannot be quoted without running it. */
-export async function quote(client: IdeogramClient, req: ApiRequest, budget: CallBudget = openBudget()): Promise<QuoteOutcome> {
+export async function quote(client: IdeogramClient, req: ApiRequest, budget: CallBudget): Promise<QuoteOutcome> {
   const refusal = quoteRefusal(req.op);
   if (refusal !== null) throw new Error(refusal);
   const result = await client.call({ ...asAsync(req), dryRun: true }, budget); // the very request execute() would send

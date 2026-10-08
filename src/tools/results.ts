@@ -35,7 +35,7 @@ async function saveImages(ctx: ToolContext, items: readonly ImageItem[]): Promis
     }
     COUNTERS.downloadFailures += 1;
     const reason = result.reason instanceof Error ? result.reason.message : String(result.reason);
-    const later = result.reason instanceof IdeogramApiError && result.reason.code === "CALL_TIMEOUT" ? " (ideogram_generation with the id above saves it in a new call)" : "";
+    const later = result.reason instanceof IdeogramApiError && result.reason.code === "CALL_TIMEOUT" ? " (ideogram_generation with the id above saves the generation's images in a new call)" : "";
     lines.push(`Not saved: ${safe[i].url} — ${reason}${later}`);
   });
   const unsafe = items.length - safe.length;

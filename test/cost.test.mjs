@@ -2,7 +2,7 @@
 // be quoted without running it.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { startFakeApi, testClientOptions } from "./support/fake-api.mjs";
+import { startFakeApi, testClientOptions, openBudget } from "./support/fake-api.mjs";
 
 const { IdeogramClient } = await import("../dist/client.js");
 const { quote, decimalString, microsToUsd, millisToCredits } = await import("../dist/cost.js");
@@ -26,7 +26,7 @@ test("a quote sends dry_run=true and returns USD and credits as decimal strings"
   }));
   try {
     const client = new IdeogramClient(testClientOptions(api.base).options);
-    const outcome = await quote(client, req("post_generate_image_v2_ideogram_v3", { prompt: "x", num_images: 2 }));
+    const outcome = await quote(client, req("post_generate_image_v2_ideogram_v3", { prompt: "x", num_images: 2 }), openBudget());
     assert.equal(api.requests[0].url, "/v2/image/generate/ideogram-3?dry_run=true");
     assert.deepEqual(outcome, {
       kind: "quote",
@@ -41,7 +41,7 @@ test("an operation without dry_run (describe) is refused locally: a quote reques
   const api = await startFakeApi(() => ({ json: {} }));
   try {
     const client = new IdeogramClient(testClientOptions(api.base).options);
-    await assert.rejects(() => quote(client, req("post_describe_image_ideogram_v3", {})), /does not declare dry_run/);
+    await assert.rejects(() => quote(client, req("post_describe_image_ideogram_v3", {}), openBudget()), /does not declare dry_run/);
     assert.equal(api.requests.length, 0);
   } finally {
     await api.close();
@@ -52,7 +52,7 @@ test("a dry run answered with something other than a PriceQuote is a ContractMis
   const api = await startFakeApi(() => ({ json: { generation_id: "g", seed: 1 } }));
   try {
     const client = new IdeogramClient(testClientOptions(api.base).options);
-    const outcome = await quote(client, req("post_generate_image_v2_ideogram_v3", { prompt: "x" }));
+    const outcome = await quote(client, req("post_generate_image_v2_ideogram_v3", { prompt: "x" }), openBudget());
     assert.equal(outcome.kind, "contract_mismatch");
   } finally {
     await api.close();

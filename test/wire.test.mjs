@@ -7,7 +7,7 @@ import { mkdtemp, rm, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { startFakeApi, testClientOptions, testContext, tool, PNG } from "./support/fake-api.mjs";
+import { startFakeApi, testClientOptions, testContext, tool, openBudget, PNG } from "./support/fake-api.mjs";
 
 const { IdeogramClient } = await import("../dist/client.js");
 const { operationById } = await import("../dist/spec/operations.js");
@@ -79,7 +79,7 @@ test("a query array is sent as repeated name=value pairs (account usage), dry_ru
   try {
     const client = new IdeogramClient(testClientOptions(api.base).options);
     const op = operationById("get_account_usage");
-    await client.call({ op, path: {}, query: { start_time: "2026-10-01T00:00:00Z", sources: ["api", "web app"] }, headers: {}, body: null, dryRun: false });
+    await client.call({ op, path: {}, query: { start_time: "2026-10-01T00:00:00Z", sources: ["api", "web app"] }, headers: {}, body: null, dryRun: false }, openBudget());
     assert.equal(api.requests[0].url, "/v2/account/usage?start_time=2026-10-01T00%3A00%3A00Z&sources=api&sources=web+app");
     assert.equal(api.requests[0].body.length, 0);
   } finally {

@@ -104,7 +104,8 @@ async function buildRawRequest(op: Operation, args: RawArgs): Promise<ApiRequest
   } else check("body", bodySchemaFor(op, media), withFiles);
   const violations = constraintViolations(op, withFiles);
   if (violations.length > 0) throw new Error(violations.join("\n"));
-  if (body.async === false) {
+  if (body.async === false && args.dry_run !== true) {
+    // a quote prices the request as given; a run with async: false would carry its result only in the POST answer
     throw new Error("async: false is not served: a synchronous generation returns its result only in the POST answer, which this server cannot wait for inside one call; omit async (the job is accepted, then polled) or set wait_s");
   }
   const uploads = await loadUploads(op, files);

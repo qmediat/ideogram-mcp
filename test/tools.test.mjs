@@ -312,9 +312,25 @@ test("a download the call's budget cuts is 'Not saved' with the way to collect i
     ctx = await testContext(api.base, join(dir, "cut"));
     const result = await (await tool("ideogram_generate")).handler(ctx, { prompt: "x" });
     assert.match(text(result), /Generation g10 completed\./);
-    assert.match(text(result), /Not saved: .*img\.png — the call's time ran out before this request could be made \(ideogram_generation with the id above saves it in a new call\)/);
+    assert.match(text(result), /Not saved: .*img\.png — the call's time ran out before this request could be made \(ideogram_generation with the id above saves the generation's images in a new call\)/);
     assert.equal(api.requests.filter((r) => r.url === "/img.png").length, 0, "no download started past the deadline");
   } finally {
     await api.close();
   }
+});
+
+test("ideogram_api refuses async: false for a run (its result would arrive only in the POST answer) and quotes it with dry_run", async () => {
+  const api = await startFakeApi(() => accepted("g"));
+  try {
+    const ctx = await testContext(api.base, dir);
+    await assert.rejects(async () => (await tool("ideogram_api")).handler(ctx, { operation: "post_generate_image_v2_ideogram_v3", params: { body: { prompt: "x", async: false } } }), /async: false is not served/);
+    assert.equal(api.requests.length, 0, "nothing sent");
+  } finally {
+    await api.close();
+  }
+  const priceQuote = { object: "price_quote", billing_identifier: "ideogram-3", quantity: 1, usd_micros: 60000, credit_millis: 60, qualifier: "exact" };
+  const quoted = await call("ideogram_api", { operation: "post_generate_image_v2_ideogram_v3", params: { body: { prompt: "x", async: false } }, dry_run: true }, () => ({ json: priceQuote }));
+  assert.equal(quoted.result.isError, undefined, text(quoted.result));
+  assert.equal(quoted.requests.length, 1);
+  assert.match(quoted.requests[0].url, /dry_run=true/);
 });

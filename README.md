@@ -108,8 +108,9 @@ included), poll and download of the call is judged against what remains of it, s
 and a request that creates work is never resent after the caller has given up: a POST is resent only when the time left
 also covers an attempt as long as the one just rejected. A download the budget cuts is listed as not saved beside the
 generation id; `ideogram_generation` saves it in a new call. What that leaves open: an upload that needs more than 55 s
-cannot be served inside one MCP call at all, and a job the API accepts after the caller gave up keeps an id nobody
-receives — a limit of the 60 s client, not of this server.
+cannot be served inside one MCP call at all; a request the budget cuts while it is in flight is reported as possibly
+accepted (never resent); and a job the API accepts after the caller gave up keeps an id nobody receives — a limit of
+the 60 s client, not of this server.
 
 ### Prices
 

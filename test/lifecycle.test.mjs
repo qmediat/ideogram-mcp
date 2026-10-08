@@ -173,11 +173,29 @@ test("the wait is cut by the call's budget: a 50 s wait inside a call with 10 s 
   }
 });
 
-test("ideogram_generation with wait_s 0 reads the status once: the lookup is never cut by a wait of zero", async () => {
+test("ideogram_generation with wait_s 0 reads the status once: the lookup is never cut by a wait of zero (a guard: 21a054d read once too)", async () => {
   const api = await startFakeApi(() => ({ json: { generation_id: "g8", status: "pending", created: "2026-10-07T00:00:00Z" } }));
   try {
     const outcome = await resume(new IdeogramClient(testClientOptions(api.base).options), "g8", waitOptions(fakeClock(), 0));
     assert.deepEqual([outcome.kind, api.requests.length], ["pending", 1]);
+  } finally {
+    await api.close();
+  }
+});
+
+test("a cancellation during a poll's sleep ends the wait at once: Pending with the cancel noted, well before the 2 s poll", async () => {
+  const api = await startFakeApi((req) => (req.method === "POST" ? { json: { generation_id: "g9", seed: 1 } } : { json: { generation_id: "g9", status: "pending", created: "2026-10-07T00:00:00Z" } }));
+  try {
+    const client = new IdeogramClient(testClientOptions(api.base).options);
+    const cancel = new AbortController();
+    setTimeout(() => cancel.abort("the client gave up"), 100);
+    const started = Date.now();
+    const { SYSTEM_CLOCK } = await import("../dist/budget.js");
+    const outcome = await execute(client, jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x" }), { waitS: 45, clock: SYSTEM_CLOCK, budget: realBudget(10_000, cancel.signal) });
+    assert.equal(outcome.kind, "pending");
+    assert.match(outcome.note, /cancelled by the caller/);
+    assert.equal(api.requests.length, 1, "the acceptance POST only: the poll the cancel woke up saw the aborted budget and sent nothing");
+    assert.ok(Date.now() - started < 1_000, `${Date.now() - started} ms`);
   } finally {
     await api.close();
   }

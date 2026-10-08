@@ -15,7 +15,7 @@ import { responseSchemaFor } from "./spec/overlay.js";
 import { operationById } from "./spec/operations.js";
 import type { Operation } from "./spec/operations.js";
 
-import { boundedBy } from "./budget.js";
+import { boundedBy, sleepWithin } from "./budget.js";
 import type { CallBudget, Clock } from "./budget.js";
 
 export { SYSTEM_CLOCK } from "./budget.js";
@@ -144,7 +144,7 @@ export async function execute(client: IdeogramClient, req: ApiRequest, options: 
     const id = String(req.path.generation_id ?? "");
     const first = generationOutcome(id, result.status, body);
     if (first.kind !== "pending") return first;
-    return poll(client, id, started + clampWait(options.waitS) * 1000, POLL_CAP_MS, options.budget);
+    return poll(client, id, started + clampWait(options.waitS) * 1000, POLL_CAP_MS, options.budget, first.note);
   }
   const schema = responseSchemaFor(req.op, false);
   const checked = schema === null ? { success: true as const } : schema.safeParse(body);
@@ -163,7 +163,7 @@ export async function resume(client: IdeogramClient, generationId: string, optio
   // the status is read once whatever the wait (wait_s 0 is "tell me now"): only the polls are bounded by it
   const first = await fetchGeneration(client, generationId, options.budget);
   if (first.kind !== "pending") return first;
-  return poll(client, generationId, deadline, options.video ? POLL_CAP_VIDEO_MS : POLL_CAP_MS, options.budget);
+  return poll(client, generationId, deadline, options.video ? POLL_CAP_VIDEO_MS : POLL_CAP_MS, options.budget, first.note);
 }
 
 const GENERATION_OP = operationById("get_generation_v2");
@@ -208,14 +208,15 @@ function generationOutcome(generationId: string, status: number, body: unknown):
   return { kind: "completed", generationId, payload, usageCostUsdMicros: g.usage_cost_usd_micros ?? null };
 }
 
-/** Polls until the wait's deadline or the call's, whichever is first: a poll never outlives either. */
-async function poll(client: IdeogramClient, generationId: string, waitDeadline: number, capMs: number, budget: CallBudget): Promise<Outcome> {
+/** Polls until the wait's deadline or the call's, whichever is first: a poll never outlives either. A wait that ends
+ * reports the last transient failure (`note`) the caller saw, never silence in its place. */
+async function poll(client: IdeogramClient, generationId: string, waitDeadline: number, capMs: number, budget: CallBudget, note: string | null = null): Promise<Outcome> {
   const bounded = boundedBy(budget, waitDeadline);
   const clock = bounded.clock;
   let delay = POLL_FIRST_MS;
   for (;;) {
-    if (clock.now() + delay > bounded.deadline) return { kind: "pending", generationId, note: null };
-    await clock.sleep(delay);
+    if (clock.now() + delay > bounded.deadline) return { kind: "pending", generationId, note };
+    await sleepWithin(bounded, delay); // a cancelled call does not finish its sleep
     const outcome = await fetchGeneration(client, generationId, bounded);
     if (outcome.kind !== "pending" || outcome.note !== null) return outcome;
     delay = Math.min(delay * POLL_FACTOR, capMs);

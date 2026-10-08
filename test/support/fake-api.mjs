@@ -26,14 +26,13 @@ export async function startFakeApi(handler) {
   return { base, requests, close, server };
 }
 
-/** Client options pointing at the fake server; sleeps are recorded, return at once and advance the fake clock, so a
- * call's budget (`budget`, 55 s on that clock) is judged as if the time had passed. */
+/** Client options pointing at the fake server, with a fake clock and a call's budget on it (55 s): the client's retry
+ * sleeps run on the budget's clock, so they are recorded (`sleeps`), return at once and advance the clock. */
 export function testClientOptions(base, overrides = {}) {
-  const sleeps = [];
   const clock = fakeClock();
   const { toolCallBudget } = budgetModule;
   return {
-    sleeps,
+    sleeps: clock.sleeps,
     clock,
     budget: toolCallBudget(clock),
     options: {
@@ -44,7 +43,6 @@ export function testClientOptions(base, overrides = {}) {
       maxRetries: 3,
       requestTimeoutMs: 10_000,
       maxDownloadBytes: 50 * 1024 * 1024,
-      sleep: async (ms) => { sleeps.push(ms); clock.t += ms; },
       boundary: () => "test-boundary",
       ...overrides,
     },
@@ -67,9 +65,14 @@ export async function testContext(base, outputDir) {
   return { client: new IdeogramClient(options), outputDir, clock, budget: budgetModule.toolCallBudget(clock) };
 }
 
-/** A budget of `ms` real milliseconds on the system clock, for one request. */
-export function realBudget(ms) {
-  return budgetModule.toolCallBudget(budgetModule.SYSTEM_CLOCK, undefined, ms);
+/** A budget of `ms` real milliseconds on the system clock, for one request; `cancel` is the caller's signal. */
+export function realBudget(ms, cancel) {
+  return budgetModule.toolCallBudget(budgetModule.SYSTEM_CLOCK, cancel, ms);
+}
+
+/** A budget without a limit, for a test of one request that is not about time. */
+export function openBudget() {
+  return budgetModule.openBudget();
 }
 
 /** Finds a registered tool by name. */

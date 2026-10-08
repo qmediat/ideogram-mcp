@@ -14,7 +14,7 @@
  * is resent only when the time left also covers the duration of the attempt that was just rejected.
  */
 import { randomBytes } from "node:crypto";
-import { openBudget, remainingMs } from "./budget.js";
+import { remainingMs, sleepWithin } from "./budget.js";
 import type { CallBudget } from "./budget.js";
 import { mkdir, open, rename, rm } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
@@ -36,10 +36,9 @@ export interface ClientOptions {
   /** Plain-http downloads, for a loopback test server only. */
   readonly allowHttpDownloads: boolean;
   readonly maxRetries: number;
-  /** The longest one attempt may take, and the deadline of an idempotent call (a download). */
+  /** The longest ONE attempt may take (an upload of tens of MB needs minutes); the call's deadline is its CallBudget. */
   readonly requestTimeoutMs: number;
   readonly maxDownloadBytes: number;
-  readonly sleep: (ms: number) => Promise<void>;
   /** The multipart boundary; random unless a test fixes it. */
   readonly boundary?: () => string;
 }
@@ -57,7 +56,6 @@ export function defaultClientOptions(apiKey: string): ClientOptions {
     maxRetries: 3,
     requestTimeoutMs: 120_000,
     maxDownloadBytes: MAX_DOWNLOAD_BYTES,
-    sleep: (ms) => new Promise((done) => setTimeout(done, ms)),
   };
 }
 
@@ -152,11 +150,19 @@ export class IdeogramClient {
       if (body !== null) init.body = body;
       return { kind: "response", response: await fetch(url, init) };
     } catch (error) {
-      // the budget's signal ends an attempt with whatever reason it was aborted with (the SDK passes a string on a client's
-      // cancel, the server's limit a TimeoutError): judged by the signal's state, never by the error's shape
-      if (budget.signal.aborted) return { kind: "network", error: budgetEnded(budget.signal, true) };
-      return { kind: "network", error };
+      return { kind: "network", error: this.budgetCut(budget, error) ?? error };
     }
+  }
+
+  /** The budget's end behind a failed attempt or body read, or null when the failure is the attempt's own. The budget's
+   * signal ends an attempt with whatever reason it was aborted with (the SDK passes a string on a client's cancel, the
+   * server's limit a TimeoutError), so the signal's state is read, never the error's shape; and the attempt's own timer is
+   * the budget's remainder whenever that is the shorter, so a timeout past the deadline is the budget's too (the two
+   * timers fire at the same instant: which one wins must not decide the type). */
+  private budgetCut(budget: CallBudget, error: unknown): BudgetEnded | null {
+    if (budget.signal.aborted) return budgetEnded(budget.signal, true);
+    if (isTimeout(error) && remainingMs(budget) <= 0) return new BudgetEnded("timeout", true);
+    return null;
   }
 
   /** Whether a retry — its sleep, then an attempt at least as long as `attemptMs` (the one just made) plus a margin —
@@ -184,7 +190,7 @@ export class IdeogramClient {
   }
 
   /** Sends one request inside the call's budget; resolves with the parsed 2xx body, rejects with a typed IdeogramApiError. */
-  async call(req: ApiRequest, budget: CallBudget = openBudget()): Promise<ApiResult> {
+  async call(req: ApiRequest, budget: CallBudget): Promise<ApiResult> {
     const { url, body } = this.encode(req);
     if (body !== null && req.body?.files.length) {
       const refusal = requestBytesRefusal(req.op, body.bytes.byteLength);
@@ -202,7 +208,7 @@ export class IdeogramClient {
       if (attempt < this.options.maxRetries && this.fits(budget, wait, reserve) && this.retryable(idempotent, result)) {
         COUNTERS.retries += 1;
         if (result.kind === "response") await discard(result.response);
-        await this.options.sleep(wait);
+        await sleepWithin(budget, wait);
         continue;
       }
       throw result.kind === "network" ? this.networkError(idempotent, result.error) : await errorFromResponse(result.response);
@@ -210,7 +216,7 @@ export class IdeogramClient {
   }
 
   /** Downloads one generated file into `outputDir`, streamed with a byte counter; nothing is left behind on failure. */
-  async download(url: string, outputDir: string, budget: CallBudget = openBudget()): Promise<SavedFile> {
+  async download(url: string, outputDir: string, budget: CallBudget): Promise<SavedFile> {
     this.checkDownloadUrl(url);
     const response = await this.fetchDownload(url, budget);
     const contentType = (response.headers.get("Content-Type") ?? "").toLowerCase();
@@ -224,7 +230,15 @@ export class IdeogramClient {
       await response.body?.cancel();
       throw tooLarge(declared, this.options.maxDownloadBytes);
     }
-    return streamToFile(response, outputDir, extension, this.options.maxDownloadBytes, contentType);
+    try {
+      return await streamToFile(response, outputDir, extension, this.options.maxDownloadBytes, contentType);
+    } catch (error) {
+      if (error instanceof IdeogramApiError) throw error;
+      // the body is read under the same signal as the request: a cut mid-body is the budget's, or the attempt's own timeout
+      const cut = this.budgetCut(budget, error);
+      if (cut !== null) throw cut.toApiError(true);
+      throw new IdeogramApiError(0, "NETWORK_ERROR", `Download network error: ${networkErrorText(error)}`);
+    }
   }
 
   private checkDownloadUrl(url: string): void {
@@ -257,7 +271,7 @@ export class IdeogramClient {
       if (attempt < this.options.maxRetries && this.fits(budget, wait, 0) && this.retryable(true, result)) {
         COUNTERS.retries += 1;
         if (result.kind === "response") await discard(result.response);
-        await this.options.sleep(wait);
+        await sleepWithin(budget, wait);
         continue;
       }
       if (result.kind === "network") {
@@ -293,9 +307,11 @@ class BudgetEnded extends Error {
 
 /** Which end the budget's signal reports: the server's own limit aborts with a TimeoutError, anything else is the caller. */
 function budgetEnded(signal: AbortSignal, inFlight: boolean): BudgetEnded {
-  const reason: unknown = signal.reason;
-  const timeout = reason instanceof DOMException && reason.name === "TimeoutError";
-  return new BudgetEnded(timeout ? "timeout" : "cancel", inFlight);
+  return new BudgetEnded(isTimeout(signal.reason) ? "timeout" : "cancel", inFlight);
+}
+
+function isTimeout(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "TimeoutError";
 }
 
 /** Releases a response body this client will not read. Its failure cannot change the outcome (the response is already

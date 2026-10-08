@@ -4,6 +4,7 @@
 // The offline part always runs: every curated quotable operation has a minimal request its tool accepts, or the
 // reason it is skipped.
 import assert from "node:assert/strict";
+import { openBudget } from "./support/fake-api.mjs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -107,7 +108,7 @@ test("live: every curated quotable operation returns a PriceQuote; the quotes go
     const call = await prepare(c.spec, c.args);
     let outcome;
     try {
-      outcome = await quote(client, call.req);
+      outcome = await quote(client, call.req, openBudget());
     } catch (error) {
       failures.push(`${c.variant.op.id}: ${error instanceof Error ? error.message : String(error)}`);
       rows.push(`| ${c.spec.name} | ${c.variant.model} | — | — | — | FAILED: ${(error instanceof Error ? error.message : String(error)).slice(0, 120)} |`);
