@@ -52,6 +52,7 @@ export function buildUrl(
   });
   const search = new URLSearchParams();
   for (const [name, value] of Object.entries(query)) {
+    if (value === undefined) continue; // an absent optional is not sent as "undefined"
     const values = Array.isArray(value) ? value : [value as Scalar];
     for (const item of values) search.append(name, String(item));
   }

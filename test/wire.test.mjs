@@ -113,3 +113,12 @@ test("semantic refusals send nothing: a mask without its image, size source with
     }
   }
 });
+
+test("an undefined value (an in-process caller's absent optional) is neither sent as a query 'undefined' nor read as a file named undefined", async () => {
+  const { buildUrl } = await import("../dist/wire.js");
+  const { splitFiles } = await import("../dist/tools/family.js");
+  const { operationById } = await import("../dist/spec/operations.js");
+  assert.equal(buildUrl("https://x", "/v2/account/usage", {}, { start_time: "2026-10-01T00:00:00Z", sources: undefined }), "https://x/v2/account/usage?start_time=2026-10-01T00%3A00%3A00Z");
+  const split = splitFiles(operationById("post_generate_image_v2_ideogram45"), { prompt: "x", images: undefined });
+  assert.deepEqual([split.files, Object.keys(split.body)], [[], ["prompt"]]);
+});

@@ -160,6 +160,7 @@ export function splitFiles(op: Operation, fields: Readonly<Record<string, unknow
   const body: Record<string, unknown> = {};
   const files: FileRef[] = [];
   for (const [name, value] of Object.entries(fields)) {
+    if (value === undefined) continue; // an absent optional (an in-process caller's; JSON cannot carry it)
     if (!fileFields.has(name)) body[name] = value;
     else for (const path of Array.isArray(value) ? value : [value]) files.push({ field: name, path: String(path) });
   }
