@@ -8,12 +8,24 @@
 
 export interface Clock {
   now(): number;
-  sleep(ms: number): Promise<void>;
+  /** Resolves after `ms`, or at once when `signal` aborts (the timer is cleared: nothing of a cancelled call lingers). */
+  sleep(ms: number, signal?: AbortSignal): Promise<void>;
 }
 
 export const SYSTEM_CLOCK: Clock = {
   now: () => Date.now(),
-  sleep: (ms) => new Promise((done) => setTimeout(done, ms)),
+  sleep: (ms, signal) =>
+    new Promise((done) => {
+      const timer = setTimeout(() => {
+        signal?.removeEventListener("abort", onAbort);
+        done();
+      }, ms);
+      const onAbort = (): void => {
+        clearTimeout(timer);
+        done();
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
+    }),
 };
 
 /** This server's limit on one tool call: the MCP client's default 60 s minus a margin. */
@@ -49,13 +61,14 @@ export function remainingMs(budget: CallBudget): number {
 }
 
 /** Sleeps `ms` on the budget's clock, or less: the budget's signal (the caller's cancellation, the call's own limit) ends
- * the sleep at once, so a cancelled call does not keep its handler waiting. */
+ * the sleep at once, so a cancelled call does not keep its handler waiting; a clock that cannot be woken (a test's) is
+ * raced with the signal instead. */
 export function sleepWithin(budget: CallBudget, ms: number): Promise<void> {
   if (budget.signal.aborted) return Promise.resolve();
   return new Promise((done) => {
     const onAbort = (): void => done();
     budget.signal.addEventListener("abort", onAbort, { once: true });
-    void budget.clock.sleep(ms).then(() => {
+    void budget.clock.sleep(ms, budget.signal).then(() => {
       budget.signal.removeEventListener("abort", onAbort);
       done();
     });

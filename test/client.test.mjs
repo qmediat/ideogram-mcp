@@ -402,3 +402,27 @@ test("a download cut mid-body by the call's budget is CALL_TIMEOUT (in flight) a
     await api.close();
   }
 });
+
+test("a download 429 the budget cannot wait out is DOWNLOAD_FAILED with its Retry-After kept for the caller", async () => {
+  const api = await startFakeApi(() => ({ status: 429, headers: { "retry-after": "900" }, body: "slow down" }));
+  try {
+    const { options, sleeps, budget } = testClientOptions(api.base);
+    const error = await new IdeogramClient(options).download(`${api.base}/x.png`, join(dir, "ra-900"), budget).catch((e) => e);
+    assert.deepEqual([error.code, error.status, error.details.retryAfterS, api.requests.length, sleeps], ["DOWNLOAD_FAILED", 429, 900, 1, []]);
+    assert.match(error.message, /429 .*retry after 900 s/);
+  } finally {
+    await api.close();
+  }
+});
+
+test("a cancelled sleep on the system clock leaves no timer behind", async () => {
+  const { SYSTEM_CLOCK, sleepWithin } = await import("../dist/budget.js");
+  const timers = () => process.getActiveResourcesInfo().filter((r) => r === "Timeout").length;
+  const cancel = new AbortController();
+  const before = timers();
+  const sleeping = sleepWithin(toolCallBudget(SYSTEM_CLOCK, cancel.signal), 60_000);
+  assert.equal(timers(), before + 1, "the 60 s timer is pending");
+  cancel.abort("gave up");
+  await sleeping;
+  assert.equal(timers(), before, "the timer was cleared with the sleep");
+});

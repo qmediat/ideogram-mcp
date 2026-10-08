@@ -161,7 +161,8 @@ export class IdeogramClient {
    * timers fire at the same instant: which one wins must not decide the type). */
   private budgetCut(budget: CallBudget, error: unknown): BudgetEnded | null {
     if (budget.signal.aborted) return budgetEnded(budget.signal, true);
-    if (isTimeout(error) && remainingMs(budget) <= 0) return new BudgetEnded("timeout", true);
+    // an abort of any name (undici reports a TimeoutError; a body read may report an AbortError) past the deadline
+    if (isAbort(error) && remainingMs(budget) <= 0) return new BudgetEnded("timeout", true);
     return null;
   }
 
@@ -279,7 +280,9 @@ export class IdeogramClient {
         throw new IdeogramApiError(0, "NETWORK_ERROR", `Download network error: ${networkErrorText(result.error)}`);
       }
       await result.response.body?.cancel();
-      throw new IdeogramApiError(result.response.status, "DOWNLOAD_FAILED", `Failed to download: ${result.response.statusText}`);
+      const after = retryAfterSeconds(result.response); // a 429 the budget cannot wait out keeps its Retry-After for the caller
+      const retry = after === undefined ? "" : ` (retry after ${after} s)`;
+      throw new IdeogramApiError(result.response.status, "DOWNLOAD_FAILED", `Failed to download: ${result.response.status} ${result.response.statusText}${retry}`, { retryAfterS: after });
     }
   }
 }
@@ -312,6 +315,10 @@ function budgetEnded(signal: AbortSignal, inFlight: boolean): BudgetEnded {
 
 function isTimeout(error: unknown): boolean {
   return error instanceof DOMException && error.name === "TimeoutError";
+}
+
+function isAbort(error: unknown): boolean {
+  return error instanceof DOMException && (error.name === "TimeoutError" || error.name === "AbortError");
 }
 
 /** Releases a response body this client will not read. Its failure cannot change the outcome (the response is already
