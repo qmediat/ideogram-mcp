@@ -200,3 +200,20 @@ test("a cancellation during a poll's sleep ends the wait at once: Pending with t
     await api.close();
   }
 });
+
+test("a poll answered 200 whose body is cut off keeps the id as pending with the failure noted (a resubmit would bill again)", async () => {
+  const api = await startFakeApi(() => (res) => {
+    res.writeHead(200, { "content-type": "application/json", "content-length": "80" });
+    res.write('{"generation_id":"gCut","status":"pen'); // the body stops here
+    setTimeout(() => res.destroy(), 30);
+  });
+  try {
+    const client = new IdeogramClient(testClientOptions(api.base, { maxRetries: 0 }).options);
+    const outcome = await resume(client, "gCut", waitOptions(fakeClock(), 0));
+    assert.equal(outcome.kind, "pending", JSON.stringify(outcome));
+    assert.equal(outcome.generationId, "gCut");
+    assert.match(outcome.note, /could not be read/);
+  } finally {
+    await api.close();
+  }
+});

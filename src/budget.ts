@@ -68,9 +68,11 @@ export function sleepWithin(budget: CallBudget, ms: number): Promise<void> {
   return new Promise((done) => {
     const onAbort = (): void => done();
     budget.signal.addEventListener("abort", onAbort, { once: true });
-    void budget.clock.sleep(ms, budget.signal).then(() => {
+    const wake = (): void => {
       budget.signal.removeEventListener("abort", onAbort);
       done();
-    });
+    };
+    budget.clock.sleep(ms, budget.signal).then(wake, wake); // a clock that fails still ends the sleep
+
   });
 }

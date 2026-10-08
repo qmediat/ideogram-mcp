@@ -168,9 +168,11 @@ export async function resume(client: IdeogramClient, generationId: string, optio
 
 const GENERATION_OP = operationById("get_generation_v2");
 
-/** A poll failure that says nothing about the generation (the network, a 5xx, a 429): the id stays pending. A 4xx is an
- * answer about the id (404 unknown, 401/403 not this account) and is reported as the error it is. */
+/** A poll failure that says nothing about the generation (the network, a 5xx, a 429, a 2xx whose body did not arrive
+ * whole or was not JSON): the id stays pending. A 4xx is an answer about the id (404 unknown, 401/403 not this account)
+ * and is reported as the error it is. */
 function transientPollFailure(error: IdeogramApiError): boolean {
+  if (error.code === "RESPONSE_READ_FAILED" || error.code === "INVALID_JSON") return true;
   return error.status === 0 || error.status === 429 || error.status >= 500;
 }
 
