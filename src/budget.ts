@@ -73,8 +73,9 @@ export class CallBudget {
   boundedBy(deadline: number): CallBudget {
     if (deadline >= this.deadline) return this;
     const controller = new AbortController();
+    // a referenced timer: the poll clears it in its finally, so nothing lingers — unref'd, a test awaiting the signal alone
+    // had no live handle and Node 22 ended the event loop under it ("Promise resolution is still pending")
     const timer = setTimeout(() => controller.abort(new WaitEnded()), Math.max(1, Math.ceil(deadline - this.clock.now())));
-    timer.unref();
     const signal = AbortSignal.any([this.signal, controller.signal]);
     return new CallBudget(deadline, signal, this.clock, "wait", () => clearTimeout(timer));
   }
