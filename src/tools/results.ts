@@ -5,6 +5,7 @@
  */
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { COUNTERS } from "../counters.js";
+import { IdeogramApiError } from "../errors.js";
 import { microsToUsd } from "../cost.js";
 import type { ImageItem, Outcome, Payload } from "../lifecycle.js";
 import type { ToolContext } from "./context.js";
@@ -23,7 +24,7 @@ function imageLine(path: string, item: ImageItem): string {
 
 async function saveImages(ctx: ToolContext, items: readonly ImageItem[]): Promise<{ lines: string[]; saved: number }> {
   const safe = items.filter((item) => item.url !== null);
-  const results = await Promise.allSettled(safe.map((item) => ctx.client.download(item.url as string, ctx.outputDir)));
+  const results = await Promise.allSettled(safe.map((item) => ctx.client.download(item.url as string, ctx.outputDir, ctx.budget)));
   const lines: string[] = [];
   let saved = 0;
   results.forEach((result, i) => {
@@ -33,7 +34,9 @@ async function saveImages(ctx: ToolContext, items: readonly ImageItem[]): Promis
       return;
     }
     COUNTERS.downloadFailures += 1;
-    lines.push(`Not saved: ${safe[i].url} — ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`);
+    const reason = result.reason instanceof Error ? result.reason.message : String(result.reason);
+    const later = result.reason instanceof IdeogramApiError && result.reason.code === "CALL_TIMEOUT" ? " (ideogram_generation with the id above saves it in a new call)" : "";
+    lines.push(`Not saved: ${safe[i].url} — ${reason}${later}`);
   });
   const unsafe = items.length - safe.length;
   if (unsafe > 0) lines.push(`${unsafe} image(s) withheld by Ideogram's safety check (no URL, nothing downloaded)`);

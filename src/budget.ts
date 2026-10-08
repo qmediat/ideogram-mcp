@@ -1,0 +1,49 @@
+/**
+ * One budget per tool call: the deadline every HTTP attempt, retry sleep, poll and download of that call is judged
+ * against, and the signal that aborts them all — the caller's own cancellation (the MCP SDK's `extra.signal`, sent when
+ * the client times out or the user cancels) or this server's own limit. An MCP client gives up at 60 s by default; a
+ * request still being (re)sent after that would create a billed job whose id reaches nobody, so the server's own limit
+ * is 55 s and nothing of a call outlives it.
+ */
+
+export interface Clock {
+  now(): number;
+  sleep(ms: number): Promise<void>;
+}
+
+export const SYSTEM_CLOCK: Clock = {
+  now: () => Date.now(),
+  sleep: (ms) => new Promise((done) => setTimeout(done, ms)),
+};
+
+/** This server's limit on one tool call: the MCP client's default 60 s minus a margin. */
+export const TOOL_CALL_MS = 55_000;
+
+export interface CallBudget {
+  /** The instant (on `clock`) after which nothing of this call may still run. */
+  readonly deadline: number;
+  /** Aborts every attempt of the call: the caller's cancellation, or this server's limit. */
+  readonly signal: AbortSignal;
+  readonly clock: Clock;
+}
+
+/** The budget of one tool call: `cancel` is the caller's signal when the transport gives one. */
+export function toolCallBudget(clock: Clock, cancel?: AbortSignal, ms: number = TOOL_CALL_MS): CallBudget {
+  const own = AbortSignal.timeout(ms);
+  const signal = cancel === undefined ? own : AbortSignal.any([cancel, own]);
+  return { deadline: clock.now() + ms, signal, clock };
+}
+
+/** A budget without a limit, for a caller outside a tool call (a script, a test of one request). */
+export function openBudget(clock: Clock = SYSTEM_CLOCK): CallBudget {
+  return { deadline: Number.POSITIVE_INFINITY, signal: new AbortController().signal, clock };
+}
+
+/** The same call, ending no later than `deadline` (a poll ends with the tool's wait, never after the call). */
+export function boundedBy(budget: CallBudget, deadline: number): CallBudget {
+  return deadline < budget.deadline ? { ...budget, deadline } : budget;
+}
+
+export function remainingMs(budget: CallBudget): number {
+  return budget.deadline - budget.clock.now();
+}

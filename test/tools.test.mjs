@@ -297,3 +297,24 @@ test("ideogram_operations lists a family and details one operation with its fiel
   assert.match(text(one.result), /image: 10 MB/);
   assert.doesNotMatch(text(one.result), /quotable/);
 });
+
+test("a download the call's budget cuts is 'Not saved' with the way to collect it in a new call; nothing past the deadline is fetched", async () => {
+  let ctx;
+  const api = await startFakeApi((req) => {
+    if (req.method === "POST") return accepted("g10");
+    if (req.url.startsWith("/v2/generations/")) {
+      ctx.clock.t += 60_000; // the poll is answered as the call's 55 s run out: the result is known, the download cannot start
+      return { json: { generation_id: "g10", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ url: `${api.base}/img.png`, prompt: "x", resolution: "1024x1024", is_image_safe: true, seed: 1, object_type: "image.generation" }] } };
+    }
+    return { status: 200, headers: { "content-type": "image/png" }, body: PNG };
+  });
+  try {
+    ctx = await testContext(api.base, join(dir, "cut"));
+    const result = await (await tool("ideogram_generate")).handler(ctx, { prompt: "x" });
+    assert.match(text(result), /Generation g10 completed\./);
+    assert.match(text(result), /Not saved: .*img\.png — the call's time ran out before this request could be made \(ideogram_generation with the id above saves it in a new call\)/);
+    assert.equal(api.requests.filter((r) => r.url === "/img.png").length, 0, "no download started past the deadline");
+  } finally {
+    await api.close();
+  }
+});

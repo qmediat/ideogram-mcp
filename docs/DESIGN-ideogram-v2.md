@@ -140,6 +140,7 @@ src/spec/operations.ts            Operation[] built from the snapshot at build t
 src/registry.ts                   Registry + the newest table + the CI check (tests/registry.test.mjs)
 src/client.ts                     as today (retries, Retry-After, allowed download hosts, 50 MB cap) + json bodies,
                                   dry_run query, typed 402/429, `Api-Key` only (never Bearer)
+src/budget.ts                     Clock + CallBudget (deadline, cancellation signal) — one per tool call, built in the handler
 src/lifecycle.ts                  sync | async | poll | timeout → Result (one function per step, ≤ 40 lines)
 src/cost.ts                       quote (dry_run) → Quote; usage → Usage; micros → Decimal strings (never floats)
 src/tools/<family>.ts             one curated tool per family: generate, precise_edit, inpaint, remix, reframe,
@@ -182,7 +183,7 @@ major version with a deprecation note, `ideogram_remix`, `ideogram_reframe`, `id
 |---|---|---|
 | tools/list after step 2 | 16 tools, advertised schema ≤ 64 KB serialized, measured in `tests/budget.test.mjs` | the count alone says nothing (consult F15): the bytes and the routing accuracy are what a client pays |
 | generated code | ≤ 600 KB committed (`src/generated/`) | 486 schemas × zod; filtered to the exposed operations |
-| request timeout | images 120 s sync (today), video: async only | the spec says video is acknowledgement-only |
+| one budget per tool call | `CallBudget` (src/budget.ts): deadline = start + 55 s (the caller's 60 s minus a margin) and the caller's cancellation signal (the SDK's `extra.signal`); every HTTP attempt, retry sleep (Retry-After included), poll and download of the call is judged against what remains; a POST is resent only when the time left covers an attempt as long as the one just rejected; a download the budget cuts is "Not saved" beside the id; one attempt is at most 120 s | pieces of a call bounded apart (a sleep budget, a per-request timeout) added up past the caller — step back after #36 r2 (Codex: a 429 answered at 40 s was resent at 70 s) |
 | wait inside a tool call | default 45 s, max 50 s, then Pending {generation_id} | the MCP SDK's client timeout is 60 s (consult F3) |
 | poll | 2 s → ×1.5 → 30 s cap (60 s video); `ideogram_generation` resumes without limit | 180 polls per video would court 429s (Gemini F6) |
 | upload | per operation from the spec (describe 10 MB, precise edit 50 MB, generate 25 MB × 5…), enforced before the call | one cap was wrong for both ends (consult F12) |

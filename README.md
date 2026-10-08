@@ -102,9 +102,14 @@ Each model's fields are listed in the tool's schema (one variant per model) and 
 ### Waiting, and collecting later
 
 A generation is sent asynchronously and returned the moment Ideogram accepts it. The tool then waits up to `wait_s` seconds (default 45, at most 50: MCP clients time a call out at 60 s), polling at 2 s, ×1.5, up to 30 s apart. A job still running at the end of the wait comes back as its `generation_id`: `ideogram_generation {"generation_id": "…"}` collects it later, in this session or another. Sending the request again would start — and bill — a second job.
-One HTTP attempt may take up to 120 s (an upload of tens of MB needs it); retries between attempts share a 30 s budget
-and a poll never outlives the wait, but a client that gives up during a long upload cannot learn the id of a job the
-API accepted after that — a limit of any HTTP client, not something this server can close.
+Every tool call has one budget, fixed when it starts: 55 s (the caller's 60 s minus a margin), ended earlier by the
+caller's own cancellation (a client that times out or a user who cancels). Every request, retry sleep (Retry-After
+included), poll and download of the call is judged against what remains of it, so nothing of a call outlives its caller
+and a request that creates work is never resent after the caller has given up: a POST is resent only when the time left
+also covers an attempt as long as the one just rejected. A download the budget cuts is listed as not saved beside the
+generation id; `ideogram_generation` saves it in a new call. What that leaves open: an upload that needs more than 55 s
+cannot be served inside one MCP call at all, and a job the API accepts after the caller gave up keeps an id nobody
+receives — a limit of the 60 s client, not of this server.
 
 ### Prices
 

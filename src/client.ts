@@ -7,8 +7,15 @@
  * refused connect) or the API explicitly rejected it before acceptance (429). A POST that failed after it may have
  * been sent (a timeout, a reset, a 5xx) is reported, not repeated. A GET (a poll, a download) is idempotent and is
  * retried on network failures, 429 and 5xx.
+ *
+ * Nothing of a call outlives the tool call it belongs to: every request and download takes the call's CallBudget
+ * (src/budget.ts) — one deadline for the whole tool call and the caller's own cancellation signal — and every attempt's
+ * timeout and every retry sleep (Retry-After included) is judged against what remains of it. A non-idempotent request
+ * is resent only when the time left also covers the duration of the attempt that was just rejected.
  */
 import { randomBytes } from "node:crypto";
+import { openBudget, remainingMs } from "./budget.js";
+import type { CallBudget } from "./budget.js";
 import { mkdir, open, rename, rm } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -29,6 +36,7 @@ export interface ClientOptions {
   /** Plain-http downloads, for a loopback test server only. */
   readonly allowHttpDownloads: boolean;
   readonly maxRetries: number;
+  /** The longest one attempt may take, and the deadline of an idempotent call (a download). */
   readonly requestTimeoutMs: number;
   readonly maxDownloadBytes: number;
   readonly sleep: (ms: number) => Promise<void>;
@@ -61,9 +69,6 @@ export interface ApiRequest {
   readonly headers: Readonly<Record<string, string>>;
   readonly body: BodyInput | null;
   readonly dryRun: boolean;
-  /** The whole budget of this request — every attempt and every retry sleep together — when shorter than the client's
-   * per-attempt timeout (a poll bounded by the tool's remaining wait); a retry never starts past it. */
-  readonly timeoutMs?: number;
 }
 
 export interface ApiResult {
@@ -79,10 +84,8 @@ export interface SavedFile {
 
 type Attempt = { readonly kind: "response"; readonly response: Response } | { readonly kind: "network"; readonly error: unknown };
 
-/** The most one call spends sleeping between attempts, in total: inside one tool call (≤ 50 s wait, 60 s client timeout),
- * so a POST is never resent after the caller has given up (the job would run and bill with its id reaching nobody). A 429
- * whose Retry-After does not fit the remaining budget is reported with its value instead of retried. */
-export const RETRY_BUDGET_MS = 30_000;
+/** The least an attempt is given: a retry does not start when less than this remains of the budget. */
+const MIN_ATTEMPT_MS = 1_000;
 
 /** The Retry-After header as whole seconds, whatever its size; undefined when absent or not a positive number. */
 function retryAfterSeconds(response: Response): number | undefined {
@@ -135,34 +138,53 @@ export class IdeogramClient {
     return { url, body: req.body === null ? null : encodeBody(req.body, this.options.boundary?.()) };
   }
 
-  private async attempt(method: string, url: string, headers: Record<string, string>, body: Uint8Array<ArrayBuffer> | null, timeoutMs?: number): Promise<Attempt> {
+  /** One HTTP attempt within the budget: its timeout is the client's or what remains of the call, whichever is less; the
+   * caller's cancellation aborts it too. */
+  private async attempt(method: string, url: string, headers: Record<string, string>, body: Uint8Array<ArrayBuffer> | null, budget: CallBudget): Promise<Attempt> {
+    const left = remainingMs(budget);
+    if (left <= 0) return { kind: "network", error: new BudgetEnded("timeout", false) };
+    if (budget.signal.aborted) return { kind: "network", error: budgetEnded(budget.signal, false) };
     try {
       // redirect manual: a 3xx is returned as a response, never followed — the download host allow-list is checked on
       // the URL this server asked for, and a hop to another host would skip it.
-      const timeout = Math.max(1, Math.min(this.options.requestTimeoutMs, timeoutMs ?? this.options.requestTimeoutMs));
-      const init: RequestInit = { method, headers, redirect: "manual", signal: AbortSignal.timeout(timeout) };
+      const timeout = Math.max(1, Math.ceil(Math.min(this.options.requestTimeoutMs, left))); // AbortSignal.timeout takes an integer
+      const init: RequestInit = { method, headers, redirect: "manual", signal: AbortSignal.any([budget.signal, AbortSignal.timeout(timeout)]) };
       if (body !== null) init.body = body;
       return { kind: "response", response: await fetch(url, init) };
     } catch (error) {
+      // the budget's signal ends an attempt with whatever reason it was aborted with (the SDK passes a string on a client's
+      // cancel, the server's limit a TimeoutError): judged by the signal's state, never by the error's shape
+      if (budget.signal.aborted) return { kind: "network", error: budgetEnded(budget.signal, true) };
       return { kind: "network", error };
     }
   }
 
+  /** Whether a retry — its sleep, then an attempt at least as long as `attemptMs` (the one just made) plus a margin —
+   * ends inside the budget. A rejected POST resent with too little time left would be aborted mid-upload: a certain
+   * rejection turned into a job that may be running and billed. */
+  private fits(budget: CallBudget, wait: number, attemptMs: number): boolean {
+    return wait + attemptMs + MIN_ATTEMPT_MS <= remainingMs(budget);
+  }
+
   /** Whether a failed attempt may be sent again without risking a second accepted job. */
   private retryable(idempotent: boolean, result: Attempt): boolean {
-    if (result.kind === "network") return idempotent ? isNetworkFailure(result.error) : failedBeforeSending(result.error);
+    if (result.kind === "network") {
+      if (result.error instanceof BudgetEnded) return false; // the call is over: nothing is resent
+      return idempotent ? isNetworkFailure(result.error) : failedBeforeSending(result.error);
+    }
     const status = result.response.status;
     return status === 429 || (idempotent && status >= 500);
   }
 
   private networkError(idempotent: boolean, error: unknown): IdeogramApiError {
+    if (error instanceof BudgetEnded) return error.toApiError(idempotent);
     const sent = !idempotent && !failedBeforeSending(error);
     const note = sent ? "; the request may have reached Ideogram, so it was not sent again (it could be billed twice)" : "";
     return new IdeogramApiError(0, "NETWORK_ERROR", `Network error: ${networkErrorText(error)}${note}`);
   }
 
-  /** Sends one request; resolves with the parsed 2xx body, rejects with a typed IdeogramApiError. */
-  async call(req: ApiRequest): Promise<ApiResult> {
+  /** Sends one request inside the call's budget; resolves with the parsed 2xx body, rejects with a typed IdeogramApiError. */
+  async call(req: ApiRequest, budget: CallBudget = openBudget()): Promise<ApiResult> {
     const { url, body } = this.encode(req);
     if (body !== null && req.body?.files.length) {
       const refusal = requestBytesRefusal(req.op, body.bytes.byteLength);
@@ -171,19 +193,15 @@ export class IdeogramClient {
     const headers: Record<string, string> = { ...req.headers, "Api-Key": this.options.apiKey, Accept: "application/json" };
     if (body !== null) headers["Content-Type"] = body.contentType;
     const idempotent = req.op.method === "GET";
-    const started = Date.now();
-    const remaining = (): number | undefined => (req.timeoutMs === undefined ? undefined : req.timeoutMs - (Date.now() - started));
-    let slept = 0;
     for (let attempt = 0; ; attempt++) {
-      const result = await this.attempt(req.op.method, url, headers, body?.bytes ?? null, remaining());
+      const begun = budget.clock.now();
+      const result = await this.attempt(req.op.method, url, headers, body?.bytes ?? null, budget);
       if (result.kind === "response" && result.response.ok) return { status: result.response.status, body: await parseJson(result.response, req) };
       const wait = backoffMs(attempt, result.kind === "response" ? result.response : undefined);
-      const left = remaining();
-      const inBudget = slept + wait <= RETRY_BUDGET_MS && (left === undefined || wait < left);
-      if (attempt < this.options.maxRetries && inBudget && this.retryable(idempotent, result)) {
+      const reserve = idempotent ? 0 : budget.clock.now() - begun; // a POST is resent only with time for an attempt as long as this one
+      if (attempt < this.options.maxRetries && this.fits(budget, wait, reserve) && this.retryable(idempotent, result)) {
         COUNTERS.retries += 1;
         if (result.kind === "response") await discard(result.response);
-        slept += wait;
         await this.options.sleep(wait);
         continue;
       }
@@ -192,9 +210,9 @@ export class IdeogramClient {
   }
 
   /** Downloads one generated file into `outputDir`, streamed with a byte counter; nothing is left behind on failure. */
-  async download(url: string, outputDir: string): Promise<SavedFile> {
+  async download(url: string, outputDir: string, budget: CallBudget = openBudget()): Promise<SavedFile> {
     this.checkDownloadUrl(url);
-    const response = await this.fetchDownload(url);
+    const response = await this.fetchDownload(url, budget);
     const contentType = (response.headers.get("Content-Type") ?? "").toLowerCase();
     const extension = MEDIA_EXTENSIONS.find(([prefix]) => contentType.startsWith(prefix))?.[1];
     if (extension === undefined) {
@@ -226,29 +244,58 @@ export class IdeogramClient {
     }
   }
 
-  private async fetchDownload(url: string): Promise<Response> {
-    let slept = 0;
+  private async fetchDownload(url: string, budget: CallBudget): Promise<Response> {
     for (let attempt = 0; ; attempt++) {
-      const result = await this.attempt("GET", url, {}, null);
+      const result = await this.attempt("GET", url, {}, null, budget);
       if (result.kind === "response" && result.response.status >= 300 && result.response.status < 400) {
         await result.response.body?.cancel();
         const location = result.response.headers.get("Location") ?? "unknown";
         throw new IdeogramApiError(result.response.status, "REDIRECT_BLOCKED", `Download redirect blocked (${result.response.status} → ${location})`);
       }
       if (result.kind === "response" && result.response.ok) return result.response;
-      const wait = backoffMs(attempt);
-      if (attempt < this.options.maxRetries && slept + wait <= RETRY_BUDGET_MS && this.retryable(true, result)) {
+      const wait = backoffMs(attempt, result.kind === "response" ? result.response : undefined); // Retry-After honoured here too
+      if (attempt < this.options.maxRetries && this.fits(budget, wait, 0) && this.retryable(true, result)) {
         COUNTERS.retries += 1;
         if (result.kind === "response") await discard(result.response);
-        slept += wait;
         await this.options.sleep(wait);
         continue;
       }
-      if (result.kind === "network") throw new IdeogramApiError(0, "NETWORK_ERROR", `Download network error: ${networkErrorText(result.error)}`);
+      if (result.kind === "network") {
+        if (result.error instanceof BudgetEnded) throw this.networkError(true, result.error);
+        throw new IdeogramApiError(0, "NETWORK_ERROR", `Download network error: ${networkErrorText(result.error)}`);
+      }
       await result.response.body?.cancel();
       throw new IdeogramApiError(result.response.status, "DOWNLOAD_FAILED", `Failed to download: ${result.response.statusText}`);
     }
   }
+}
+
+/** The call's budget ended — its own limit ran out, or the caller cancelled — before an attempt or during one. */
+class BudgetEnded extends Error {
+  constructor(
+    readonly why: "timeout" | "cancel",
+    readonly inFlight: boolean,
+  ) {
+    super(why === "timeout" ? "the call's time ran out" : "the call was cancelled by the caller");
+    this.name = "BudgetEnded";
+  }
+
+  /** Typed for the caller: a non-idempotent request that was in flight may have reached Ideogram, and says so. */
+  toApiError(idempotent: boolean): IdeogramApiError {
+    const when = !this.inFlight
+      ? " before this request could be made"
+      : idempotent
+        ? " while the request was in flight"
+        : "; the request was in flight and may have reached Ideogram, so it was not sent again (it could be billed twice)";
+    return new IdeogramApiError(0, this.why === "timeout" ? "CALL_TIMEOUT" : "CANCELLED", `${this.message}${when}`);
+  }
+}
+
+/** Which end the budget's signal reports: the server's own limit aborts with a TimeoutError, anything else is the caller. */
+function budgetEnded(signal: AbortSignal, inFlight: boolean): BudgetEnded {
+  const reason: unknown = signal.reason;
+  const timeout = reason instanceof DOMException && reason.name === "TimeoutError";
+  return new BudgetEnded(timeout ? "timeout" : "cancel", inFlight);
 }
 
 /** Releases a response body this client will not read. Its failure cannot change the outcome (the response is already

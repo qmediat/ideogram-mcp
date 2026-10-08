@@ -48,6 +48,11 @@ sells through an API key is reachable, priced before a call, and collected by id
 - A request is sent again only when it never left the machine or the API rejected it with 429; a 5xx, a timeout or a
   reset after sending is reported, never repeated (one tool call never creates two billed jobs). Polls and downloads
   (GET) keep retrying network failures, 429 and 5xx.
+- One budget per tool call: 55 s (the MCP client's 60 s minus a margin), ended earlier by the caller's cancellation;
+  every attempt, retry sleep (Retry-After included), poll and download of the call is judged against what remains, so
+  nothing of a call outlives its caller — a POST is resent only with time for an attempt as long as the rejected one,
+  a cut download is listed as not saved beside the generation id (typed `CALL_TIMEOUT` / `CANCELLED`), and
+  `ideogram_api` refuses `async: false` (a synchronous result this server could not wait for).
 - A 2xx body the specification's schema rejects is reported as a contract mismatch with the generation id, never as a
   success.
 

@@ -2,6 +2,8 @@
 // by the test's handler. Also builds the client options and the fake clock the tests share. No test lives here.
 import http from "node:http";
 
+const budgetModule = await import("../../dist/budget.js");
+
 /** Starts a server; `handler(req)` returns { status, headers?, json? | body? | stream? } or a function of the raw res. */
 export async function startFakeApi(handler) {
   const requests = [];
@@ -24,11 +26,16 @@ export async function startFakeApi(handler) {
   return { base, requests, close, server };
 }
 
-/** Client options pointing at the fake server; sleeps are recorded and return at once. */
+/** Client options pointing at the fake server; sleeps are recorded, return at once and advance the fake clock, so a
+ * call's budget (`budget`, 55 s on that clock) is judged as if the time had passed. */
 export function testClientOptions(base, overrides = {}) {
   const sleeps = [];
+  const clock = fakeClock();
+  const { toolCallBudget } = budgetModule;
   return {
     sleeps,
+    clock,
+    budget: toolCallBudget(clock),
     options: {
       apiKey: "dummy-key-for-tests",
       baseUrl: base,
@@ -37,7 +44,7 @@ export function testClientOptions(base, overrides = {}) {
       maxRetries: 3,
       requestTimeoutMs: 10_000,
       maxDownloadBytes: 50 * 1024 * 1024,
-      sleep: async (ms) => { sleeps.push(ms); },
+      sleep: async (ms) => { sleeps.push(ms); clock.t += ms; },
       boundary: () => "test-boundary",
       ...overrides,
     },
@@ -52,10 +59,17 @@ export function fakeClock() {
 
 export const PNG = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex");
 
-/** A tool context on the fake API: its client, a fresh output directory, a clock that does not wait. */
+/** A tool context on the fake API: its client, a fresh output directory, a clock that does not wait, and the call's budget
+ * on that clock. */
 export async function testContext(base, outputDir) {
   const { IdeogramClient } = await import("../../dist/client.js");
-  return { client: new IdeogramClient(testClientOptions(base).options), outputDir, clock: fakeClock() };
+  const { clock, options } = testClientOptions(base);
+  return { client: new IdeogramClient(options), outputDir, clock, budget: budgetModule.toolCallBudget(clock) };
+}
+
+/** A budget of `ms` real milliseconds on the system clock, for one request. */
+export function realBudget(ms) {
+  return budgetModule.toolCallBudget(budgetModule.SYSTEM_CLOCK, undefined, ms);
 }
 
 /** Finds a registered tool by name. */

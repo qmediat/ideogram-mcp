@@ -19,6 +19,6 @@ export const GENERATION_TOOL: ToolDefinition = {
   handler: async (ctx, args) => {
     const id = String(args.generation_id);
     const waitS = typeof args.wait_s === "number" ? args.wait_s : WAIT_DEFAULT_S;
-    return outcomeResult(ctx, await resume(ctx.client, id, { waitS, clock: ctx.clock }), []);
+    return outcomeResult(ctx, await resume(ctx.client, id, { waitS, clock: ctx.clock, budget: ctx.budget }), []);
   },
 };

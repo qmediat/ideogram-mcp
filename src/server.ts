@@ -2,7 +2,8 @@ import { createRequire } from "node:module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { IdeogramApiError } from "./errors.js";
-import type { ToolContext, ToolDefinition } from "./tools/context.js";
+import { callContext } from "./tools/context.js";
+import type { ServerContext, ToolDefinition } from "./tools/context.js";
 import { curatedDefinitions } from "./tools/curated.js";
 import { OPERATIONS_TOOL } from "./tools/discovery.js";
 import { GENERATION_TOOL } from "./tools/generation.js";
@@ -24,15 +25,17 @@ export function errorResult(error: unknown): CallToolResult {
   return { content: [{ type: "text", text: message }], isError: true };
 }
 
-export function createServer(ctx: ToolContext): McpServer {
+export function createServer(ctx: ServerContext): McpServer {
   const server = new McpServer({ name: "ideogram", version });
   for (const tool of toolDefinitions()) {
     server.registerTool(
       tool.name,
       { title: tool.title, description: tool.description, inputSchema: tool.inputSchema },
-      async (args: Record<string, unknown>) => {
+      async (args: Record<string, unknown>, extra: { signal?: AbortSignal }) => {
         try {
-          return await tool.handler(ctx, args);
+          // one budget per call: the caller's cancellation (the SDK aborts extra.signal on its timeout or a cancel) and this
+          // server's own 55 s limit end every request, poll and download of the call together
+          return await tool.handler(callContext(ctx, extra.signal), args);
         } catch (error) {
           return errorResult(error);
         }

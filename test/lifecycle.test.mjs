@@ -2,12 +2,16 @@
 // that ends Pending with the id, a body the schema rejects → ContractMismatch, the poll schedule.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { startFakeApi, testClientOptions, fakeClock } from "./support/fake-api.mjs";
+import { startFakeApi, testClientOptions, fakeClock, realBudget } from "./support/fake-api.mjs";
 
 const { IdeogramClient } = await import("../dist/client.js");
 const { execute, resume, asAsync, fetchGeneration, POLL_CAP_MS } = await import("../dist/lifecycle.js");
 const { operationById } = await import("../dist/spec/operations.js");
 const { COUNTERS } = await import("../dist/counters.js");
+const { toolCallBudget } = await import("../dist/budget.js");
+
+/** The wait options of one tool call on a fake clock: the call's 55 s budget runs on the same clock. */
+const waitOptions = (clock, waitS, extra = {}) => ({ waitS, clock, budget: toolCallBudget(clock), ...extra });
 
 const op = (id) => operationById(id);
 const jsonRequest = (operation, fields) => ({
@@ -27,7 +31,7 @@ async function run(handler, req, waitS = 45) {
   try {
     const clock = fakeClock();
     const client = new IdeogramClient(testClientOptions(api.base).options);
-    const outcome = await execute(client, req, { waitS, clock });
+    const outcome = await execute(client, req, waitOptions(clock, waitS));
     return { outcome, requests: api.requests, clock };
   } finally {
     await api.close();
@@ -119,10 +123,10 @@ test("a poll answered 503 keeps the id as pending with the error; a 404 is the a
   const flaky = await startFakeApi(() => ({ status: 503, json: { message: "upstream" } }));
   const gone = await startFakeApi(() => ({ status: 404, json: { message: "no such generation" } }));
   try {
-    const pending = await resume(new IdeogramClient(testClientOptions(flaky.base).options), "gX", { waitS: 10, clock: fakeClock() });
+    const pending = await resume(new IdeogramClient(testClientOptions(flaky.base).options), "gX", waitOptions(fakeClock(), 10));
     assert.equal(pending.kind, "pending");
     assert.match(pending.note, /upstream/);
-    const error = await resume(new IdeogramClient(testClientOptions(gone.base).options), "gX", { waitS: 10, clock: fakeClock() }).catch((e) => e);
+    const error = await resume(new IdeogramClient(testClientOptions(gone.base).options), "gX", waitOptions(fakeClock(), 10)).catch((e) => e);
     assert.equal(error.status, 404, "a 404 is never 'still running'");
     assert.match(error.message, /no such generation/);
   } finally {
@@ -139,15 +143,41 @@ test("asAsync adds async: true only when the caller left it unset; an explicit a
   assert.equal(asAsync(explicit).body.fields.async, false);
 });
 
-test("a poll carries the wait's remaining time as its timeout: a hanging API ends the poll as pending with the timeout noted", async () => {
+test("a poll ends with the call's budget: a hanging API ends the poll as pending with the timeout noted", async () => {
   const api = await startFakeApi(() => () => {});
   try {
     const client = new IdeogramClient(testClientOptions(api.base, { maxRetries: 0, requestTimeoutMs: 60_000 }).options);
     const started = Date.now();
-    const outcome = await fetchGeneration(client, "gHang", 200);
+    const outcome = await fetchGeneration(client, "gHang", realBudget(200));
     assert.equal(outcome.kind, "pending");
-    assert.match(outcome.note, /TimeoutError/);
+    assert.match(outcome.note, /the call's time ran out while the request was in flight/);
     assert.ok(Date.now() - started < 5_000);
+  } finally {
+    await api.close();
+  }
+});
+
+test("the wait is cut by the call's budget: a 50 s wait inside a call with 10 s left ends Pending at the call's deadline", async () => {
+  const pending = { generation_id: "g7", status: "pending", created: "2026-10-07T00:00:00Z" };
+  const handler = (req) => (req.method === "POST" ? { json: { generation_id: "g7", seed: 1 } } : { json: pending });
+  const api = await startFakeApi(handler);
+  try {
+    const clock = fakeClock();
+    const client = new IdeogramClient(testClientOptions(api.base).options);
+    const budget = toolCallBudget(clock, undefined, 10_000);
+    const outcome = await execute(client, jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x" }), { waitS: 50, clock, budget });
+    assert.deepEqual(outcome, { kind: "pending", generationId: "g7", note: null });
+    assert.deepEqual(clock.sleeps, [2000, 3000, 4500], "the next poll (at 16.25 s) would pass the call's 10 s deadline, not the wait's 50 s");
+  } finally {
+    await api.close();
+  }
+});
+
+test("ideogram_generation with wait_s 0 reads the status once: the lookup is never cut by a wait of zero", async () => {
+  const api = await startFakeApi(() => ({ json: { generation_id: "g8", status: "pending", created: "2026-10-07T00:00:00Z" } }));
+  try {
+    const outcome = await resume(new IdeogramClient(testClientOptions(api.base).options), "g8", waitOptions(fakeClock(), 0));
+    assert.deepEqual([outcome.kind, api.requests.length], ["pending", 1]);
   } finally {
     await api.close();
   }

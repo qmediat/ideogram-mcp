@@ -104,6 +104,9 @@ async function buildRawRequest(op: Operation, args: RawArgs): Promise<ApiRequest
   } else check("body", bodySchemaFor(op, media), withFiles);
   const violations = constraintViolations(op, withFiles);
   if (violations.length > 0) throw new Error(violations.join("\n"));
+  if (body.async === false) {
+    throw new Error("async: false is not served: a synchronous generation returns its result only in the POST answer, which this server cannot wait for inside one call; omit async (the job is accepted, then polled) or set wait_s");
+  }
   const uploads = await loadUploads(op, files);
   return {
     op,
@@ -126,11 +129,11 @@ async function runRaw(ctx: ToolContext, input: ToolArguments): Promise<CallToolR
   const req = await buildRawRequest(op, args);
   const notes = op.class === "spec_only" ? [`${op.id} is undocumented (spec_only): its behaviour may change without notice`] : [];
   if (args.dry_run === true) {
-    const priced = await quote(ctx.client, req);
+    const priced = await quote(ctx.client, req, ctx.budget);
     if (priced.kind !== "quote") return outcomeResult(ctx, priced, notes);
     return textResult([quoteText(priced.quote), ...notes].join("\n"));
   }
-  const outcome = await execute(ctx.client, req, { waitS: args.wait_s ?? WAIT_DEFAULT_S, clock: ctx.clock });
+  const outcome = await execute(ctx.client, req, { waitS: args.wait_s ?? WAIT_DEFAULT_S, clock: ctx.clock, budget: ctx.budget });
   return outcomeResult(ctx, outcome, notes);
 }
 

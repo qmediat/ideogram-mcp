@@ -42,7 +42,7 @@ export const QUOTE_TOOL: ToolDefinition = {
     const refusal = variant === undefined ? null : quoteRefusal(variant.op);
     if (refusal !== null) return textResult(refusal, true);
     const call = await prepare(spec, given);
-    const outcome = await quote(ctx.client, call.req);
+    const outcome = await quote(ctx.client, call.req, ctx.budget);
     if (outcome.kind !== "quote") return outcomeResult(ctx, outcome, call.notes);
     const mapped = call.notes.length === 0 ? "" : `\nMapped from the 1.x inputs: ${call.notes.join("; ")}`;
     return textResult(quoteText(outcome.quote) + mapped);

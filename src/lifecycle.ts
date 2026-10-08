@@ -15,15 +15,11 @@ import { responseSchemaFor } from "./spec/overlay.js";
 import { operationById } from "./spec/operations.js";
 import type { Operation } from "./spec/operations.js";
 
-export interface Clock {
-  now(): number;
-  sleep(ms: number): Promise<void>;
-}
+import { boundedBy } from "./budget.js";
+import type { CallBudget, Clock } from "./budget.js";
 
-export const SYSTEM_CLOCK: Clock = {
-  now: () => Date.now(),
-  sleep: (ms) => new Promise((done) => setTimeout(done, ms)),
-};
+export { SYSTEM_CLOCK } from "./budget.js";
+export type { Clock } from "./budget.js";
 
 export const WAIT_DEFAULT_S = 45;
 export const WAIT_MAX_S = 50;
@@ -64,6 +60,8 @@ export interface WaitOptions {
   /** Seconds to wait for the result; 0 returns the generation id at acceptance. Clamped to WAIT_MAX_S. */
   readonly waitS: number;
   readonly clock: Clock;
+  /** The tool call's budget: no request, poll or download of this generation outlives it. */
+  readonly budget: CallBudget;
 }
 
 const ImageItemShape = z.looseObject({
@@ -139,14 +137,14 @@ function isVideo(op: Operation): boolean {
 /** Runs one generation: send (async when possible), then the bounded wait. */
 export async function execute(client: IdeogramClient, req: ApiRequest, options: WaitOptions): Promise<Outcome> {
   const started = options.clock.now();
-  const result = await client.call(asAsync(req));
+  const result = await client.call(asAsync(req), options.budget);
   const body = withImageKind(result.body);
   if (req.op.id === GENERATION_OP?.id) {
     // a lookup, not a job: its status is read as one, and a still-pending generation is polled for the rest of the wait
     const id = String(req.path.generation_id ?? "");
     const first = generationOutcome(id, result.status, body);
     if (first.kind !== "pending") return first;
-    return poll(client, id, started + clampWait(options.waitS) * 1000, POLL_CAP_MS, options.clock);
+    return poll(client, id, started + clampWait(options.waitS) * 1000, POLL_CAP_MS, options.budget);
   }
   const schema = responseSchemaFor(req.op, false);
   const checked = schema === null ? { success: true as const } : schema.safeParse(body);
@@ -156,15 +154,16 @@ export async function execute(client: IdeogramClient, req: ApiRequest, options: 
   if (payload !== null) return { kind: "completed", generationId, payload, usageCostUsdMicros: null };
   if (generationId === null) throw new Error(`${req.op.id} answered without a payload or a generation id`);
   const deadline = started + clampWait(options.waitS) * 1000;
-  return poll(client, generationId, deadline, isVideo(req.op) ? POLL_CAP_VIDEO_MS : POLL_CAP_MS, options.clock);
+  return poll(client, generationId, deadline, isVideo(req.op) ? POLL_CAP_VIDEO_MS : POLL_CAP_MS, options.budget);
 }
 
 /** Resumes a generation by id: the same bounded wait, from now. */
 export async function resume(client: IdeogramClient, generationId: string, options: WaitOptions & { readonly video?: boolean }): Promise<Outcome> {
   const deadline = options.clock.now() + clampWait(options.waitS) * 1000;
-  const first = await fetchGeneration(client, generationId);
+  // the status is read once whatever the wait (wait_s 0 is "tell me now"): only the polls are bounded by it
+  const first = await fetchGeneration(client, generationId, options.budget);
   if (first.kind !== "pending") return first;
-  return poll(client, generationId, deadline, options.video ? POLL_CAP_VIDEO_MS : POLL_CAP_MS, options.clock);
+  return poll(client, generationId, deadline, options.video ? POLL_CAP_VIDEO_MS : POLL_CAP_MS, options.budget);
 }
 
 const GENERATION_OP = operationById("get_generation_v2");
@@ -176,11 +175,11 @@ function transientPollFailure(error: IdeogramApiError): boolean {
 }
 
 /** One poll; a transient failure keeps the id (pending, with the error as its note) and is counted. */
-export async function fetchGeneration(client: IdeogramClient, generationId: string, timeoutMs?: number): Promise<Outcome> {
+export async function fetchGeneration(client: IdeogramClient, generationId: string, budget: CallBudget): Promise<Outcome> {
   if (GENERATION_OP === null) throw new Error("the snapshot lacks get_generation_v2");
   let result;
   try {
-    result = await client.call({ op: GENERATION_OP, path: { generation_id: generationId }, query: {}, headers: {}, body: null, dryRun: false, timeoutMs });
+    result = await client.call({ op: GENERATION_OP, path: { generation_id: generationId }, query: {}, headers: {}, body: null, dryRun: false }, budget);
   } catch (error) {
     if (!(error instanceof IdeogramApiError) || !transientPollFailure(error)) throw error;
     COUNTERS.pollErrors += 1;
@@ -209,13 +208,15 @@ function generationOutcome(generationId: string, status: number, body: unknown):
   return { kind: "completed", generationId, payload, usageCostUsdMicros: g.usage_cost_usd_micros ?? null };
 }
 
-async function poll(client: IdeogramClient, generationId: string, deadline: number, capMs: number, clock: Clock): Promise<Outcome> {
+/** Polls until the wait's deadline or the call's, whichever is first: a poll never outlives either. */
+async function poll(client: IdeogramClient, generationId: string, waitDeadline: number, capMs: number, budget: CallBudget): Promise<Outcome> {
+  const bounded = boundedBy(budget, waitDeadline);
+  const clock = bounded.clock;
   let delay = POLL_FIRST_MS;
   for (;;) {
-    if (clock.now() + delay > deadline) return { kind: "pending", generationId, note: null };
+    if (clock.now() + delay > bounded.deadline) return { kind: "pending", generationId, note: null };
     await clock.sleep(delay);
-    // the poll may not outlive the wait: its timeout is what remains of the deadline (at least one second)
-    const outcome = await fetchGeneration(client, generationId, Math.max(1_000, deadline - clock.now()));
+    const outcome = await fetchGeneration(client, generationId, bounded);
     if (outcome.kind !== "pending" || outcome.note !== null) return outcome;
     delay = Math.min(delay * POLL_FACTOR, capMs);
   }

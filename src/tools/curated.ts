@@ -70,7 +70,7 @@ export const FAMILY_TOOLS: readonly FamilyToolSpec[] = [
 
 async function runFamilyTool(spec: FamilyToolSpec, ctx: ToolContext, args: ToolArguments): Promise<CallToolResult> {
   const call = await prepare(spec, args);
-  const outcome = await execute(ctx.client, call.req, { waitS: call.waitS, clock: ctx.clock });
+  const outcome = await execute(ctx.client, call.req, { waitS: call.waitS, clock: ctx.clock, budget: ctx.budget });
   return outcomeResult(ctx, outcome, call.notes);
 }
 
