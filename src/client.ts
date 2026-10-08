@@ -397,7 +397,7 @@ async function streamToFile(response: Response, outputDir: string, extension: st
   } catch (error) {
     // The download already failed with `error`; closing and removing the partial file must not replace it.
     await handle.close().catch(() => undefined);
-    await rm(partial, { force: true });
+    await rm(partial, { force: true }).catch(() => undefined); // a failed removal must not replace the download's error either
     throw error;
   }
 }
