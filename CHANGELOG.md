@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.0.0] - 2026-10-07
+## [2.0.0] - 2026-10-09
 
 The server moves to Ideogram's v2 API and is built from its OpenAPI specification: every image model the platform
 sells through an API key is reachable, priced before a call, and collected by id when it runs long
@@ -53,6 +53,9 @@ sells through an API key is reachable, priced before a call, and collected by id
   nothing of a call outlives its caller — a POST is resent only with time for an attempt as long as the rejected one,
   a cut download is listed as not saved beside the generation id (typed `CALL_TIMEOUT` / `CANCELLED`), and
   `ideogram_api` refuses `async: false` (a synchronous result this server could not wait for).
+- A cut attempt is typed by construction (review rounds 3–6 of #36, two recorded step-backs): one timer per bound — the
+  budget's own signal alone when it is the shorter bound, so no second timer races the same instant — and a poll the
+  wait cuts in flight is a clean Pending (collect it with `ideogram_generation`), never "the last poll failed".
 - A 2xx body the specification's schema rejects is reported as a contract mismatch with the generation id, never as a
   success.
 
