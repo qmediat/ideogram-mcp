@@ -31,3 +31,5 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm audit --omit=dev --audit-level=high
+      - name: The generator toolchain's lockfile carries no high advisory (the js-yaml override of #38 holds)
+        run: npm audit --prefix scripts/spec-gen --audit-level=high
