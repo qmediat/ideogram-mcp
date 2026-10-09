@@ -26,6 +26,8 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
+      - name: The generated code is what the committed snapshot generates
+        run: npm ci --prefix scripts/spec-gen && npm run spec:check
       - run: npm run typecheck
       - run: npm test
       - run: npm audit --omit=dev --audit-level=high

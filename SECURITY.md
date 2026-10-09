@@ -21,7 +21,7 @@ We will acknowledge your report within 48 hours and aim to release a fix within 
 | Measure | Implementation |
 |---------|---------------|
 | **2 runtime dependencies only** | `@modelcontextprotocol/sdk` + `zod` — no axios, no form-data |
-| **Native fetch** | Node.js built-in `fetch`, `FormData`, `Blob` — no HTTP library |
+| **Native fetch** | Node.js built-in `fetch`; multipart bodies encoded by the server itself — no HTTP library |
 | **Pinned exact versions** | No `^` or `~` ranges in `package.json` |
 | **No eval/exec** | Zero usage of `eval()`, `child_process`, `exec`, or `Function()` in the server (`src/`); the smoke test in `test/` spawns the built server to talk to it over stdio |
 | **No telemetry** | No analytics, no phoning home, no tracking |
@@ -32,31 +32,31 @@ We will acknowledge your report within 48 hours and aim to release a fix within 
 
 | Threat | Protection |
 |--------|-----------|
-| **SSRF via download URLs** | HTTPS required + hostname allowlist (`ideogram.ai`, `api.ideogram.ai`, known CDN) |
+| **SSRF via download URLs** | HTTPS required + hostname allowlist (`ideogram.ai` and its subdomains, the known CDN) |
 | **SSRF via redirects** | `redirect: "manual"` — all redirects blocked and reported |
 | **API key exfiltration** | Key sent only to `api.ideogram.ai` (hardcoded base URL), never logged |
-| **Request timeout** | `AbortSignal.timeout(120s)` on every outbound request; a timed-out request is not retried (the server may have accepted and billed it), only connection failures and 429/5xx are |
-| **Content-Type validation** | Downloads must have `image/*` Content-Type — HTML/JSON error pages rejected |
-| **Download size limit** | Content-Length pre-check + post-download buffer size cap (50 MB) |
+| **Request timeout** | One budget per tool call: 55 s (the MCP client's 60 s minus a margin), ended earlier by the caller's cancellation; every attempt (bounded by the budget's remainder; the 120 s attempt cap applies only to a caller whose budget leaves more than that — never inside a tool call), retry sleep, poll and download of the call is judged against what remains. A POST is sent again only when it never left the machine (DNS, a refused connect) or got a 429; a timeout, a reset or a 5xx after sending is reported, never repeated (one call never creates two billed jobs). A GET (a poll, a download) is retried on network failures, 429 and 5xx |
+| **Content-Type validation** | Downloads must be an image type or `video/mp4` — HTML/JSON error pages rejected |
+| **Download size limit** | Content-Length pre-check, then the body streamed to a partial file with a byte counter: stopped at 50 MB, the partial file removed |
 
 ### Local File Security
 
 | Threat | Protection |
 |--------|-----------|
-| **Path traversal** | Extension allowlist (`.png`, `.jpg`, `.jpeg`, `.webp` only) |
+| **Path traversal** | Extension allowlist for uploads (`.png`, `.jpg`, `.jpeg`, `.webp` — the types the specification names); the local file name is never sent (a file goes as `<field>.<ext>`) |
 | **Symlink attacks** | `lstat()` on the image path before reading — a symlinked file is rejected; a symlinked parent directory is resolved |
-| **File size DoS** | `stat()` check before read — 25 MB limit per image (Ideogram's documented maximum); `ideogram_edit` refuses image + mask at or over Ideogram's 50 MB request limit before uploading |
+| **File size DoS** | `stat()` check of every file before any is read, against its operation and field's own limit as Ideogram's specification states it (describe 10 MB, remix 50 MB, 25 MB × 5 for Ideogram 4.5's images, …; 50 MB where none is stated), the number of files per field and any whole-request cap |
 | **Filename injection** | Output filenames are `ideogram-{timestamp}-{random}.{ext}` — no user input |
-| **Output directory escape** | `path.relative()` containment check on all saved files |
+| **Output directory escape** | Saved files are named by the server (no input in the name) directly in the output directory |
 
 ### Data Validation
 
 | Layer | Mechanism |
 |-------|-----------|
-| **Input validation** | Zod schemas on all tool parameters (type, range, enum) |
-| **Response validation** | Zod schemas on every success response; an error body is read as `{code?, message?}` |
+| **Input validation** | Each model's request schema generated from Ideogram's specification, plus reviewed rules the specification states only in prose; a parameter the model does not take is refused by name |
+| **Response validation** | The generated schema on every success response — a body it rejects is reported as a contract mismatch, never as a success; 402/429 bodies are typed (`GenerationErrorResponse`), other error bodies read for their message |
 | **Error isolation** | `IdeogramApiError` class — raw stack traces never exposed to MCP clients |
-| **Retry logic** | Exponential backoff with jitter for 429/500/502/503/504 + network errors |
+| **Retry logic** | Exponential backoff with jitter (or `Retry-After`), on the conditions in the request-timeout row above |
 
 ### What This Server Does NOT Do
 

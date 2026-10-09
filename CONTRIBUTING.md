@@ -4,8 +4,8 @@ Thank you for your interest in contributing! This is an open-source project by [
 
 ## Architecture Principles
 
-- **Zero axios** — use Node.js native `fetch`, `FormData`, `Blob`
-- **Zod v4** — all input schemas and response validation use `zod/v4`
+- **Zero axios** — use Node.js native `fetch`
+- **Zod v4** — input schemas and response validation use `zod/v4`; request and response schemas are generated from the specification (`src/generated/`, never edited by hand)
 - **MCP SDK** — `@modelcontextprotocol/sdk` with `registerTool()` API
 - **Security first** — see [SECURITY.md](./SECURITY.md) for the full model
 - **Minimal dependencies** — 2 runtime deps only, no exceptions without discussion
@@ -32,13 +32,20 @@ bundled TypeScript.
 
 ## Adding a New Tool
 
-1. Create `src/tools/your-tool.ts` following the pattern of existing tools
-2. Define a Zod input schema with `.describe()` on every field
-3. Use `loadImageBlob()` from `image-input.ts` for image inputs
-4. Use `IdeogramResponseSchema.parse()` for response validation
-5. Handle `url: null` (safety-filtered images)
-6. Use `Promise.allSettled` for multi-image downloads
-7. Register in `src/server.ts` via `server.registerTool()`
+The specification decides the fields; the code decides the behaviour (`docs/adr/0001-openapi-snapshot-as-the-source-of-truth.md`).
+
+1. A model family: add a `FamilyToolSpec` to `src/tools/curated.ts` (name, family, default model, our own description);
+   its models and their fields come from the registry and the generated schemas, its checks from `src/tools/family.ts`.
+2. Mark the family's operations `curated` in `src/spec/support.ts`; a rule the specification states only in prose goes
+   to `src/spec/overlay.ts` with the phrase that states it.
+3. Anything else: a `ToolDefinition` in `src/tools/`, registered in `toolDefinitions()` in `src/server.ts`.
+4. Tests in `test/` against the fake API (`test/support/fake-api.mjs`): the wire body, the refusals, the outcome. Keep
+   `test/budget.test.mjs` green — tools/list stays within 64 KB.
+5. `npm run docs:api` regenerates `docs/API-REFERENCE.md`.
+
+A snapshot update: `node scripts/spec-pull.mjs --write`, `npm ci --prefix scripts/spec-gen && npm run spec:generate`,
+read the diff of `src/generated/`, then `npm test` (the class counts, the registry and the anchored rules say what
+needs a decision).
 
 ## Pull Requests
 

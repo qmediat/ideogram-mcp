@@ -1,0 +1,5 @@
+# Generated from the committed specification snapshot (scripts/spec-generate.mjs, scripts/api-reference.mjs): CI
+# regenerates them and fails when they differ. Collapsed on GitHub; a review reads the generator config and the lists instead.
+src/generated/** linguist-generated=true -diff
+spec/openapi.json linguist-generated=true -diff
+docs/API-REFERENCE.md linguist-generated=true

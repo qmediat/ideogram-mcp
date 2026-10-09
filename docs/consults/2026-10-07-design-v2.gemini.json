@@ -1,0 +1,111 @@
+{
+  "answers": [
+    {
+      "question": 1,
+      "recommendation": "One tool per family with a model enum and union of fields.",
+      "reason": "Exposing 60+ tools overwhelms the LLM context window and MCP client UI. A single tool per family reduces clutter, and schema validation can easily catch invalid parameter combinations."
+    },
+    {
+      "question": 2,
+      "recommendation": "Commit the generated code.",
+      "reason": "Ensures deterministic installs, avoids build-time network dependencies or generation tool failures, and allows reviewers to track schema drift directly in version control diffs."
+    },
+    {
+      "question": 3,
+      "recommendation": "Include it, but clearly document it as an advanced fallback.",
+      "reason": "It guarantees 100% platform coverage immediately, unblocking edge use cases before curation, though its massive schema may challenge some LLM context limits."
+    },
+    {
+      "question": 4,
+      "recommendation": "Weekly issue.",
+      "reason": "Provider-side API additions are out of your control and shouldn't break CI. A weekly issue alerts maintainers to update the spec without blocking urgent hotfixes."
+    },
+    {
+      "question": 5,
+      "recommendation": "A clean break at 2.0.0.",
+      "reason": "Major versions exist exactly for breaking changes. Carrying legacy aliases adds technical debt and inflates the MCP schema unnecessarily."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F1",
+      "section": "2",
+      "severity": "P1",
+      "problem": "LLM clients typically time out after 60-120 seconds. A 10-30 minute blocking poll inside a tool call will cause the LLM run to fail entirely.",
+      "change": "Set the default lifecycle timeout to 60s, returning a 'pending' state with the generation_id so the LLM can explicitly resume/poll.",
+      "blocks_step0": true
+    },
+    {
+      "id": "F2",
+      "section": "2",
+      "severity": "P1",
+      "problem": "Exposing 200 operations via a single `ideogram_api` tool requires a massive JSON schema that will likely exceed LLM context window and schema size limits.",
+      "change": "Remove the generic `ideogram_api` tool, or split it into smaller category-specific raw tools to prevent schema explosion.",
+      "blocks_step0": true
+    },
+    {
+      "id": "F3",
+      "section": "4",
+      "severity": "P1",
+      "problem": "Assuming Zod catches all 400 errors is dangerous; APIs often have undocumented business logic constraints (e.g., aspect ratios) missing from OpenAPI.",
+      "change": "Catch 400 Bad Request errors from the fetch call and format them cleanly as tool errors rather than relying solely on Zod.",
+      "blocks_step0": true
+    },
+    {
+      "id": "F4",
+      "section": "2",
+      "severity": "P1",
+      "problem": "A union schema with optional fields allows the LLM to hallucinate invalid field combinations, wasting API calls or turns on validation errors.",
+      "change": "Use JSON Schema `oneOf` or discriminated unions based on the `model` field to give exact contextual auto-complete.",
+      "blocks_step0": true
+    },
+    {
+      "id": "F5",
+      "section": "7",
+      "severity": "P2",
+      "problem": "Silently defaulting `generate` to `ideogram-4-5` instead of `ideogram-3` will significantly increase cost per request for 1.x users upgrading.",
+      "change": "Require the `model` field to be explicit, or keep the default to the cheapest/closest equivalent from 1.x.",
+      "blocks_step0": true
+    },
+    {
+      "id": "F6",
+      "section": "5",
+      "severity": "P2",
+      "problem": "Polling every 10 seconds for up to 30 minutes (video) generates 180 requests per generation, risking 429 rate limits for concurrent usage.",
+      "change": "Increase the maximum polling backoff cap to 30 or 60 seconds for long-running async tasks like video.",
+      "blocks_step0": true
+    },
+    {
+      "id": "F7",
+      "section": "5",
+      "severity": "P2",
+      "problem": "Auto-downloading multiple high-res images into memory before returning the tool result can cause out-of-memory errors or severe delays.",
+      "change": "Stream downloads directly to disk, or return URLs by default and provide a separate tool for local downloading.",
+      "blocks_step0": true
+    },
+    {
+      "id": "F8",
+      "section": "2",
+      "severity": "P2",
+      "problem": "If a generation is flagged unsafe (url null), the user might still be charged without knowing exactly why their prompt was blocked.",
+      "change": "Surface specific safety/moderation warnings from the response data so the LLM can understand and adjust the prompt.",
+      "blocks_step0": false
+    },
+    {
+      "id": "F9",
+      "section": "2",
+      "severity": "P3",
+      "problem": "The `Result` type uses `usage_cost_usd_micros` but fails to map this to the user's primary billing unit (credits) for actual runs.",
+      "change": "Add a helper to convert and surface `credits` in the `Result` type, mirroring the `Quote` object's dual display.",
+      "blocks_step0": false
+    },
+    {
+      "id": "F10",
+      "section": "6",
+      "severity": "P3",
+      "problem": "Assuming `dry_run` works on accounts with exactly zero credits might be false if the API checks balance before quoting.",
+      "change": "Document the requirement for the test account to have a non-zero balance even for running the `dry_run` test suite.",
+      "blocks_step0": false
+    }
+  ]
+}

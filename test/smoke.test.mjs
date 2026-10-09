@@ -1,4 +1,4 @@
-// Smoke test: the built server starts over stdio, completes the MCP handshake and lists its seven tools.
+// Smoke test: the built server starts over stdio, completes the MCP handshake and lists its tools.
 // Runs with Node's built-in test runner (`npm test`, which builds first), no extra dependency. The placeholder
 // API key is never sent anywhere because `initialize` and `tools/list` do not call the Ideogram API.
 import assert from "node:assert/strict";
@@ -14,12 +14,17 @@ const PACKAGE_VERSION = JSON.parse(readFileSync(new URL("../package.json", impor
 const REQUEST_TIMEOUT_MS = 10_000;
 const EXPECTED_TOOLS = [
   "ideogram_generate",
-  "ideogram_describe",
-  "ideogram_edit",
+  "ideogram_inpaint",
   "ideogram_remix",
   "ideogram_reframe",
   "ideogram_replace_background",
   "ideogram_upscale",
+  "ideogram_describe",
+  "ideogram_edit",
+  "ideogram_quote",
+  "ideogram_generation",
+  "ideogram_operations",
+  "ideogram_api",
 ];
 
 /** Spawns the built server; every request either resolves with its response or rejects (timeout, child exit, error). */
@@ -75,7 +80,7 @@ function startServer(env) {
   return { closed, request, notify, stop, stderr: () => stderr };
 }
 
-test("the server completes the MCP handshake, advertises the package version and lists the seven tools", async () => {
+test("the server completes the MCP handshake, advertises the package version and lists the tools of this release", async () => {
   const server = startServer({ ...process.env, IDEOGRAM_API_KEY: "smoke-test-placeholder" });
   try {
     const init = await server.request("initialize", {

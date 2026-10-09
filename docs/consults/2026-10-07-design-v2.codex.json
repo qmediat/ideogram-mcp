@@ -1,0 +1,151 @@
+{
+  "answers": [
+    {
+      "question": 1,
+      "recommendation": "Use one tool per family with a model enum, compact advertised inputs, strict validation against the selected model, and on-demand model-specific schemas/examples. Split families only where contracts or client compatibility require it.",
+      "reason": "Sixty-plus tools increase selection overhead, but a flat union also hides required fields and incompatible combinations. Measure tools/list size and client behavior; tool count alone is insufficient."
+    },
+    {
+      "question": 2,
+      "recommendation": "Commit generated code, the OpenAPI snapshot, the documentation index, reviewed overrides and generator configuration. Pin generator versions and require deterministic regeneration with no diff in CI.",
+      "reason": "Both approaches can build offline; committed output makes generator changes reviewable. Snapshot references below mean ~/.claude/state/ideogram-spec/openapi-2026-10-07.json, verified SHA-256 919a744eb885e9fb6ef4cbf75f0888c97dc95006bbec845400fb392e7cb95a05."
+    },
+    {
+      "question": 3,
+      "recommendation": "Include ideogram_api from day one as an advanced fallback, restricted to explicitly supported operations. Provide operation discovery, schemas, examples and capability metadata. Make undocumented operations opt-in.",
+      "reason": "A raw interface usefully closes coverage gaps, but structural validation does not establish runtime support, retry safety or result handling. It must share the curated tools' transport, file and lifecycle policies."
+    },
+    {
+      "question": 4,
+      "recommendation": "Use a weekly issue with semantic drift detection covering operations, referenced schemas, authentication and documentation membership. Keep ordinary CI tied to the committed snapshot.",
+      "reason": "Upstream changes should trigger review without making unrelated builds nondeterministic. CI should fail on inconsistent committed artifacts; new upstream operations must never become exposed automatically."
+    },
+    {
+      "question": 5,
+      "recommendation": "Keep existing names and aliases throughout 2.x, backed by explicit compatibility adapters. Preserve old defaults in a documented compatibility profile, pin canonical defaults per release, and publish unsupported mappings before removing aliases in 3.x.",
+      "reason": "Aliases preserve names, not behavior. Existing calls omit model, use uppercase enums and depend on endpoint-specific controls (src/tools/generate.ts:18; src/tools/upscale.ts:8). Silent substitutions can change outputs, validity and cost."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F1",
+      "section": "1, 6",
+      "severity": "P1",
+      "problem": "The snapshot's describe endpoints and several workflows have no dry_run parameter. Section 6 nevertheless calls every curated operation with dry_run=true. An endpoint ignoring that unsupported query parameter could execute and bill a supposedly free CI request.",
+      "change": "Maintain an explicit quote-capability allowlist. Reject unsupported quotes locally without HTTP. Run credentialed dry-run tests only for confirmed operations, assert the query reaches the wire, and never fall back to execution when quoting fails.",
+      "blocks_step0": true
+    },
+    {
+      "id": "F2",
+      "section": "1, 7",
+      "severity": "P1",
+      "problem": "The migration contradicts GenerateImageIdeogramV3Request and GenerateImageIdeogramV4Request: both still use rendering_speed with lowercase turbo/default/quality. Globally translating it to quality breaks those models; FLASH has no corresponding speed there. Name aliases alone do not preserve existing calls.",
+      "change": "Define compatibility per operation and model, including enum casing, defaults, reference controls and outputs. Keep rendering_speed where supported; translate only proven equivalents. Explicitly reject unsupported values or retain a v1 compatibility route instead of silently changing semantics.",
+      "blocks_step0": true
+    },
+    {
+      "id": "F3",
+      "section": "2, 5",
+      "severity": "P1",
+      "problem": "Lifecycle holds calls for 10–30 minutes, but the installed SDK defaults to 60 seconds (node_modules/@modelcontextprotocol/sdk/dist/esm/shared/protocol.js:8,740). Clients can time out before receiving the generation ID, lose access to paid work, and resubmit it.",
+      "change": "Return the generation ID immediately after acceptance; make bounded waiting optional. Resume by ID across restarts, retain operation/model context, propagate cancellation to polling, and distinguish stopping local waiting from cancelling provider execution. Coordinate polling limits across concurrent jobs.",
+      "blocks_step0": true
+    },
+    {
+      "id": "F4",
+      "section": "3, 4",
+      "severity": "P1",
+      "problem": "Keeping today's retries preserves automatic POST retries after connection resets and 5xx responses (src/client.ts:105,120; src/errors.ts:17,24). Either can happen after a generation was accepted, so one tool call can create multiple billed jobs.",
+      "change": "Attach retry safety to each operation. Retry submissions only with verified provider idempotency or confirmed rejection before acceptance. Otherwise return an explicit unknown-outcome error. Retry polling/downloads separately; bound and cancel delays, honoring Retry-After rather than truncating it.",
+      "blocks_step0": true
+    },
+    {
+      "id": "F5",
+      "section": "2, 3",
+      "severity": "P1",
+      "problem": "The snapshot defines PriceQuote but no operation response references it. Generating only declared operation-response schemas therefore rejects successful quotes. Reachability-based filtering could also discard PriceQuote, despite quoting being a step 0 requirement.",
+      "change": "Add a reviewed schema overlay for dry_run response selection and explicitly retain PriceQuote. Select response validators by operation, status, media type and execution mode. Test quotes independently of generated examples, including estimated quotes and optional upper bounds.",
+      "blocks_step0": true
+    },
+    {
+      "id": "F6",
+      "section": "2, 3",
+      "severity": "P1",
+      "problem": "Operation and RawCall flatten requests into one schema and params object, omitting parameter locations, media alternatives and serialization rules. The snapshot requires path-bound generation_id, query-bound usage filters, repeated query arrays, and JSON-encoded multipart fields.",
+      "change": "Represent path, query, headers and body separately; retain OpenAPI style/explode, media types and multipart encoding. Define ordered repeated file parts and collisions with params. Centralize serialization so curated tools, raw calls and quotes produce the same validated wire request.",
+      "blocks_step0": true
+    },
+    {
+      "id": "F7",
+      "section": "2, 3, 8",
+      "severity": "P1",
+      "problem": "Result assumes generation_id, seed and images. Snapshot describe responses use description_id and text or json_prompt; GenerationResponse_data_inner includes video, SVG and layered outputs. Some outputs lack seeds, and polled costs remain optional. The shared lifecycle cannot return its declared type.",
+      "change": "Separate execution state from typed output payloads. Support descriptions, images, video and layered artifacts with optional identifiers, seeds and measured costs. Preserve asset identifiers, per-artifact download errors and remote URLs; expose structured MCP results plus a readable text fallback.",
+      "blocks_step0": true
+    },
+    {
+      "id": "F8",
+      "section": "2, 4, 6",
+      "severity": "P1",
+      "problem": "Generated schemas cannot guarantee that validation errors never reach the API. DescribeImageIdeogramV4Request permits an empty object; image-source requirements, mask compatibility and size constraints appear only in descriptions. Authentication, ownership and safety failures remain server decisions.",
+      "change": "Keep generated structural validation separate from reviewed semantic constraints. Validate file metadata and cross-field dependencies before submission. Handle all HTTP errors and terminal generation failures explicitly, including unstructured bodies; never classify an undocumented server failure as impossible.",
+      "blocks_step0": true
+    },
+    {
+      "id": "F9",
+      "section": "2, 8",
+      "severity": "P1",
+      "problem": "Day-one raw access includes later-release video, workflows and v1 training, while their handling is deferred. Sections 2 and 8 also disagree about when v1_only becomes callable. Exposure class currently substitutes for implementation readiness.",
+      "change": "Track classification and runtime support separately. Publish an explicit operation allowlist for each release. Either implement lifecycle, serialization and result handling for every day-one raw operation now, or advertise unsupported operations as unavailable until their family ships.",
+      "blocks_step0": true
+    },
+    {
+      "id": "F10",
+      "section": "4",
+      "severity": "P1",
+      "problem": "Returning schema-rejected bodies as ordinary results (docs/DESIGN-ideogram-v2.md:143) defeats the promised typed boundary. Curated lifecycle/download code cannot safely consume them, and callers cannot distinguish a contract failure from successful completion of a paid request.",
+      "change": "Return a discriminated contract_mismatch outcome with status, recoverable generation ID and bounded, redacted diagnostics. Never pass rejected payloads to typed handlers or automatically repeat generation. Preserve unknown fields only within validated envelopes; make full raw diagnostics an explicit option.",
+      "blocks_step0": true
+    },
+    {
+      "id": "F11",
+      "section": "1, 3",
+      "severity": "P2",
+      "problem": "Provider x-tool-description text contains host-specific instructions: GenerateImageIdeogram45Request says files cannot be sent, quality must be medium, and async is always forced. Reusing these descriptions misrepresents this server's file support and configurable execution policy.",
+      "change": "Treat provider extensions as source material, not executable product policy. Maintain reviewed description overrides for this MCP server. Keep runtime behavior, advertised defaults and examples consistent; validate example hosts without adding placeholder hosts to download permissions.",
+      "blocks_step0": true
+    },
+    {
+      "id": "F12",
+      "section": "3, 5",
+      "severity": "P1",
+      "problem": "The universal 25 MB upload cap conflicts with snapshot limits: describe accepts 10 MB, precise edit 50 MB. The inherited downloader buffers the entire response before enforcing its cap (src/client.ts:217), so 50 MB is not a memory bound.",
+      "change": "Define per-operation file counts, byte limits and MIME policies, plus aggregate request and concurrency limits. Stream downloads with byte counting and cancellation. Keep unsupported media unavailable until handled; return server-local paths and accessible artifact references with explicit retention and expiry.",
+      "blocks_step0": true
+    },
+    {
+      "id": "F13",
+      "section": "6",
+      "severity": "P2",
+      "problem": "Schemas and synthetic fixtures derived from the same snapshot can agree while both serialize requests incorrectly. Failing because 1.x lacks a registry proves only feature absence. Seventeen example operations do not independently verify the much larger exposed surface.",
+      "change": "Use independently authored wire fixtures and negative semantic cases. Mutation-check wrong query placement, dropped multipart fields, forbidden exposure, duplicate POSTs and premature timeout. Test an actual MCP client disconnect and resumed result retrieval; paid smoke coverage remains explicit and separate.",
+      "blocks_step0": true
+    },
+    {
+      "id": "F14",
+      "section": "1, 2, 8, 9",
+      "severity": "P2",
+      "problem": "Classifying every unversioned path as obsolete permanently excludes /datasets and /models. The snapshot exposes both with API-key authentication, and TrainModelV3Request requires dataset_id. Step 5 promises these same dataset/model capabilities, contradicting the classification rule.",
+      "change": "Classify reviewed operations by capability and effective authentication, not URL age alone. Preserve a separate supported/exposed decision, resolve inherited security and overlapping classes explicitly, and add training's dependency operations before implementing step 5.",
+      "blocks_step0": false
+    },
+    {
+      "id": "F15",
+      "section": "2, 3, 5",
+      "severity": "P2",
+      "problem": "The stated step 2 inventory totals 16 tools: eleven image families, edit alias, quote, generation, raw and usage. A family union can also produce a large schema regardless of tool count; neither 15 tools nor 600 KB has measured justification.",
+      "change": "Snapshot actual tools/list schemas; budget serialized bytes, tokens, startup time and routing accuracy. Count compatibility aliases. Use compact family schemas with strict model-specific validation and on-demand operation discovery; split only families that fail client compatibility or usability checks.",
+      "blocks_step0": false
+    }
+  ]
+}
