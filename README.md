@@ -93,7 +93,7 @@ Add to `claude_desktop_config.json`:
 | `ideogram_upscale` | Enlarge an image | `auto` (default), `topaz-bloom-2`, `topaz-redefine`, `topaz-standard-2`, `topaz-text-refine`, `topaz-wonder-3-5`, `nano-banana-pro` |
 | `ideogram_describe` | Describe an image: words (`ideogram-3`, default) or a structured JSON prompt (`ideogram-4`) | `ideogram-3`, `ideogram-4` |
 | `ideogram_quote` | The price of a call: `{"tool": "ideogram_generate", "arguments": {…}}` | every model that offers a dry run (all but describe) |
-| `ideogram_generation` | Collect a generation by `generation_id` | — |
+| `ideogram_generation` | Collect a generation by `generation_id` (`video: true` for a video: the polls slow to 60 s apart, as the generating tool's wait did) | — |
 | `ideogram_operations` | What the API offers: families, operations, fields, limits | — |
 | `ideogram_api` | Any served operation by id (precise edit, remove background, remove object, …) | — |
 

@@ -11,7 +11,7 @@
  */
 import type { ZodType } from "zod/v4";
 import type { FileFieldFacts } from "./facts.js";
-import { generatedComponent, isExposable } from "./operations.js";
+import { isExposable } from "./operations.js";
 import type { Operation } from "./operations.js";
 
 /** A request body's fields as the caller gave them, after the operation's generated schema accepted them. */
@@ -44,13 +44,10 @@ export function quoteRefusal(op: Operation): string | null {
   return null;
 }
 
-const PRICE_QUOTE = generatedComponent("PriceQuote");
-
-/** The schema the 200 body of a call must match: PriceQuote for a dry run, else the operation's response. */
-export function responseSchemaFor(op: Operation, dryRun: boolean): ZodType | null {
-  if (!dryRun) return op.schemas.response;
-  if (PRICE_QUOTE === null) throw new Error("the generated code lacks PriceQuote: regenerate src/generated/");
-  return PRICE_QUOTE;
+/** The schema the 200 body of a call must match: the operation's response (a dry run's PriceQuote is cost.ts's own
+ * schema — one chooser per body). */
+export function responseSchemaFor(op: Operation): ZodType | null {
+  return op.schemas.response;
 }
 
 export interface FileLimit {

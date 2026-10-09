@@ -146,7 +146,7 @@ export async function execute(client: IdeogramClient, req: ApiRequest, options: 
     if (first.kind !== "pending") return first;
     return poll(client, id, started + clampWait(options.waitS) * 1000, POLL_CAP_MS, options.budget, first.note);
   }
-  const schema = responseSchemaFor(req.op, false);
+  const schema = responseSchemaFor(req.op);
   const checked = schema === null ? { success: true as const } : schema.safeParse(body);
   if (!checked.success) return contractMismatch(result.status, body, checked.error);
   const payload = payloadOf(body);

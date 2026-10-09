@@ -72,9 +72,8 @@ test("only an operation that declares dry_run may be quoted; describe may not", 
 test("a dry run is validated against PriceQuote, a real call against the operation's response", () => {
   const generate = op("post_generate_image_v2_ideogram_v3");
   const quote = { object: "price_quote", billing_identifier: "ideogram-3", quantity: 1, usd_micros: 60000, credit_millis: 60, qualifier: "exact" };
-  assert.equal(responseSchemaFor(generate, true).safeParse(quote).success, true);
-  assert.equal(responseSchemaFor(generate, false).safeParse(quote).success, false);
-  assert.equal(responseSchemaFor(generate, true).safeParse({ generation_id: "g", seed: 1 }).success, false);
+  assert.equal(responseSchemaFor(generate).safeParse(quote).success, false, "a quote is not the operation's response");
+  assert.equal(responseSchemaFor(generate).safeParse({ generation_id: "g", seed: 1 }).success, true, "the operation's response");
 });
 
 test("file limits are per operation and field, as the descriptions state them", () => {
