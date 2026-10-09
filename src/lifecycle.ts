@@ -176,13 +176,16 @@ function transientPollFailure(error: IdeogramApiError): boolean {
   return error.status === 0 || error.status === 429 || error.status >= 500;
 }
 
-/** One poll; a transient failure keeps the id (pending, with the error as its note) and is counted. */
+/** One poll; a transient failure keeps the id (pending, with the error as its note) and is counted. A poll the WAIT cuts
+ * in flight is the wait ending, not a poll failure: the id is pending with nothing to note (the caller collects it with
+ * ideogram_generation) — Grok r5. */
 export async function fetchGeneration(client: IdeogramClient, generationId: string, budget: CallBudget): Promise<Outcome> {
   if (GENERATION_OP === null) throw new Error("the snapshot lacks get_generation_v2");
   let result;
   try {
     result = await client.call({ op: GENERATION_OP, path: { generation_id: generationId }, query: {}, headers: {}, body: null, dryRun: false }, budget);
   } catch (error) {
+    if (error instanceof IdeogramApiError && error.code === "WAIT_TIMEOUT") return { kind: "pending", generationId, note: null };
     if (!(error instanceof IdeogramApiError) || !transientPollFailure(error)) throw error;
     COUNTERS.pollErrors += 1;
     return { kind: "pending", generationId, note: `the last poll failed: ${error.toMcpError()}` };

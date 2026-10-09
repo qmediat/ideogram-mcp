@@ -236,7 +236,7 @@ test("a budget bounded by a nearer deadline has a signal of its own that fires a
   assert.equal(ended.signal.aborted, false, "end() cleared the wait's timer");
 });
 
-test("a poll cut in flight by the WAIT is Pending with 'the wait ran out' noted — not the call's timeout (wait 3 s, the poll at 2 s hangs)", async () => {
+test("a poll cut in flight by the WAIT is a clean Pending — no 'last poll failed' note, not the call's timeout (wait 3 s, the poll at 2 s hangs)", async () => {
   const api = await startFakeApi((req) => (req.method === "POST" ? { json: { generation_id: "gW", seed: 1 } } : () => {}));
   try {
     const client = new IdeogramClient(testClientOptions(api.base, { maxRetries: 0 }).options);
@@ -244,7 +244,7 @@ test("a poll cut in flight by the WAIT is Pending with 'the wait ran out' noted 
     const started = Date.now();
     const outcome = await execute(client, jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x" }), { waitS: 3, clock: SYSTEM_CLOCK, budget: realBudget(30_000) });
     assert.equal(outcome.kind, "pending");
-    assert.match(outcome.note, /WAIT_TIMEOUT.*the wait ran out while the request was in flight/);
+    assert.equal(outcome.note, null, "the wait ending during a poll is a normal end, not a poll failure");
     assert.ok(Date.now() - started >= 2_900 && Date.now() - started < 4_500, `${Date.now() - started} ms: cut at the wait's 3 s, not at the call's 30 s`);
   } finally {
     await api.close();
