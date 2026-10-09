@@ -268,9 +268,10 @@ Measured on the PR's head (branch `qmt/v2-foundation`, 2026-10-07):
 
 Commands green at the head: `npm run typecheck`, `npm test` (83), `npm run spec:check` (regeneration byte-identical),
 `node scripts/api-reference.mjs --check`, `actionlint` on both workflows, `npm audit --omit=dev --audit-level=high`
-(0). The generator toolchain (`scripts/spec-gen/`, dev-only, never installed by users) carries js-yaml advisories
-GHSA-52cp-r559-cp3m / GHSA-2883-xcg3-v3hh through openapi-ts; it runs only on a maintainer's machine against the
-committed snapshot.
+(0). The generator toolchain (`scripts/spec-gen/`, dev-only, never installed by users) pins js-yaml 4.3.2 through an
+exact `overrides` entry (the nested copy openapi-ts' ref-parser pins carried GHSA-52cp-r559-cp3m / GHSA-5p4m-2wfm-xmqj /
+GHSA-2883-xcg3-v3hh — #38); CI audits that lockfile too (`npm audit --prefix scripts/spec-gen --audit-level=high`), so a
+regeneration cannot reinstall the advisory tree unseen; it runs only on a maintainer's machine against the committed snapshot.
 
 What the live suite found: the test's own PNG fixture wrote its size as one byte, so a 1024-pixel image had a zero
 IHDR and the API answered "Could not read a source image." (fixed: the size as 32-bit big-endian); and the API refuses

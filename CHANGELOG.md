@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- `scripts/spec-gen/`: js-yaml 4.3.2 through an exact `overrides` entry — the nested 4.2.0 openapi-ts' ref-parser pinned
+  carried GHSA-52cp-r559-cp3m, GHSA-5p4m-2wfm-xmqj and GHSA-2883-xcg3-v3hh (three high Dependabot alerts at the 2.0.0
+  release); the lockfile regenerated under the override (`npm ls js-yaml`: one 4.3.2); CI audits that lockfile (#38).
+
 ## [2.0.0] - 2026-10-09
 
 The server moves to Ideogram's v2 API and is built from its OpenAPI specification: every image model the platform
