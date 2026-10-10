@@ -151,12 +151,14 @@ test("the support table: the eleven image families' documented models and the ge
   }
   assert.equal(supportOf(op("post_reframe_image_auto")), "raw", "a spec-only image operation is raw (opt-in at call time)");
   assert.equal(supportOf(op("post_generate_video_seed_dance2_text_to_video")), "planned");
-  assert.equal(supportOf(op("get_account_usage")), "planned");
+  assert.equal(supportOf(op("get_account_usage")), "curated", "the account listings are curated since 2.2.0");
+  assert.equal(supportOf(op("get_asset_reference_usage")), "raw", "a spec-only operation of a curated family is raw (opt-in at call time)");
+  assert.equal(supportOf(op("get_webhook_signing_jwks")), "planned", "v1-only stays for step 5");
   assert.equal(supportOf(op("post_generate_image")), "unsupported", "legacy");
   assert.equal(servedByRawCall(op("post_ad_resizer")), false);
   const counts = {};
   for (const o of OPERATIONS) counts[supportOf(o)] = (counts[supportOf(o)] ?? 0) + 1;
-  assert.deepEqual(counts, { curated: 44, raw: 4, planned: 79, unsupported: 73 });
+  assert.deepEqual(counts, { curated: 47, raw: 5, planned: 75, unsupported: 73 });
 });
 
 test("a font field is the one whose description names the font formats; every other file field takes images", () => {

@@ -27,6 +27,9 @@ const EXPECTED_TOOLS = [
   "ideogram_edit",
   "ideogram_quote",
   "ideogram_generation",
+  "ideogram_usage",
+  "ideogram_invoices",
+  "ideogram_api_keys",
   "ideogram_operations",
   "ideogram_api",
 ];

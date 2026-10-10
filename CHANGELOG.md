@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 Step 1 of `docs/DESIGN-ideogram-v2.md`: every image family of Ideogram's documentation index has its own tool.
+Step 2: the account — usage and spend, invoices, API keys — and the webhook signature helper.
 
 ### Added
 
@@ -22,6 +23,29 @@ Step 1 of `docs/DESIGN-ideogram-v2.md`: every image family of Ideogram's documen
   each saved image under 3.75 MB (the model APIs behind the clients take 5 MiB of base64 per image), up to 10 MB per
   result, is also returned as MCP image content with its media type normalized, for a client without access to this
   machine's files; the others are named with their size and stay by path. Off by default.
+- `ideogram_usage`: the organization's billed API usage as Ideogram reports it (`GET /v2/account/usage`: dense time
+  buckets of line items — product, endpoint, cost, billed units, the redacted API key, the source), the last 7 days
+  by day (24 hours by hour) unless told otherwise, a range over the API's span (92 days at `1d`, 168 hours at `1h`)
+  refused before asking, summed per product, unit and currency as decimal strings (never floats; an amount the sums
+  cannot read is counted and listed, not summed — an unreadable quantity leaves the cost in), the buckets written
+  exactly as received to a JSON file in the output directory (named by the whole query, owner-readable: the line items
+  carry emails and key prefixes) and printed too when under 64 KB: the shape ai-cost reads; the end of the range is
+  always sent, so the span the tool checked is the span the API sees; every account answer — the invoices, the API
+  keys, one off its specification (reported as such, never as a success) — is written to an owner-readable file the
+  same way and shown inline under 64 KB. `ideogram_invoices` and
+  `ideogram_api_keys` list what their endpoints return as received. All three need an organization-admin key: a 404
+  is said as that, with Ideogram's words. Reads only, never billed.
+- `verifyWebhook` (`dist/webhooks.js`): the canonical message Ideogram signs
+  (`request_id\nuser_id\ntimestamp\nsha256_hex(body)`) checked against the JWKS of `GET /v1/.well-known/jwks.json`
+  with Ed25519, the header's key first, a rotated key still accepted, the signature as base64, base64url or hex; a
+  replay refused by the timestamp (300 s by default, `Infinity` turns it off; the signature alone never expires); a
+  missing header is null, never a throw. A helper for the receiver: this server receives no webhook itself (a stdio process has no public
+  URL); where `request_id`, `user_id` and `timestamp` travel is not stated by the specification.
+- `ideogram_operations` and the API reference list an operation's path and query parameters.
+- `get_asset_reference_usage` (spec-only) is served by `ideogram_api` behind `allow_undocumented`: a spec-only
+  operation of a curated family is raw, as the undocumented reframe models are. Support: curated 47 · raw 5 ·
+  planned 75. tools/list: 19 tools.
+
 - `ideogram_precise_edit` (Ideogram 4.5: the image, an optional mask, up to four `reference_images` or
   `reference_image_asset_identifiers`, `context_window`), `ideogram_remove_background` and `ideogram_remove_object`
   (ideogram-1), `ideogram_layerize` (Ideogram 3.0: the text-free base image is saved, the detected text blocks are

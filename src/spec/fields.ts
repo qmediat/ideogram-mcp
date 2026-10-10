@@ -31,6 +31,11 @@ function kindOf(property: JsonProperty, file: boolean): string {
   return typeof property.type === "string" ? property.type : property.anyOf ? "one of several shapes" : "object";
 }
 
+/** An operation's path and query parameters in one line each (headers are checked by name at call time, not listed). */
+export function parameterSummaries(op: Operation): string[] {
+  return op.facts.parameters.filter((p) => p.location !== "header").map((p) => `${p.name} (${p.location}${p.required ? ", required" : ""}${p.array ? ", repeated" : ""})`);
+}
+
 export function fieldSummaries(op: Operation): FieldSummary[] {
   if (op.schemas.body === null) return [];
   const json = z.toJSONSchema(op.schemas.body, { io: "input", unrepresentable: "any" }) as {

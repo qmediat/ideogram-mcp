@@ -4,7 +4,7 @@
  */
 import { z } from "zod/v4";
 import { countersLine } from "../counters.js";
-import { fieldSummaries } from "../spec/fields.js";
+import { fieldSummaries, parameterSummaries } from "../spec/fields.js";
 import { fileLimitsOf, MB, quoteAllowed, rulesOf } from "../spec/overlay.js";
 import { DOCS_INDEX_URL, FAMILIES, isExposable, operationById, OPERATIONS } from "../spec/operations.js";
 import type { Family, Operation } from "../spec/operations.js";
@@ -24,6 +24,11 @@ function fieldLines(op: Operation): string[] {
   return fieldSummaries(op).map((f) => `  ${f.name}${f.required ? " (required)" : ""}: ${f.kind}`);
 }
 
+function parameterLines(op: Operation): string[] {
+  const params = parameterSummaries(op);
+  return params.length === 0 ? [] : ["Parameters:", ...params.map((p) => `  ${p}`)];
+}
+
 function detail(op: Operation): string {
   const limits = fileLimitsOf(op).map((l) => `  ${l.field}: ${(l.maxBytes / MB).toFixed(0)} MB${l.stated ? "" : " (not stated by Ideogram; this server's cap)"}${l.maxItems === null ? "" : `, at most ${l.maxItems} files`}`);
   const rules = rulesOf(op).map((text) => `  ${text}`);
@@ -31,6 +36,7 @@ function detail(op: Operation): string {
     opLine(op),
     op.summary,
     `Body: ${op.body}; async: ${op.async}; call it with ideogram_api {"operation": "${op.id}", …}`,
+    ...parameterLines(op),
     "Fields:",
     ...fieldLines(op),
     ...(limits.length > 0 ? ["File limits:", ...limits] : []),
