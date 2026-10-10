@@ -13,20 +13,14 @@ import {
 } from "../generated/zod.gen.js";
 import { zModelStatus } from "../generated/zod.gen.js";
 import { constraintViolations } from "../spec/overlay.js";
-import { bodySchemaFor, operationById } from "../spec/operations.js";
+import { bodySchemaFor } from "../spec/operations.js";
 import type { Operation } from "../spec/operations.js";
 import { loadUploads } from "../uploads.js";
 import type { QueryValue } from "../wire.js";
 import type { ToolContext, ToolDefinition } from "./context.js";
 import type { ToolArguments } from "./family.js";
-import { apiErrorResult, readOperation } from "./reads.js";
+import { apiErrorResult, operation, rawLines, readOperation } from "./reads.js";
 import { jsonText, textResult } from "./results.js";
-
-function operation(id: string): Operation {
-  const op = operationById(id);
-  if (op === null) throw new Error(`the snapshot lacks ${id}`);
-  return op;
-}
 
 const LIST_DATASETS = operation("list_datasets");
 const GET_DATASET = operation("get_dataset");
@@ -64,13 +58,13 @@ async function runDatasets(ctx: ToolContext, args: ToolArguments): Promise<CallT
       if (!one.ok) return one.result;
       const d = one.data;
       const files = d.files.map((f) => `  ${f.file_name}${f.file_size_bytes === undefined ? "" : ` (${f.file_size_bytes} bytes)`}${f.caption ? ` — ${f.caption.length > 120 ? `${f.caption.slice(0, 120)}…` : f.caption}` : ""}`);
-      return textResult([`Dataset ${d.dataset.name} (${d.dataset.dataset_id}): ${d.file_count} file(s), ${d.custom_model_ids.length} model(s) trained from it${d.custom_model_ids.length > 0 ? `: ${d.custom_model_ids.join(", ")}` : ""}.`, ...files, "As Ideogram sent it:", jsonText(one.raw)].join("\n"));
+      return textResult([`Dataset ${d.dataset.name} (${d.dataset.dataset_id}): ${d.file_count} file(s), ${d.custom_model_ids.length} model(s) trained from it${d.custom_model_ids.length > 0 ? `: ${d.custom_model_ids.join(", ")}` : ""}.`, ...files, ...(await rawLines(ctx, "As Ideogram sent it", `dataset-${input.data.dataset_id}`, one.raw))].join("\n"));
     }
     const query: Record<string, QueryValue> = input.data.search === undefined ? {} : { search: input.data.search };
     const list = await readOperation(ctx, { op: LIST_DATASETS, query }, zListDatasetsResponse);
     if (!list.ok) return list.result;
     const rows = list.data.datasets.map((d) => `  ${d.name} (${d.dataset_id}), created ${d.creation_time}`);
-    return textResult([`${rows.length} dataset(s), most recently updated first.`, ...rows, "As Ideogram sent them:", jsonText(list.raw)].join("\n"));
+    return textResult([`${rows.length} dataset(s), most recently updated first.`, ...rows, ...(await rawLines(ctx, "As Ideogram sent them", `datasets-${ctx.clock.now()}`, list.raw))].join("\n"));
   } catch (error) {
     return apiErrorResult(error, "ideogram_datasets", OWNER);
   }
@@ -119,7 +113,7 @@ async function runUpload(ctx: ToolContext, args: ToolArguments): Promise<CallToo
     if (!answer.ok) return created === "" ? answer.result : textResult(`${created}${answer.result.content.map((c) => (c.type === "text" ? c.text : "")).join("")}`, true);
     const a = answer.data;
     const failed = a.failed_assets.map((f) => `  ${f.file_name ?? "(unnamed)"}: ${f.failure_reason}`);
-    const lines = [`${created}${a.success_count} of ${a.total_count} asset(s) uploaded to dataset ${datasetId}${a.failure_count > 0 ? `, ${a.failure_count} failed:` : "."}`, ...failed, "As Ideogram sent it:", jsonText(answer.raw)];
+    const lines = [`${created}${a.success_count} of ${a.total_count} asset(s) uploaded to dataset ${datasetId}${a.failure_count > 0 ? `, ${a.failure_count} failed:` : "."}`, ...failed, ...(await rawLines(ctx, "As Ideogram sent it", `dataset-upload-${datasetId}-${ctx.clock.now()}`, answer.raw))];
     return textResult(lines.join("\n"), a.success_count === 0);
   } catch (error) {
     return apiErrorResult(error, "ideogram_dataset_upload", OWNER);
@@ -186,14 +180,14 @@ async function runModels(ctx: ToolContext, args: ToolArguments): Promise<CallToo
     if (input.data.model_id !== undefined) {
       const one = await readOperation(ctx, { op: GET_MODEL, path: { model_id: input.data.model_id } }, zGetCustomModelResponse);
       if (!one.ok) return one.result;
-      return textResult([`Model:`, modelLine(one.data.model), `Training runs: ${one.data.model.training_runs?.length ?? 0}`, "As Ideogram sent it:", jsonText(one.raw)].join("\n"));
+      return textResult([`Model:`, modelLine(one.data.model), `Training runs: ${one.data.model.training_runs?.length ?? 0}`, ...(await rawLines(ctx, "As Ideogram sent it", `model-${input.data.model_id}`, one.raw))].join("\n"));
     }
     const query: Record<string, QueryValue> = {};
     if (input.data.scope !== undefined) query.scope = input.data.scope;
     if (input.data.status !== undefined) query.status = input.data.status;
     const list = await readOperation(ctx, { op: LIST_MODELS, query }, zListCustomModelsResponse);
     if (!list.ok) return list.result;
-    return textResult([`${list.data.models.length} custom model(s).`, ...list.data.models.map(modelLine), "As Ideogram sent them:", jsonText(list.raw)].join("\n"));
+    return textResult([`${list.data.models.length} custom model(s).`, ...list.data.models.map(modelLine), ...(await rawLines(ctx, "As Ideogram sent them", `models-${ctx.clock.now()}`, list.raw))].join("\n"));
   } catch (error) {
     return apiErrorResult(error, "ideogram_models", "the model is not yours, not shared with your organization, or does not exist");
   }

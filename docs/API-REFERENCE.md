@@ -1483,7 +1483,7 @@ No body.
 
 List datasets
 
-Parameters: `search` (query).
+Parameters: `search (query)`.
 
 No body.
 
@@ -1499,7 +1499,7 @@ Create a new dataset
 
 Get a dataset
 
-Parameters: `dataset_id` (path, required).
+Parameters: `dataset_id (path, required)`.
 
 No body.
 
@@ -1507,7 +1507,7 @@ No body.
 
 Train a model from a dataset
 
-Parameters: `dataset_id` (path, required).
+Parameters: `dataset_id (path, required)`.
 
 | field | kind | required |
 |---|---|---|
@@ -1517,7 +1517,7 @@ Parameters: `dataset_id` (path, required).
 
 Upload assets to a dataset
 
-Parameters: `dataset_id` (path, required).
+Parameters: `dataset_id (path, required)`.
 
 | field | kind | required |
 |---|---|---|
@@ -1529,7 +1529,7 @@ File limits: `files` 50 MB (not stated; this server's cap).
 
 List models
 
-Parameters: `scope` (query), `status` (query, repeated).
+Parameters: `scope (query)`, `status (query, repeated)`.
 
 No body.
 
@@ -1537,7 +1537,7 @@ No body.
 
 Get model details
 
-Parameters: `model_id` (path, required).
+Parameters: `model_id (path, required)`.
 
 No body.
 

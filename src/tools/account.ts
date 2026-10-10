@@ -7,41 +7,26 @@
  * not summed) and hands the buckets on exactly as received — written to a file in the output directory, inline too
  * when small: the shape ai-cost reads.
  */
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { z } from "zod/v4";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { ApiRequest } from "../client.js";
 import { decimalString } from "../cost.js";
-import { IdeogramApiError } from "../errors.js";
 import { zGetAccountUsageResponse, zListAccountApiKeysResponse, zListAccountInvoicesResponse } from "../generated/zod.gen.js";
-import { contractMismatch } from "../lifecycle.js";
-import { operationById } from "../spec/operations.js";
-import type { Operation } from "../spec/operations.js";
 import type { QueryValue } from "../wire.js";
 import type { ToolContext, ToolDefinition } from "./context.js";
 import type { ToolArguments } from "./family.js";
-import { jsonText, outcomeResult, textResult } from "./results.js";
+import { apiErrorResult, operation, rawLines, readOperation } from "./reads.js";
+import { textResult } from "./results.js";
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 const PLACES = 9; // every amount the API sends fits nine decimals
 const SCALE = 10n ** BigInt(PLACES);
-/** The buckets' JSON is printed inline up to this size; above it the file in the output directory is the answer. */
-const INLINE_JSON_BYTES = 64 * 1024;
-
 /** The API's range rules per bucket width: the default window this tool asks for, and the most one request may span. */
 const WIDTHS = {
   "1d": { defaultMs: 7 * DAY_MS, maxMs: 92 * DAY_MS, limit: "92 days" },
   "1h": { defaultMs: 24 * HOUR_MS, maxMs: 168 * HOUR_MS, limit: "168 hours" },
 } as const;
 type Width = keyof typeof WIDTHS;
-
-function operation(id: string): Operation {
-  const op = operationById(id);
-  if (op === null) throw new Error(`the snapshot lacks ${id}`);
-  return op;
-}
 
 const USAGE = operation("get_account_usage");
 const INVOICES = operation("get_account_invoices");
@@ -59,27 +44,6 @@ export function decimalUnits(text: string): bigint | null {
 /** Scaled units as a decimal string without trailing zeros. */
 export function unitsText(units: bigint): string {
   return decimalString(units, PLACES).replace(/\.?0+$/, "");
-}
-
-/** One GET of the operation with its query; the answer parsed by the schema (and kept raw), or a contract mismatch. */
-async function read<T extends z.ZodType>(ctx: ToolContext, op: Operation, query: Readonly<Record<string, QueryValue>>, schema: T): Promise<{ ok: true; data: z.infer<T>; raw: unknown } | { ok: false; result: CallToolResult }> {
-  const req: ApiRequest = { op, path: {}, query, headers: {}, body: null, dryRun: false };
-  const answer = await ctx.client.call(req, ctx.budget);
-  const parsed = schema.safeParse(answer.body);
-  if (parsed.success) return { ok: true, data: parsed.data as z.infer<T>, raw: answer.body };
-  // a listing off its schema is reported as such (never a success) AND kept as received: the data is the point of a listing
-  const mismatch = await outcomeResult(ctx, contractMismatch(answer.status, answer.body, parsed.error), []);
-  const said = mismatch.content[0]?.type === "text" ? mismatch.content[0].text : "";
-  const kept = await rawLines(ctx, "As Ideogram sent it (off the specification)", `${op.id}-mismatch-${ctx.clock.now()}`, answer.body);
-  return { ok: false, result: textResult([said, ...kept].join("\n"), true) };
-}
-
-/** The three listings answer 404 to a key another member owns: said as such, with the API's own words. */
-function adminOnly(error: unknown, what: string): CallToolResult | null {
-  if (error instanceof IdeogramApiError && error.status === 404) {
-    return textResult(`${what} needs an API key whose owner is an organization admin — Ideogram answers 404 to a key owned by another member (its answer: ${error.message}).`, true);
-  }
-  return null;
 }
 
 type Usage = z.infer<typeof zGetAccountUsageResponse>;
@@ -135,19 +99,6 @@ function summaryLines(usage: Usage, width: Width): string[] {
   return lines;
 }
 
-/** An answer exactly as received: written to a file in the output directory (named by what was asked, so two
- * reports never overwrite each other; readable by the owner only — the account's answers carry emails and key
- * prefixes), inline too when small. The one mechanism of every account listing, the mismatch path included. */
-async function rawLines(ctx: ToolContext, what: string, name: string, value: unknown): Promise<string[]> {
-  const text = JSON.stringify(value, null, 2) ?? "null";
-  const bytes = Buffer.byteLength(text, "utf8");
-  await mkdir(ctx.outputDir, { recursive: true });
-  const path = join(ctx.outputDir, `ideogram-${name}.json`);
-  await writeFile(path, text, { mode: 0o600 });
-  const head = `${what}: ${path} (${bytes} bytes, owner-readable)`;
-  return bytes <= INLINE_JSON_BYTES ? [head, text] : [`${head}; not printed here, over ${INLINE_JSON_BYTES} bytes`];
-}
-
 /** The file name of a usage report: the resolved query, every part present (the defaults spelled out). */
 function usageName(query: Readonly<Record<string, QueryValue>>, width: Width, sources: readonly string[]): string {
   const part = (v: QueryValue): string => String(v).replace(/[^0-9A-Za-z,]/g, "");
@@ -194,38 +145,38 @@ async function runUsage(ctx: ToolContext, args: ToolArguments): Promise<CallTool
   const checked = USAGE.schemas.query?.safeParse(query);
   if (checked !== undefined && !checked.success) return textResult(`ideogram_usage: ${checked.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")} (RFC 3339 times, e.g. 2026-10-01T00:00:00Z)`, true);
   try {
-    const answer = await read(ctx, USAGE, query, zGetAccountUsageResponse);
+    const answer = await readOperation(ctx, { op: USAGE, query }, zGetAccountUsageResponse);
     if (!answer.ok) return answer.result;
     const width = input.data.bucket_width ?? "1d";
     const sources = input.data.sources ?? ["api", "app"];
     const buckets = (answer.raw as { buckets?: unknown }).buckets ?? [];
     return textResult([...summaryLines(answer.data, width), ...(await rawLines(ctx, "Buckets as Ideogram sent them (the shape ai-cost reads)", usageName(query, width, sources), buckets))].join("\n"));
   } catch (error) {
-    return adminOnly(error, "Reading the usage") ?? Promise.reject(error);
+    return apiErrorResult(error, "Reading the usage", "needs an API key whose owner is an organization admin — Ideogram answers 404 to a key owned by another member");
   }
 }
 
 async function runInvoices(ctx: ToolContext): Promise<CallToolResult> {
   try {
-    const answer = await read(ctx, INVOICES, {}, zListAccountInvoicesResponse);
+    const answer = await readOperation(ctx, { op: INVOICES }, zListAccountInvoicesResponse);
     if (!answer.ok) return answer.result;
     const rows = answer.data.invoices.map((inv) => `${inv.start_time} → ${inv.end_time}: ${inv.total} ${inv.currency_code}, ${inv.status}${inv.paid_time ? `, paid ${inv.paid_time}` : ""} (${inv.line_items.length} line item(s))`);
     const raw = (answer.raw as { invoices?: unknown }).invoices ?? [];
     return textResult([`${rows.length} invoice(s).`, ...rows, ...(await rawLines(ctx, "Invoices as Ideogram sent them", `invoices-${ctx.clock.now()}`, raw))].join("\n"));
   } catch (error) {
-    return adminOnly(error, "Listing invoices") ?? Promise.reject(error);
+    return apiErrorResult(error, "Listing invoices", "needs an API key whose owner is an organization admin — Ideogram answers 404 to a key owned by another member");
   }
 }
 
 async function runApiKeys(ctx: ToolContext): Promise<CallToolResult> {
   try {
-    const answer = await read(ctx, API_KEYS, {}, zListAccountApiKeysResponse);
+    const answer = await readOperation(ctx, { op: API_KEYS }, zListAccountApiKeysResponse);
     if (!answer.ok) return answer.result;
     const rows = answer.data.api_keys.map((k) => `${k.redacted_api_key} (${k.api_key_id}) ${k.status}${k.label ? ` "${k.label}"` : ""}, created ${k.creation_time}${k.creator_display_label ? ` by ${k.creator_display_label}` : ""}`);
     const raw = (answer.raw as { api_keys?: unknown }).api_keys ?? [];
     return textResult([`${rows.length} API key(s), newest first (key material redacted by Ideogram).`, ...rows, ...(await rawLines(ctx, "API keys as Ideogram sent them", `api-keys-${ctx.clock.now()}`, raw))].join("\n"));
   } catch (error) {
-    return adminOnly(error, "Listing API keys") ?? Promise.reject(error);
+    return apiErrorResult(error, "Listing API keys", "needs an API key whose owner is an organization admin — Ideogram answers 404 to a key owned by another member");
   }
 }
 
