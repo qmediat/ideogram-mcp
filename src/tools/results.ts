@@ -43,16 +43,25 @@ async function saveImages(ctx: ToolContext, items: readonly ImageItem[]): Promis
   return { lines, saved };
 }
 
-/** A layerized design: its base image is saved as any image is; its text blocks follow as JSON. */
-async function layeredResult(ctx: ToolContext, items: readonly LayeredItem[]): Promise<{ lines: string[]; isError: boolean }> {
-  const base: ImageItem[] = items.map((item) => ({ url: item.baseImageUrl, resolution: item.resolution, seed: item.seed, prompt: null, isImageSafe: item.isImageSafe }));
-  const images = await saveImages(ctx, base);
-  const blocks = items.flatMap((item, i) => [
+function designLines(item: LayeredItem, i: number): string[] {
+  return [
+    ...(item.isImageSafe ? [] : [`Design ${i + 1} withheld by Ideogram's safety check`]),
+    ...(item.isImageSafe && item.baseImageUrl === null ? [`Design ${i + 1}: no base image listed by Ideogram`] : []),
     ...(item.url === null ? [] : [`Design ${i + 1}: ${item.url}`]),
     ...(item.htmlUrl === null ? [] : [`Editable page of design ${i + 1}: ${item.htmlUrl}`]),
     `Text blocks of design ${i + 1} (${item.textBlocks.length}):\n${jsonText(item.textBlocks)}`,
-  ]);
-  return { lines: [`${images.saved} of ${items.length} base image(s) saved.`, ...images.lines, ...blocks], isError: images.saved === 0 };
+  ];
+}
+
+/** A layerized design: its base image (when listed) is saved as any image is; its link, its editable page and its
+ * text blocks follow. A design is usable by any of the three; only one Ideogram withheld is an error. */
+async function layeredResult(ctx: ToolContext, items: readonly LayeredItem[]): Promise<{ lines: string[]; isError: boolean }> {
+  const withBase = items.filter((item) => item.isImageSafe && item.baseImageUrl !== null);
+  const base: ImageItem[] = withBase.map((item) => ({ url: item.baseImageUrl, resolution: item.resolution, seed: item.seed, prompt: null, isImageSafe: true }));
+  const images = await saveImages(ctx, base);
+  const usable = items.some((item) => item.isImageSafe && (item.url !== null || item.htmlUrl !== null)) || images.saved > 0;
+  const head = `${images.saved} of ${withBase.length} base image(s) saved (${items.length} design(s)).`;
+  return { lines: [head, ...images.lines, ...items.flatMap(designLines)], isError: !usable };
 }
 
 function descriptionLines(payload: Extract<Payload, { kind: "description" }>): string[] {

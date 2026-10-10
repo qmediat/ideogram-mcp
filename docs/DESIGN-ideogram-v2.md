@@ -306,8 +306,8 @@ Deviations from the note, confirmed in review: the generator runs from its own t
 generator config imports it); `docsUrl` is null everywhere (the snapshot has no per-operation URL — `DOCS_INDEX_URL`
 instead); `/v1/edit`, `/v1/edit-lite`, `/v1/.well-known/jwks.json` added to v1_only and
 `/integration-assets/{external_ref}` classed legacy; spec_only `/v2/image/*` operations are `raw` behind
-`allow_undocumented` (else the flag could never apply in 2.0.0); curated tools leave `webhook_url` / `private` /
-`target_collection_id` to `ideogram_api` (schema budget); `ideogram_edit` advertises a pointer, not a schema copy;
+`allow_undocumented` (else the flag could never apply in 2.0.0); curated tools leave `webhook_url` /
+`target_collection_id` to `ideogram_api` (schema budget; `private` joined every curated variant in step 1 — cross-review X1); `ideogram_edit` advertises a pointer, not a schema copy;
 FLASH → `quality: very_low` on the models that take `quality`, refused on those that take `rendering_speed`; extra
 modules `src/wire.ts`, `src/uploads.ts`, `src/counters.ts`, `src/spec/facts.ts`, `src/spec/fields.ts`,
 `src/tools/{family,compat,fields,results,context,curated,discovery}.ts`; a body schema is chosen per media type

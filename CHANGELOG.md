@@ -46,8 +46,8 @@ Step 1 of `docs/DESIGN-ideogram-v2.md`: every image family of Ideogram's documen
   and saved like any image (`test/tools.test.mjs` pins the shape).
 - `ideogram_api`'s refusal of a planned operation names "this release", not a version.
 - The plan's order after step 2 (design note section 8, operator decision 2026-10-10): custom-model training (v1)
-  before video, the commercial tools last; step 1 also brings inline image content and URL input, opt-in, for clients
-  without file access.
+  before video, the commercial tools last; step 1's second change (not this one) brings inline image content and URL
+  input, opt-in, for clients without file access.
 - `docs/COMPETITION-2026-10-01.md`: the official MCP page names 12 tools (`generate_image` and
   `get_images_by_collection_id` were missing from the list).
 

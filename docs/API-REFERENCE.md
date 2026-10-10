@@ -36,7 +36,7 @@ Fields of the operations this release serves (curated or raw) are listed below t
 | `ideogram_quote` | Ask Ideogram what a call would cost before making it: give the curated tool's name and the arguments you would pass it. Answers USD and credits from the API's own dry run (exact, or an estimate with its upper bound). Nothing is generated or billed. |
 | `ideogram_generation` | Collect the result of a generation by its generation_id (from a tool that answered 'still running', or from an earlier session): waits up to wait_s for it, then saves its images. Reading a generation is free and never runs it again. |
 | `ideogram_operations` | Discover what Ideogram's API offers and what this server serves: no input = every family; family = its operations (model, class, support, quotable); operation = its fields, file limits and rules, ready for ideogram_api. |
-| `ideogram_api` | Advanced: call an Ideogram operation by id (from ideogram_operations) when no curated tool covers it — e.g. precise edit, remove background, remove object. params holds path, query, headers and body apart; files maps local files to file fields. Checked against the operation's own schema before anything is sent; dry_run prices it instead. |
+| `ideogram_api` | Advanced: call an Ideogram operation by id (from ideogram_operations) when no curated tool covers it — a model the documentation index does not list (allow_undocumented), or a call with webhook_url / target_collection_id. params holds path, query, headers and body apart; files maps local files to file fields. Checked against the operation's own schema before anything is sent; dry_run prices it instead. |
 
 ## Families
 

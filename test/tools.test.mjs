@@ -386,7 +386,7 @@ test("ideogram_layerize: font files go under font_candidate_files as fonts, an i
   assert.match(requests[0].body.toString("latin1"), /name="font_candidate_files"; filename="font_candidate_files.ttf"\r\nContent-Type: font\/ttf/);
   const out = text(result);
   assert.match(out, /Generation L1 completed\./);
-  assert.match(out, /1 of 1 base image\(s\) saved\./);
+  assert.match(out, /1 of 1 base image\(s\) saved \(1 design\(s\)\)\./);
   assert.match(out, /Text blocks of design 1 \(1\):\n\[\n  \{\n    "alignment": "left"/);
   assert.match(out, /"text": "SALE"/);
   assert.equal(result.isError, undefined);
@@ -397,13 +397,14 @@ test("ideogram_layerize: font files go under font_candidate_files as fonts, an i
   assert.match(fontAsImage.message, /image: unsupported file type \.ttf; one of \.png, \.jpg, \.jpeg, \.webp/);
 });
 
-test("ideogram_generation shows a layerized design collected by id the same way; a design without a base image is counted, not fetched", async () => {
+test("ideogram_generation shows a layerized design collected by id the same way; a design Ideogram withheld is an error, nothing fetched", async () => {
   const done = { generation_id: "L2", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "layerized_image", base_image_url: null, is_image_safe: false, resolution: "1024x1024", seed: 1, text_blocks: [] }] };
-  const { result } = await call("ideogram_generation", { generation_id: "L2", wait_s: 0 }, () => ({ json: done }));
-  assert.equal(result.isError, true, "nothing saved");
-  assert.match(text(result), /0 of 1 base image\(s\) saved\./);
-  assert.match(text(result), /1 image\(s\) withheld by Ideogram's safety check/);
+  const { result, requests } = await call("ideogram_generation", { generation_id: "L2", wait_s: 0 }, () => ({ json: done }));
+  assert.equal(result.isError, true, "nothing usable");
+  assert.match(text(result), /0 of 0 base image\(s\) saved \(1 design\(s\)\)\./);
+  assert.match(text(result), /Design 1 withheld by Ideogram's safety check/);
   assert.match(text(result), /Text blocks of design 1 \(0\)/);
+  assert.equal(requests.length, 1, "no download attempted");
 });
 
 test("ideogram_quote prices the new tools through their own dry run", async () => {
@@ -455,4 +456,24 @@ test("a layerized design generation shows the design's own link and its editable
   const { result } = await call("ideogram_generation", { generation_id: "L3", wait_s: 0 }, () => ({ json: done }));
   assert.match(text(result), /Design 1: https:\/\/ideogram\.ai\/d\/L3\.psd/);
   assert.match(text(result), /Editable page of design 1: https:\/\/ideogram\.ai\/d\/L3\.html/);
+  assert.equal(result.isError, undefined, "a safe design with a link is a success even without a base image");
+  assert.match(text(result), /Design 1: no base image listed by Ideogram/);
+  assert.doesNotMatch(text(result), /withheld/);
+});
+
+test("the source rule is one rule: ideogram_api refuses a precise edit without a source as the curated tool does; a quote too", async () => {
+  const { result, requests } = await call("ideogram_api", { operation: "post_precise_edit_image_v2_ideogram45", params: { body: { prompt: "x" } }, files: [{ field: "reference_images", path: png }] }).catch((e) => ({ result: { isError: true, content: [{ text: e.message }] }, requests: [] }));
+  assert.match(text(result), /post_precise_edit_image_v2_ideogram45 needs a source image/);
+  assert.equal(requests.length, 0);
+  const quote = await call("ideogram_quote", { tool: "ideogram_remove_background", arguments: {} }).catch((e) => e);
+  assert.match(quote.message, /ideogram_remove_background needs a source image/);
+});
+
+test("the schema inliner ends on a cycle of aliases and keeps the $ref that cannot be inlined", async () => {
+  const { inlineSmallDefinitions } = await import("../dist/tools/family.js");
+  const json = { oneOf: [{ type: "object", properties: { a: { $ref: "#/definitions/x" } } }], definitions: { x: { $ref: "#/definitions/y" }, y: { $ref: "#/definitions/x" }, z: { type: "string" } } };
+  inlineSmallDefinitions(json);
+  const refs = JSON.stringify(json).match(/#\/definitions\/[a-z]/g) ?? [];
+  for (const ref of refs) assert.ok(ref.replace("#/definitions/", "") in json.definitions, `${ref} resolves`);
+  assert.equal("z" in json.definitions, false, "an unreferenced short definition is dropped");
 });
