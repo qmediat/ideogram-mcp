@@ -56,12 +56,13 @@ function designLines(item: LayeredItem, i: number): string[] {
 }
 
 /** A layerized design: its base image (when listed) is saved as any image is; its link, its editable page and its
- * text blocks follow. A design is usable by any of the three; only one Ideogram withheld is an error. */
+ * text blocks follow. A design is usable by its base image, its link, its page or its text blocks; only one Ideogram
+ * withheld, or one that lists none of them, is an error. */
 async function layeredResult(ctx: ToolContext, items: readonly LayeredItem[]): Promise<{ lines: string[]; isError: boolean }> {
   const withBase = items.filter((item) => item.isImageSafe && item.baseImageUrl !== null);
   const base: ImageItem[] = withBase.map((item) => ({ url: item.baseImageUrl, resolution: item.resolution, seed: item.seed, prompt: null, isImageSafe: true }));
   const images = await saveImages(ctx, base);
-  const usable = items.some((item) => item.isImageSafe && (item.url !== null || item.htmlUrl !== null)) || images.saved > 0;
+  const usable = items.some((item) => item.isImageSafe && (item.url !== null || item.htmlUrl !== null || item.textBlocks.length > 0)) || images.saved > 0;
   const head = `${images.saved} of ${withBase.length} base image(s) saved (${items.length} design(s)).`;
   return { lines: [head, ...images.lines, ...items.flatMap(designLines)], isError: !usable };
 }

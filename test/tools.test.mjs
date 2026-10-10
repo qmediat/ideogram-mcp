@@ -493,3 +493,22 @@ test("private: null is 'not set' and becomes true; an image flagged unsafe is no
   assert.match(text(result), /1 image\(s\) withheld by Ideogram's safety check/);
   assert.equal(result.isError, true);
 });
+
+test("a safe layerized design that lists only text blocks is a result, not an error; a flag Ideogram omitted is inferred from what is listed", async () => {
+  const blocks = [{ text: "SALE", alignment: "left", formatting: [], x: 1, y: 2, width: 30, height: 8 }];
+  const only = { generation_id: "L4", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "layerized_image", base_image_url: null, is_image_safe: true, resolution: "1024x1024", seed: 1, text_blocks: blocks }] };
+  const { result } = await call("ideogram_generation", { generation_id: "L4", wait_s: 0 }, () => ({ json: only }));
+  assert.equal(result.isError, undefined, text(result));
+  assert.match(text(result), /Text blocks of design 1 \(1\)/);
+  const { payloadOf } = await import("../dist/lifecycle.js");
+  const inferred = payloadOf({ data: [{ object_type: "layerized_design.generation", html_url: "https://ideogram.ai/d/x.html", text_blocks: [] }] });
+  assert.equal(inferred.kind, "layered");
+  assert.equal(inferred.items[0].isImageSafe, true, "a listed page counts as safe when the flag is absent");
+});
+
+test("ideogram_api says the missing source once: the inpaint rule names it, the shared rule does not repeat it", async () => {
+  const { result } = await call("ideogram_api", { operation: "post_inpaint_image_v2_ideogram_v3", params: { body: { prompt: "x" } }, files: [{ field: "mask", path: png }] }).catch((e) => ({ result: { isError: true, content: [{ text: e.message }] } }));
+  const lines = text(result).split("\n");
+  assert.equal(lines.filter((l) => /source/.test(l)).length, 1, text(result));
+  assert.match(text(result), /inpaint needs the source/);
+});
