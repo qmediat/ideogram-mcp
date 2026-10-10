@@ -297,7 +297,7 @@ test("ideogram_operations lists a family and details one operation with its fiel
   assert.match(text(one.result), /image: local file path/);
   assert.match(text(one.result), /image: 10 MB/);
   assert.doesNotMatch(text(one.result), /quotable/);
-  assert.match(text(one.result), /Rules:\n  needs a source image: image \(a local file\) or image_asset_identifier/);
+  assert.match(text(one.result), /Rules:\n  needs a source image: image \(a local file or a public https URL\) or image_asset_identifier/);
   const gen = await call("ideogram_operations", { operation: "post_generate_image_v2_ideogram_v3" });
   assert.doesNotMatch(text(gen.result), /needs a source image/, "generate has no source rule");
 });
@@ -434,7 +434,7 @@ test("private is sent as true unless the caller says otherwise, on every model t
 test("a tool that works on an image refuses a call without a source, before any request; a JSON call is checked against the JSON schema", async () => {
   for (const [name, args] of [["ideogram_remove_background", {}], ["ideogram_precise_edit", { prompt: "x" }], ["ideogram_layerize", {}], ["ideogram_remix", { prompt: "x" }], ["ideogram_upscale", {}], ["ideogram_describe", {}]]) {
     const { result, requests } = await call(name, args).catch((e) => ({ result: { isError: true, content: [{ text: e.message }] }, requests: [] }));
-    assert.match(text(result), /needs a source image: image \(a local file\) or image_asset_identifier/, name);
+    assert.match(text(result), /needs a source image: image \(a local file or a public https URL\) or image_asset_identifier/, name);
     assert.equal(requests.length, 0, name);
   }
   const { buildRequest } = await import("../dist/tools/family.js");
@@ -575,4 +575,25 @@ test("inline_images: each saved image comes back as image content beside the tex
   assert.equal(capped.result.content.length, 4, "three of four 3 MB images fit under the 10 MB total");
   assert.equal(capped.result.content[1].mimeType, "image/jpeg", "the media type is normalized");
   assert.match(capped.result.content[0].text, /would take this result past 10\.00 MB of images/);
+});
+
+test("an inline read failure is an omission with its reason, never the loss of the result (the id and the saved paths stay)", async () => {
+  const handler = (req, _n, api) => {
+    if (req.url.startsWith("/img/")) return { status: 200, headers: { "content-type": "image/png" }, body: PNG };
+    if (req.method === "POST") return accepted("i3");
+    return { json: { generation_id: "i3", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "image.generation", url: `${api.base}/img/a.png`, prompt: "p", resolution: "1024x1024", is_image_safe: true, seed: 1 }] } };
+  };
+  const api = await startFakeApi((req, n) => handler(req, n, api));
+  try {
+    const ctx = await testContext(api.base, join(dir, "gone"));
+    const client = Object.create(ctx.client);
+    client.download = async () => ({ path: join(dir, "gone", "vanished.png"), bytes: 10, contentType: "image/png" }); // saved, then gone before the read-back
+    const result = await (await tool("ideogram_generate")).handler({ ...ctx, client }, { prompt: "x", inline_images: true });
+    assert.equal(result.isError, undefined);
+    assert.match(text(result), /Generation i3 completed\./);
+    assert.match(text(result), /Not returned inline: .*vanished\.png could not be read back \(ENOENT/);
+    assert.equal(result.content.length, 1, "no image item, the text stays");
+  } finally {
+    await api.close();
+  }
 });

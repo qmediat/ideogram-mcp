@@ -9,7 +9,7 @@ import { readFile } from "node:fs/promises";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { SavedFile } from "../client.js";
 import { COUNTERS } from "../counters.js";
-import { INLINE_MAX_BYTES, INLINE_MAX_TOTAL_BYTES } from "./fields.js";
+import { INLINE_MAX_BYTES, INLINE_MAX_TOTAL_BYTES, mbText } from "../spec/overlay.js";
 import { IdeogramApiError } from "../errors.js";
 import { microsToUsd } from "../cost.js";
 import type { ImageItem, LayeredItem, Outcome, Payload } from "../lifecycle.js";
@@ -60,8 +60,6 @@ async function saveImages(ctx: ToolContext, items: readonly ImageItem[]): Promis
 
 type ImageContent = { type: "image"; data: string; mimeType: string };
 
-const mb = (bytes: number): string => `${(bytes / 1_000_000).toFixed(2)} MB`;
-
 /** The media type as a client expects it: no parameters, `image/jpg` as `image/jpeg`. */
 function inlineMimeType(contentType: string): string {
   const bare = contentType.split(";")[0].trim().toLowerCase();
@@ -69,22 +67,28 @@ function inlineMimeType(contentType: string): string {
 }
 
 /** The saved images as content items, each under the inline cap and all of them under the total; the rest are named
- * with their size instead. */
+ * with their size instead, and a file that cannot be read back is named with the reason — the result (the id, the
+ * saved paths) is never lost to an inline omission. */
 async function inlineContent(files: readonly SavedFile[]): Promise<{ items: ImageContent[]; lines: string[] }> {
   const items: ImageContent[] = [];
   const lines: string[] = [];
   let total = 0;
   for (const file of files) {
     if (file.bytes > INLINE_MAX_BYTES) {
-      lines.push(`Not returned inline: ${file.path} is ${mb(file.bytes)}, over ${mb(INLINE_MAX_BYTES)}`);
+      lines.push(`Not returned inline: ${file.path} is ${mbText(file.bytes, 2)}, over ${mbText(INLINE_MAX_BYTES, 2)}`);
       continue;
     }
     if (total + file.bytes > INLINE_MAX_TOTAL_BYTES) {
-      lines.push(`Not returned inline: ${file.path} would take this result past ${mb(INLINE_MAX_TOTAL_BYTES)} of images`);
+      lines.push(`Not returned inline: ${file.path} would take this result past ${mbText(INLINE_MAX_TOTAL_BYTES, 2)} of images`);
       continue;
     }
-    total += file.bytes;
-    items.push({ type: "image", data: (await readFile(file.path)).toString("base64"), mimeType: inlineMimeType(file.contentType) });
+    try {
+      items.push({ type: "image", data: (await readFile(file.path)).toString("base64"), mimeType: inlineMimeType(file.contentType) });
+      total += file.bytes;
+    } catch (error) {
+      COUNTERS.downloadFailures += 1;
+      lines.push(`Not returned inline: ${file.path} could not be read back (${error instanceof Error ? error.message : String(error)})`);
+    }
   }
   return { items, lines };
 }

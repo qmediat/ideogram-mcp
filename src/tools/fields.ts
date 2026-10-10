@@ -15,12 +15,6 @@ export const PRIVATE_FIELD = "private";
 /** Inputs of every curated tool that are not request fields. */
 export const CONTROL_FIELDS: ReadonlySet<string> = new Set(["model", "wait_s", "inline_images"]);
 
-/** The largest image returned inline, in raw bytes: the model APIs behind the clients take at most 5 MiB of base64
- * per image (5 242 880 B, i.e. 3 932 160 raw bytes); 3.75 MB (decimal, as every size here) stays under it. */
-export const INLINE_MAX_BYTES = 3_750_000;
-/** The most image bytes one result carries inline; the rest stay by path (a result of eight images is not 30 MB of base64). */
-export const INLINE_MAX_TOTAL_BYTES = 10_000_000;
-
 export const INLINE_TEXT = "true: each saved image is also returned as image content (base64; one over 3.75 MB, or past 10 MB in total, by path only), for a client without file access";
 
 export const WAIT_TEXT =

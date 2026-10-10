@@ -9,7 +9,7 @@
  */
 import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { extname, resolve } from "node:path";
-import { fileLimitsOf, FONT_FILE_FIELDS, MB, requestLimitOf } from "./spec/overlay.js";
+import { fileLimitsOf, FONT_FILE_FIELDS, mbText, requestLimitOf } from "./spec/overlay.js";
 import type { FileLimit } from "./spec/overlay.js";
 import type { Operation } from "./spec/operations.js";
 import { isRemoteInput } from "./remote-input.js";
@@ -51,7 +51,7 @@ interface CheckedFile {
   readonly contentType: string;
 }
 
-const mb = (bytes: number): string => `${(bytes / MB).toFixed(1)} MB`;
+const mb = mbText;
 
 async function checkFile(ref: FileRef, limit: FileLimit): Promise<CheckedFile> {
   const resolved = resolve(ref.path);
@@ -126,6 +126,7 @@ export async function loadUploads(op: Operation, files: readonly FileRef[], remo
       parts.push({ field: f.field, filename: `${f.field}${extname(own.realPath).toLowerCase()}`, contentType: own.contentType, bytes: new Uint8Array(await readFile(own.realPath)) });
       continue;
     }
+    if (cap - total <= 0) checkRequestCap(op, total + 1); // the local files already fill the request: said as the cap, not as a 0.0 MB limit
     const part = await fetchRemote(f, limits.get(f.field) as FileLimit, cap - total, remote);
     total += part.bytes.byteLength;
     parts.push(part);

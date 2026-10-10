@@ -25,9 +25,10 @@ export interface ToolContext extends ServerContext {
   readonly remote: RemoteFetcher;
 }
 
-/** The fetcher of one call: public HTTPS hosts only, unless the client was built for a loopback test server. */
+/** The fetcher of one call: public HTTPS hosts only, unless the client was built for a loopback test server
+ * (`loopbackRemoteInputs`, a test-only option). */
 export function remoteFetcherFor(server: ServerContext, budget: CallBudget): RemoteFetcher {
-  const loopback = server.client.options.allowHttpDownloads;
+  const loopback = server.client.options.loopbackRemoteInputs;
   return (url, maxBytes, accepted) => fetchRemoteInput(url, { maxBytes, accepted, budget, loopback });
 }
 

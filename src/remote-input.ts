@@ -6,8 +6,10 @@
  * link-local, carrier, site-local, mapped, translated or reserved range after resolution —, no redirect followed, the
  * body a type the field takes, at most the field's limit, inside the call's budget, never empty. What stays: a host
  * that answers the lookup with a public address and the connection with a private one (DNS rebinding) is not caught;
- * a public host is reachable by anyone anyway. A loopback test server is reached only with `loopback: true`, which
- * relaxes the scheme, the IP-literal and the address checks and nothing else; the server never sets it.
+ * a public host is reachable by anyone anyway. A loopback test server is reached only with `loopback: true` (the
+ * client option `loopbackRemoteInputs`), which relaxes the scheme, the IP-literal and the address checks and nothing
+ * else; the server never sets it. The lookup runs under the call's budget as the fetch does: a resolver that stalls
+ * ends the call, not the caller's patience (the lookup itself cannot be cancelled; its answer is dropped).
  */
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
@@ -59,12 +61,16 @@ export function urlRefusal(text: string, loopback = false): string | null {
   return null;
 }
 
-function ipv4Private(a: number, b: number): boolean {
+/** Not globally reachable (IANA special-purpose registry): private, loopback, link-local, carrier NAT, the
+ * protocol-assignment and documentation blocks, the benchmark block, 6to4 relay, multicast and reserved. */
+function ipv4Private(a: number, b: number, c: number): boolean {
   if (a === 10 || a === 127 || a === 0) return true;
   if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 192 && b === 168) return true;
+  if (a === 192 && (b === 168 || (b === 0 && (c === 0 || c === 2)) || (b === 88 && c === 99))) return true;
   if (a === 169 && b === 254) return true;
   if (a === 100 && b >= 64 && b <= 127) return true; // carrier-grade NAT
+  if (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) return true; // benchmark, documentation
+  if (a === 203 && b === 0 && c === 113) return true; // documentation
   return a >= 224; // multicast and reserved
 }
 
@@ -102,6 +108,8 @@ function ipv6Private(address: string): boolean {
   const embedded = embeddedIpv4(groups, lower);
   if (embedded !== null) return isPrivateAddress(embedded);
   const first = groups[0];
+  if (first === 0x2001 && groups[1] === 0x0db8) return true; // documentation 2001:db8::/32
+  if (first === 0x0100 && groups.slice(1, 4).every((g) => g === 0)) return true; // discard-only 100::/64
   if ((first & 0xfe00) === 0xfc00) return true; // unique local fc00::/7
   if ((first & 0xffc0) === 0xfe80) return true; // link-local fe80::/10
   if ((first & 0xffc0) === 0xfec0) return true; // site-local fec0::/10
@@ -112,8 +120,8 @@ function ipv6Private(address: string): boolean {
 export function isPrivateAddress(address: string): boolean {
   const kind = isIP(address);
   if (kind === 4) {
-    const [a, b] = address.split(".").map(Number);
-    return ipv4Private(a, b);
+    const [a, b, c] = address.split(".").map(Number);
+    return ipv4Private(a, b, c);
   }
   return kind === 6 ? ipv6Private(address) : true;
 }
@@ -169,12 +177,29 @@ async function refuse(response: Response, message: string): Promise<never> {
   throw new Error(message);
 }
 
+/** The promise, or the budget's end if it comes first (the work behind it goes on unobserved — a lookup cannot be cancelled). */
+function withinBudget<T>(work: Promise<T>, budget: CallBudget): Promise<T> {
+  if (budget.signal.aborted) return Promise.reject(new BudgetEndedHere());
+  return new Promise<T>((done, fail) => {
+    const onAbort = (): void => fail(new BudgetEndedHere());
+    budget.signal.addEventListener("abort", onAbort, { once: true });
+    work.then(done, fail).finally(() => budget.signal.removeEventListener("abort", onAbort));
+  });
+}
+
+class BudgetEndedHere extends Error {
+  constructor() {
+    super("the budget ended");
+  }
+}
+
 async function checkHost(url: string, options: RemoteFetchOptions): Promise<void> {
   const host = hostOf(new URL(url));
   let addresses: readonly string[];
   try {
-    addresses = await (options.resolve ?? resolveAll)(host);
+    addresses = await withinBudget((options.resolve ?? resolveAll)(host), options.budget);
   } catch (error) {
+    if (error instanceof BudgetEndedHere) throw fetchError(url, options.budget, error);
     throw new Error(`${url}: ${host} could not be resolved (${describe(error)})`);
   }
   const byAddress = addressRefusal(host, addresses);
