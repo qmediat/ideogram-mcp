@@ -168,14 +168,20 @@ test("every judged address is handed to the socket: an unreachable first address
   }
 });
 
-test("the budget's end mid-body ends the read: a server that sends part of an image and then holds does not keep the call", async () => {
-  const api = await startFakeApi(() => (res) => { res.writeHead(200, { "content-type": "image/png" }); res.write(PNG.subarray(0, 8)); /* and never ends */ });
+test("the budget's end mid-body ends the read, and a connection that breaks mid-body is a refusal naming the URL", async () => {
+  const api = await startFakeApi((req) => (res) => {
+    res.writeHead(200, { "content-type": "image/png", ...(req.url === "/cut.png" ? { "content-length": "1000" } : {}) });
+    res.write(PNG.subarray(0, 8));
+    if (req.url === "/cut.png") res.socket.destroy(); // the server drops the connection mid-body
+    /* else: never ends */
+  });
   try {
     const { toolCallBudget, SYSTEM_CLOCK } = await import("../dist/budget.js");
     const options = { maxBytes: 1000, accepted: ["image/png"], budget: toolCallBudget(SYSTEM_CLOCK, undefined, 400), loopback: true };
     const t0 = Date.now();
     await assert.rejects(() => fetchRemoteInput(`${api.base}/held.png`, options), /not fetched, the call's time ran out|ended before it was complete/);
     assert.ok(Date.now() - t0 < 5000, "ended with the budget, not with the server");
+    await assert.rejects(() => fetchRemoteInput(`${api.base}/cut.png`, { ...options, budget: openBudget() }), new RegExp(`^Error: ${api.base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/cut\\.png: (the body ended (early|before it was complete)|network error while fetching it)`)); // the URL is named whichever event Node raises first
   } finally {
     await api.close();
   }

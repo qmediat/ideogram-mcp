@@ -168,9 +168,11 @@ function readCapped(response: IncomingMessage, cap: number, url: string): Promis
       }
       chunks.push(chunk);
     });
-    response.on("error", fail);
+    // a connection that breaks mid-body (or the budget's abort, which destroys the response) lands on 'error' — named
+    // with the URL like every other refusal; 'close' before completion is the guard under it (Node ≥ 22 emits 'error' first)
+    response.on("error", (error: Error) => fail(new Error(`${url}: the body ended early (${error.message})`)));
     response.on("close", () => {
-      if (!response.complete) fail(new Error(`${url}: the body ended before it was complete`)); // an abort mid-body (the budget's end) lands here
+      if (!response.complete) fail(new Error(`${url}: the body ended before it was complete`));
     });
     response.on("end", () => {
       if (total === 0) {
