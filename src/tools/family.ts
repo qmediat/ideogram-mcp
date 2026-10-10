@@ -212,7 +212,7 @@ function checkMediaSchema(op: Operation, media: "json" | "multipart", fields: Re
 }
 
 /** The request one operation call becomes: multipart when files go with it, else JSON when the operation takes it. */
-export async function buildRequest(op: Operation, fields: Readonly<Record<string, unknown>>, remote?: RemoteFetcher): Promise<ApiRequest> {
+export async function buildRequest(op: Operation, fields: Readonly<Record<string, unknown>>, remote: RemoteFetcher | undefined): Promise<ApiRequest> {
   const { body, files } = splitFiles(op, fields);
   const takesJson = op.facts.bodies.includes("json");
   if (files.length > 0 && !op.facts.bodies.includes("multipart")) throw new Error(`${op.id} takes no files`);
@@ -238,7 +238,8 @@ function withPrivateDefault(variant: ModelVariant, fields: Record<string, unknow
 }
 
 /** Turns a curated tool's arguments into one checked request of the chosen model. */
-export async function prepare(spec: FamilyToolSpec, args: ToolArguments, remote?: RemoteFetcher): Promise<PreparedCall> {
+/** `remote` is the call's URL fetcher; a caller without a call passes `undefined` on purpose (a URL input is then refused). */
+export async function prepare(spec: FamilyToolSpec, args: ToolArguments, remote: RemoteFetcher | undefined): Promise<PreparedCall> {
   const resolved = resolveModel(spec.family, args, spec.defaultModel);
   const variant = variantsOf(spec).find((v) => v.model === resolved.model);
   if (variant === undefined) {

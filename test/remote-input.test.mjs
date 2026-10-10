@@ -61,7 +61,7 @@ test("the fetch against a loopback server (test only): redirect refused, wrong t
     const options = { maxBytes: 1000, accepted: ["image/png", "image/jpeg", "image/webp"], budget: openBudget(), loopback: true };
     await assert.rejects(() => fetchRemoteInput(`${api.base}/redirect`, options), /redirects \(302\); a redirect is not followed/);
     await assert.rejects(() => fetchRemoteInput(`${api.base}/text`, options), /is text\/html, not one of image\/png/);
-    await assert.rejects(() => fetchRemoteInput(`${api.base}/big`, options), /is over 0\.0 MB, the limit here/);
+    await assert.rejects(() => fetchRemoteInput(`${api.base}/big`, options), /is over 1000 bytes \(0\.00 MB\), the limit here/);
     await assert.rejects(() => fetchRemoteInput(`${api.base}/missing`, options), /answered 404/);
     const got = await fetchRemoteInput(`${api.base}/a.png`, options);
     assert.equal(got.contentType, "image/png");
@@ -87,7 +87,7 @@ test("a 204 or an empty body is refused, a declared length over the limit is ref
     const options = { maxBytes: 1000, accepted: ["image/png"], budget: openBudget(), loopback: true };
     await assert.rejects(() => fetchRemoteInput(`${api.base}/nobody`, options), /answered without a body|answered an empty body/);
     await assert.rejects(() => fetchRemoteInput(`${api.base}/empty`, options), /answered an empty body/);
-    await assert.rejects(() => fetchRemoteInput(`${api.base}/declared`, options), /by its Content-Length, over 0\.0 MB/);
+    await assert.rejects(() => fetchRemoteInput(`${api.base}/declared`, options), /by its Content-Length \(0\.01 MB\), over 1000 bytes/);
     const cancel = new AbortController();
     cancel.abort(new Error("the caller gave up"));
     const { toolCallBudget, SYSTEM_CLOCK } = await import("../dist/budget.js");

@@ -118,7 +118,7 @@ async function readLocal(f: CheckedFile, limit: FileLimit): Promise<UploadPart> 
  * a download), then fetches the remote inputs one after another, each under the room the request cap still leaves (a
  * body over it is cut as it arrives, never held whole); nothing is read or fetched when any local check fails. The
  * parts keep the caller's order. */
-export async function loadUploads(op: Operation, files: readonly FileRef[], remote?: RemoteFetcher): Promise<UploadPart[]> {
+export async function loadUploads(op: Operation, files: readonly FileRef[], remote: RemoteFetcher | undefined): Promise<UploadPart[]> {
   const limits = new Map(fileLimitsOf(op).map((l) => [l.field, l]));
   checkCounts(op, files, limits);
   const local = files.filter((f) => !isRemoteInput(f.path));

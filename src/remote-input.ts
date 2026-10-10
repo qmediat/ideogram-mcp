@@ -18,6 +18,7 @@ import type { IncomingMessage } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
 import type { CallBudget } from "./budget.js";
+import { mbText } from "./spec/overlay.js";
 
 export interface RemoteBytes {
   readonly bytes: Uint8Array<ArrayBuffer>;
@@ -163,7 +164,7 @@ function readCapped(response: IncomingMessage, cap: number, url: string): Promis
       total += chunk.byteLength;
       if (total > cap) {
         response.destroy();
-        fail(new Error(`${url} is over ${(cap / 1_000_000).toFixed(1)} MB, the limit here`));
+        fail(new Error(`${url} is over ${cap} bytes (${mbText(cap, 2)}), the limit here`));
         return;
       }
       chunks.push(chunk);
@@ -267,7 +268,7 @@ export async function fetchRemoteInput(url: string, options: RemoteFetchOptions)
   if (!options.accepted.includes(contentType)) refuse(response, `${url} is ${contentType || "(no content type)"}, not one of ${options.accepted.join(", ")}`);
   const declared = Number.parseInt(response.headers["content-length"] ?? "", 10);
   if (Number.isFinite(declared) && declared > options.maxBytes) {
-    refuse(response, `${url} is ${(declared / 1_000_000).toFixed(1)} MB by its Content-Length, over ${(options.maxBytes / 1_000_000).toFixed(1)} MB, the limit here`);
+    refuse(response, `${url} is ${declared} bytes by its Content-Length (${mbText(declared, 2)}), over ${options.maxBytes} bytes (${mbText(options.maxBytes, 2)}), the limit here`);
   }
   try {
     return { bytes: await readCapped(response, options.maxBytes, url), contentType };

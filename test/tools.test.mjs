@@ -439,7 +439,7 @@ test("a tool that works on an image refuses a call without a source, before any 
   }
   const { buildRequest } = await import("../dist/tools/family.js");
   const { operationById } = await import("../dist/spec/operations.js");
-  await assert.rejects(() => buildRequest(operationById("post_remove_background_v2"), {}), /post_remove_background_v2 sent as json refuses the input:\nimage_asset_identifier/);
+  await assert.rejects(() => buildRequest(operationById("post_remove_background_v2"), {}, undefined), /post_remove_background_v2 sent as json refuses the input:\nimage_asset_identifier/);
 });
 
 test("a completed remove-background generation (an image without prompt or seed, as the API lists it) is saved like any image", async () => {
@@ -563,7 +563,7 @@ test("inline_images: each saved image comes back as image content beside the tex
   const { result } = await call("ideogram_generate", { prompt: "x", inline_images: true }, handler);
   assert.equal(result.content[0].type, "text");
   assert.match(result.content[0].text, /2 of 2 image\(s\) saved\./);
-  assert.match(result.content[0].text, /Not returned inline: .*\.png is 3\.75 MB, over 3\.75 MB/);
+  assert.match(result.content[0].text, /Not returned inline: .*\.png is 3750001 bytes, over 3\.75 MB \(3750000 bytes\)/);
   assert.equal(result.content.length, 2, "one image item: the small one");
   assert.deepEqual(result.content[1], { type: "image", data: PNG.toString("base64"), mimeType: "image/png" });
   const plain = await call("ideogram_generate", { prompt: "x" }, handler);

@@ -146,7 +146,7 @@ export const RAW_TOOL: ToolDefinition = {
   name: "ideogram_api",
   title: "Call any served Ideogram operation",
   description:
-    "Advanced: call an Ideogram operation by id (from ideogram_operations) when no curated tool covers it — a model the documentation index does not list (allow_undocumented), or a call with webhook_url / target_collection_id. params holds path, query, headers and body apart; files maps local files to file fields. Checked against the operation's own schema before anything is sent; dry_run prices it instead.",
+    "Advanced: call an Ideogram operation by id (from ideogram_operations) when no curated tool covers it — a model the documentation index does not list (allow_undocumented), or a call with webhook_url / target_collection_id. params holds path, query, headers and body apart; files maps local files or public https URLs to file fields. Checked against the operation's own schema before anything is sent; dry_run prices it instead.",
   inputSchema: z.object({
     operation: z.string().min(1).describe("The operation id, e.g. post_precise_edit_image_v2_ideogram45"),
     params: z.record(z.string(), z.unknown()).optional().describe("{path?, query?, headers?, body?}: each an object of that location's parameters"),

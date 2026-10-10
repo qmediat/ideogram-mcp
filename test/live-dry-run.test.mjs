@@ -89,7 +89,7 @@ test("every curated quotable operation has a minimal request its tool accepts, o
   const cases = quotableCases();
   assert.ok(cases.length >= 30, `${cases.length} quotable curated operations`);
   for (const c of cases.filter((x) => x.args)) {
-    const call = await prepare(c.spec, c.args);
+    const call = await prepare(c.spec, c.args, undefined);
     assert.equal(call.req.op.id, c.variant.op.id);
   }
   const skipped = cases.filter((x) => x.skip).map((x) => `${x.variant.model}: ${x.skip}`);
@@ -105,7 +105,7 @@ test("live: every curated quotable operation returns a PriceQuote; the quotes go
       rows.push(`| ${c.spec.name} | ${c.variant.model} | — | — | — | skipped: ${c.skip} |`);
       continue;
     }
-    const call = await prepare(c.spec, c.args);
+    const call = await prepare(c.spec, c.args, undefined);
     let outcome;
     try {
       outcome = await quote(client, call.req, openBudget());

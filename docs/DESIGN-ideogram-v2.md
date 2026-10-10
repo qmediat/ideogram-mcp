@@ -164,7 +164,7 @@ major version with a deprecation note, `ideogram_remix`, `ideogram_reframe`, `id
 | case | behaviour |
 |---|---|
 | a tool input the chosen model does not take | refused before the call: "`<field>` is not a parameter of `<model>`; the models that take it: …" |
-| a call without a source image on a family that works on one | refused before the schema and before any request: "`<tool>` needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)" (step 1, cross-review X4) |
+| a call without a source image on a family that works on one | refused before the schema and before any request: "`<tool>` needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)" (step 1, cross-review X4) |
 | a body checked against one format, sent in another | the body is checked against the schema of the format it is sent in (JSON without a file, multipart with one) — remove background by JSON needs the asset (step 1, X3) |
 | `private` omitted by the caller | sent as `true` on every curated call whose model takes it (the API's default is the plan's setting on some operations, public when the plan has none); `ideogram_api` sends what it is given (step 1, X1) |
 | `dry_run` quote `qualifier: estimate` | the quote carries `upper_bound_usd` and says "estimate" — never printed as exact |

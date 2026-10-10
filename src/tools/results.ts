@@ -83,7 +83,7 @@ async function inlineContent(files: readonly SavedFile[]): Promise<{ items: Imag
       continue;
     }
     if (file.bytes > INLINE_MAX_BYTES) {
-      lines.push(`Not returned inline: ${file.path} is ${mbText(file.bytes, 2)}, over ${mbText(INLINE_MAX_BYTES, 2)}`);
+      lines.push(`Not returned inline: ${file.path} is ${file.bytes} bytes, over ${mbText(INLINE_MAX_BYTES, 2)} (${INLINE_MAX_BYTES} bytes)`);
       continue;
     }
     if (total + file.bytes > INLINE_MAX_TOTAL_BYTES) {
@@ -94,7 +94,7 @@ async function inlineContent(files: readonly SavedFile[]): Promise<{ items: Imag
       items.push({ type: "image", data: (await readFile(file.path)).toString("base64"), mimeType });
       total += file.bytes;
     } catch (error) {
-      COUNTERS.downloadFailures += 1;
+      COUNTERS.inlineReadFailures += 1;
       lines.push(`Not returned inline: ${file.path} could not be read back (${error instanceof Error ? error.message : String(error)})`);
     }
   }
