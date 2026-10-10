@@ -36,8 +36,19 @@ export interface ImageItem {
   readonly isImageSafe: boolean;
 }
 
+/** One layerized design: the text-free base image and the detected text as positioned blocks (the specification's
+ * `LayerizedImageObject` / `TextLayerizerResultObject`; the blocks are passed through as the API lists them). */
+export interface LayeredItem {
+  readonly baseImageUrl: string | null;
+  readonly resolution: string | null;
+  readonly seed: number | null;
+  readonly isImageSafe: boolean;
+  readonly textBlocks: readonly unknown[];
+}
+
 export type Payload =
   | { readonly kind: "images"; readonly items: readonly ImageItem[] }
+  | { readonly kind: "layered"; readonly items: readonly LayeredItem[] }
   | { readonly kind: "description"; readonly descriptionId: string; readonly texts: readonly string[]; readonly jsonPrompt: unknown }
   | { readonly kind: "record"; readonly body: unknown };
 
@@ -73,6 +84,15 @@ const ImageItemShape = z.looseObject({
   is_image_safe: z.boolean().optional(),
 });
 
+const LayeredItemShape = z.looseObject({
+  object_type: z.enum(["layerized_image", "layerized_design.generation"]),
+  base_image_url: z.string().nullish(),
+  resolution: z.string().optional(),
+  seed: z.number().optional(),
+  is_image_safe: z.boolean().optional(),
+  text_blocks: z.array(z.unknown()).optional(),
+});
+
 const BodyShape = z.looseObject({
   generation_id: z.string().optional(),
   data: z.array(z.unknown()).optional(),
@@ -105,6 +125,17 @@ function imageItems(data: readonly unknown[]): ImageItem[] | null {
   return items;
 }
 
+function layeredItems(data: readonly unknown[]): LayeredItem[] | null {
+  const items: LayeredItem[] = [];
+  for (const raw of data) {
+    const item = LayeredItemShape.safeParse(raw);
+    if (!item.success) return null;
+    const d = item.data;
+    items.push({ baseImageUrl: d.base_image_url ?? null, resolution: d.resolution ?? null, seed: d.seed ?? null, isImageSafe: d.is_image_safe ?? d.base_image_url != null, textBlocks: d.text_blocks ?? [] });
+  }
+  return items;
+}
+
 /** The payload of a body that carries one (data, descriptions, a JSON prompt); null for an acknowledgement. */
 export function payloadOf(body: unknown): Payload | null {
   const parsed = BodyShape.safeParse(body);
@@ -116,7 +147,9 @@ export function payloadOf(body: unknown): Payload | null {
   }
   if (b.data === undefined) return b.generation_id === undefined ? { kind: "record", body } : null;
   const items = imageItems(b.data);
-  return items === null ? { kind: "record", body } : { kind: "images", items };
+  if (items !== null) return { kind: "images", items };
+  const layered = layeredItems(b.data);
+  return layered === null ? { kind: "record", body } : { kind: "layered", items: layered };
 }
 
 /** The request with `async: true` when the operation takes it, so the API answers at acceptance; a caller who set `async`

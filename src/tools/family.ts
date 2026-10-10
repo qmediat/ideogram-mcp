@@ -96,6 +96,30 @@ function hoistShared(variants: JsonObject[], definitions: JsonObject): void {
   }
 }
 
+/** A definition this short costs more as a `$ref` (34 bytes) than inline: zod hoists every reused schema, a bare
+ * `{"type":"string"}` included. Such definitions are put back in place (lossless). */
+const INLINE_DEFINITION_BYTES = 34;
+
+function inlineSmallDefinitions(json: JsonObject): void {
+  const definitions = json.definitions as JsonObject;
+  const small = new Map<string, string>();
+  for (const [name, def] of Object.entries(definitions)) {
+    const text = JSON.stringify(def);
+    if (text.length <= INLINE_DEFINITION_BYTES) small.set(`#/definitions/${name}`, text);
+  }
+  const walk = (node: unknown): unknown => {
+    if (Array.isArray(node)) return node.map(walk);
+    if (node === null || typeof node !== "object") return node;
+    const o = node as JsonObject;
+    const ref = typeof o.$ref === "string" && Object.keys(o).length === 1 ? small.get(o.$ref) : undefined;
+    if (ref !== undefined) return JSON.parse(ref) as unknown;
+    return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, walk(v)]));
+  };
+  json.oneOf = walk(json.oneOf);
+  for (const [name, def] of Object.entries(definitions)) definitions[name] = walk(def);
+  for (const ref of small.keys()) delete definitions[ref.replace("#/definitions/", "")];
+}
+
 function variantJsonSchemas(spec: FamilyToolSpec): { oneOf: unknown[]; definitions: unknown } {
   const variants = variantsOf(spec).map((v) => {
     const model = v.model === spec.defaultModel ? z.literal(v.model).optional() : z.literal(v.model);
@@ -112,7 +136,9 @@ function variantJsonSchemas(spec: FamilyToolSpec): { oneOf: unknown[]; definitio
     for (const key of Object.keys(props)) props[key] = unwrapRef(props[key]);
   }
   hoistShared(json.anyOf, definitions);
-  return { oneOf: json.anyOf, definitions };
+  const shaped: JsonObject = { oneOf: json.anyOf, definitions };
+  inlineSmallDefinitions(shaped);
+  return { oneOf: shaped.oneOf as unknown[], definitions: shaped.definitions };
 }
 
 /** The schema tools/list advertises: `model`, `wait_s`, each described field once, and one exact variant per model. */

@@ -16,6 +16,8 @@ export const NEWEST: Readonly<Partial<Record<Family, string>>> = {
   inpaint: "ideogram-3",
   reframe: "ideogram-3",
   replace_background: "ideogram-3",
+  remove_background: "ideogram-1",
+  remove_object: "ideogram-1",
   layerize: "ideogram-3",
 };
 

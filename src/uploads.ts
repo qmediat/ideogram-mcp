@@ -7,7 +7,7 @@
  */
 import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { extname, resolve } from "node:path";
-import { fileLimitsOf, MB, requestLimitOf } from "./spec/overlay.js";
+import { fileLimitsOf, FONT_FILE_FIELDS, MB, requestLimitOf } from "./spec/overlay.js";
 import type { FileLimit } from "./spec/overlay.js";
 import type { Operation } from "./spec/operations.js";
 import type { UploadPart } from "./wire.js";
@@ -18,14 +18,27 @@ export interface FileRef {
   readonly path: string;
 }
 
-/** The media types an upload is sent as, by extension: the three every file field of the specification names ("JPEG, PNG, and
- * WebP are supported"); another type would be refused by the API after the upload. */
+/** The media types an image upload is sent as, by extension: the three every image field of the specification names
+ * ("JPEG, PNG, and WebP are supported"); another type would be refused by the API after the upload. */
 export const UPLOAD_TYPES: Readonly<Record<string, string>> = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".webp": "image/webp",
 };
+
+/** The media types a font upload is sent as (the formats the specification names for a font field). */
+export const FONT_TYPES: Readonly<Record<string, string>> = {
+  ".ttf": "font/ttf",
+  ".otf": "font/otf",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+};
+
+/** The types a field's files may have: fonts for a font field, images for every other. */
+export function uploadTypesFor(field: string): Readonly<Record<string, string>> {
+  return FONT_FILE_FIELDS.has(field) ? FONT_TYPES : UPLOAD_TYPES;
+}
 
 interface CheckedFile {
   readonly ref: FileRef;
@@ -40,9 +53,10 @@ async function checkFile(ref: FileRef, limit: FileLimit): Promise<CheckedFile> {
   const resolved = resolve(ref.path);
   if ((await lstat(resolved)).isSymbolicLink()) throw new Error(`${ref.field}: symlinks are not uploaded (${ref.path})`);
   const realPath = await realpath(resolved);
-  const contentType = UPLOAD_TYPES[extname(realPath).toLowerCase()];
+  const types = uploadTypesFor(ref.field);
+  const contentType = types[extname(realPath).toLowerCase()];
   if (contentType === undefined) {
-    throw new Error(`${ref.field}: unsupported file type ${extname(realPath) || "(none)"}; one of ${Object.keys(UPLOAD_TYPES).join(", ")}`);
+    throw new Error(`${ref.field}: unsupported file type ${extname(realPath) || "(none)"}; one of ${Object.keys(types).join(", ")}`);
   }
   const bytes = (await stat(realPath)).size;
   if (bytes === 0) throw new Error(`${ref.field}: ${ref.path} is empty`);

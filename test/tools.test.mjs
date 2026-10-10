@@ -334,3 +334,78 @@ test("ideogram_api refuses async: false for a run (its result would arrive only 
   assert.equal(quoted.requests.length, 1);
   assert.match(quoted.requests[0].url, /dry_run=true/);
 });
+
+test("ideogram_precise_edit: Ideogram 4.5 by default, the image, mask and reference images as parts, the rules before any request", async () => {
+  const { requests } = await call("ideogram_precise_edit", { prompt: "swap the sign", image: png, mask: png, reference_images: [png, png], context_window: "auto", wait_s: 0 });
+  assert.equal(requests[0].url, "/v2/image/precise-edit/ideogram-4-5");
+  const body = requests[0].body.toString("latin1");
+  assert.match(body, /name="image"; filename="image.png"/);
+  assert.match(body, /name="mask"; filename="mask.png"/);
+  assert.equal(body.split('name="reference_images"; filename="reference_images.png"').length - 1, 2);
+  assert.match(body, /name="context_window"\r\n\r\nauto\r\n/);
+  assert.match(body, /name="async"\r\n\r\ntrue\r\n/);
+  const noMask = await call("ideogram_precise_edit", { prompt: "x", image: png, context_window: "auto" }).catch((e) => e);
+  assert.match(noMask.message, /context_window "auto" needs a mask/);
+  const speed = await call("ideogram_precise_edit", { prompt: "x", image: png, rendering_speed: "TURBO", wait_s: 0 });
+  assert.match(speed.requests[0].body.toString("latin1"), /name="quality"\r\n\r\nlow\r\n/, "the 1.x speed maps to quality on 4.5");
+  assert.match(text(speed.result), /rendering_speed TURBO → quality low/);
+});
+
+test("ideogram_remove_background and ideogram_remove_object go to their ideogram-1 paths; remove object needs a mask", async () => {
+  const bg = await call("ideogram_remove_background", { image: png, wait_s: 0 });
+  assert.equal(bg.requests[0].url, "/v2/image/remove-background/ideogram-1");
+  assert.match(bg.requests[0].body.toString("latin1"), /name="async"\r\n\r\ntrue\r\n/);
+  const obj = await call("ideogram_remove_object", { image: png, mask: png, seed: 7, wait_s: 0 });
+  assert.equal(obj.requests[0].url, "/v2/image/remove-object/ideogram-1");
+  assert.match(obj.requests[0].body.toString("latin1"), /name="seed"\r\n\r\n7\r\n/);
+  assert.doesNotMatch(obj.requests[0].body.toString("latin1"), /name="async"/, "remove object takes no async field: it is a job by construction");
+  const missing = await call("ideogram_remove_object", { image: png }).catch((e) => e);
+  assert.match(missing.message, /remove object needs the source .* and the mask/);
+  const prompt = await call("ideogram_remove_background", { image: png, prompt: "x" }).catch((e) => e);
+  assert.match(prompt.message, /`prompt` is not a parameter of ideogram-1; no ideogram_remove_background model takes it/);
+});
+
+test("ideogram_layerize: font files go under font_candidate_files as fonts, an image there is refused, and the result saves the base image and lists the text blocks", async () => {
+  const ttf = join(dir, "brand.ttf");
+  await writeFile(ttf, Buffer.from("00010000", "hex"));
+  const handler = (req, _n, api) => {
+    if (req.url.startsWith("/img/")) return { status: 200, headers: { "content-type": "image/png" }, body: PNG };
+    if (req.method === "POST") return accepted("L1");
+    return {
+      json: {
+        generation_id: "L1", status: "completed", created: "2026-10-07T00:00:00Z",
+        data: [{ object_type: "layerized_image", base_image_url: `${api.base}/img/base.png`, is_image_safe: true, resolution: "1024x1024", seed: 3, text_blocks: [{ text: "SALE", font_name: "Brand", font_size: 72, color: "#212121", alignment: "left", formatting: ["bold"], x: 10, y: 20, width: 300, height: 80 }] }],
+      },
+    };
+  };
+  const { requests, result, ctx } = await call("ideogram_layerize", { image: png, font_candidate_files: [ttf], prompt: "a poster" }, handler);
+  assert.equal(requests[0].url, "/v2/design/layerize/ideogram-3");
+  assert.match(requests[0].body.toString("latin1"), /name="font_candidate_files"; filename="font_candidate_files.ttf"\r\nContent-Type: font\/ttf/);
+  const out = text(result);
+  assert.match(out, /Generation L1 completed\./);
+  assert.match(out, /1 of 1 base image\(s\) saved\./);
+  assert.match(out, /Text blocks of design 1 \(1\):\n\[\n  \{\n    "alignment": "left"/);
+  assert.match(out, /"text": "SALE"/);
+  assert.equal(result.isError, undefined);
+  assert.equal((await readdir(ctx.outputDir)).length, 1);
+  const notFont = await call("ideogram_layerize", { image: png, font_candidate_files: [png] }).catch((e) => e);
+  assert.match(notFont.message, /font_candidate_files: unsupported file type \.png; one of \.ttf, \.otf, \.woff, \.woff2/);
+  const fontAsImage = await call("ideogram_layerize", { image: ttf }).catch((e) => e);
+  assert.match(fontAsImage.message, /image: unsupported file type \.ttf; one of \.png, \.jpg, \.jpeg, \.webp/);
+});
+
+test("ideogram_generation shows a layerized design collected by id the same way; a design without a base image is counted, not fetched", async () => {
+  const done = { generation_id: "L2", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "layerized_image", base_image_url: null, is_image_safe: false, resolution: "1024x1024", seed: 1, text_blocks: [] }] };
+  const { result } = await call("ideogram_generation", { generation_id: "L2", wait_s: 0 }, () => ({ json: done }));
+  assert.equal(result.isError, true, "nothing saved");
+  assert.match(text(result), /0 of 1 base image\(s\) saved\./);
+  assert.match(text(result), /1 image\(s\) withheld by Ideogram's safety check/);
+  assert.match(text(result), /Text blocks of design 1 \(0\)/);
+});
+
+test("ideogram_quote prices the new tools through their own dry run", async () => {
+  const priceQuote = { object: "price_quote", billing_identifier: "remove-background", quantity: 1, usd_micros: 10000, credit_millis: 10, qualifier: "exact" };
+  const { requests, result } = await call("ideogram_quote", { tool: "ideogram_remove_background", arguments: { image: png } }, () => ({ json: priceQuote }));
+  assert.equal(requests[0].url, "/v2/image/remove-background/ideogram-1?dry_run=true");
+  assert.match(text(result), /0\.010000 USD exact/);
+});

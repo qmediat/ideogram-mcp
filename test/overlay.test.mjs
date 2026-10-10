@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const { OPERATIONS, operationById, isExposable } = await import("../dist/spec/operations.js");
-const { quoteAllowed, quoteRefusal, responseSchemaFor, fileLimitsOf, CONSTRAINTS, constraintViolations, MB, requestLimitOf, requestBytesRefusal, UNSTATED_REQUEST_BYTES, UNSTATED_FILE_BYTES } =
+const { quoteAllowed, quoteRefusal, responseSchemaFor, fileLimitsOf, CONSTRAINTS, constraintViolations, MB, requestLimitOf, requestBytesRefusal, UNSTATED_REQUEST_BYTES, UNSTATED_FILE_BYTES, FONT_FILE_FIELDS } =
   await import("../dist/spec/overlay.js");
 const { supportOf, servedByRawCall } = await import("../dist/spec/support.js");
 
@@ -104,27 +104,41 @@ test("the constraints refuse what the API refuses and pass what it takes", () =>
     ["post_generate_image_v2_ideogram_v3_character", { prompt: "x" }, /character model needs a character reference/],
     ["post_remix_image_v2_ideogram_v3_character", { prompt: "x", image: "a.png" }, /character model needs a character reference/],
     ["post_generate_image_v2_ideogram45", { prompt: "x", size: "source" }, /size "source"/],
+    ["post_precise_edit_image_v2_ideogram45", { prompt: "x", image: "a.png", reference_image_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "r" }] }, /needs the edited image by reference too/],
+    ["post_precise_edit_image_v2_ideogram45", { prompt: "x", image: "a.png", mask: "m.png", reference_images: ["1.png", "2.png", "3.png", "4.png"] }, /at most three/],
+    ["post_precise_edit_image_v2_ideogram45", { prompt: "x", image_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" }, context_window: "none" }, /context_window needs the image/],
+    ["post_precise_edit_image_v2_ideogram45", { prompt: "x", image: "a.png", context_window: "auto" }, /"auto" needs a mask/],
+    ["post_remove_object_from_v2_assets", { image: "a.png" }, /remove object needs the source .* and the mask/],
+    ["post_remove_object_from_v2_assets", { mask_asset_identifier: { asset_type: "UPLOAD", asset_id: "m" } }, /remove object needs the source/],
   ];
   for (const [id, fields, message] of cases) {
     const violations = constraintViolations(op(id), fields);
     assert.equal(violations.length, 1, `${id}: ${JSON.stringify(fields)}`);
     assert.match(violations[0], message);
   }
+  // references by reference with a mask: two rules fire (the mask also needs the image as a file), both said
+  const maskAndReferences = constraintViolations(op("post_precise_edit_image_v2_ideogram45"), { prompt: "x", image_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" }, reference_image_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "r" }], mask: "m.png" });
+  assert.ok(maskAndReferences.some((v) => /cannot be combined with mask/.test(v)), maskAndReferences.join("; "));
   const passing = [
     ["post_generate_image_v2_ideogram_v3", { prompt: "x", resolution: "1024x1024" }],
     ["post_inpaint_image_v2_ideogram_v3", { prompt: "x", image: "a.png", mask_asset_identifier: { asset_type: "UPLOAD", asset_id: "m" } }],
     ["post_generate_image_v2_ideogram45", { prompt: "x", size: "source", images: ["a.png"] }],
     ["post_generate_image_v2_ideogram_v4", { prompt: "x", resolution: "1024x1024", aspect_ratio: "1x1" }],
+    ["post_precise_edit_image_v2_ideogram45", { prompt: "x", image: "a.png", mask: "m.png", reference_images: ["1.png", "2.png", "3.png"], context_window: "auto" }],
+    ["post_precise_edit_image_v2_ideogram45", { prompt: "x", image_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" }, reference_image_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "r" }] }],
+    ["post_remove_object_from_v2_assets", { image: "a.png", mask_asset_identifier: { asset_type: "UPLOAD", asset_id: "m" } }],
     ["post_generate_image_v2_ideogram_v3_character", { prompt: "x", character_reference_collection_id: "c" }],
     ["post_inpaint_image_v2_ideogram_v3_character", { prompt: "x", image: "a.png", mask: "m.png", character_reference_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "a" }] }],
   ];
   for (const [id, fields] of passing) assert.deepEqual(constraintViolations(op(id), fields), [], id);
 });
 
-test("the support table: the seven families' documented models and the generation lookup are curated", () => {
+test("the support table: the eleven image families' documented models and the generation lookup are curated", () => {
   assert.equal(supportOf(op("post_generate_image_v2_ideogram45")), "curated");
   assert.equal(supportOf(op("get_generation_v2")), "curated");
-  assert.equal(supportOf(op("post_precise_edit_image_v2_ideogram45")), "raw");
+  for (const id of ["post_precise_edit_image_v2_ideogram45", "post_remove_background_v2", "post_remove_object_from_v2_assets", "post_layerize_design_ideogram_v3"]) {
+    assert.equal(supportOf(op(id)), "curated", `${id} is curated since 2.1.0`);
+  }
   assert.equal(supportOf(op("post_reframe_image_auto")), "raw", "a spec-only image operation is raw (opt-in at call time)");
   assert.equal(supportOf(op("post_generate_video_seed_dance2_text_to_video")), "planned");
   assert.equal(supportOf(op("get_account_usage")), "planned");
@@ -132,7 +146,18 @@ test("the support table: the seven families' documented models and the generatio
   assert.equal(servedByRawCall(op("post_ad_resizer")), false);
   const counts = {};
   for (const o of OPERATIONS) counts[supportOf(o)] = (counts[supportOf(o)] ?? 0) + 1;
-  assert.deepEqual(counts, { curated: 40, raw: 7, planned: 80, unsupported: 73 });
+  assert.deepEqual(counts, { curated: 44, raw: 4, planned: 79, unsupported: 73 });
+});
+
+test("a font field is the one whose description names the font formats; every other file field takes images", () => {
+  const fileFields = OPERATIONS.filter(isExposable).flatMap((o) => o.facts.fileFields.map((f) => ({ op: o, field: f.name })));
+  const fonts = fileFields.filter(({ op: o, field }) => /\.ttf, \.otf, \.woff, \.woff2/.test(fieldDescription(o, field) ?? ""));
+  assert.ok(fonts.length > 0, "the specification states a font field");
+  assert.deepEqual(new Set(fonts.map((f) => f.field)), FONT_FILE_FIELDS);
+  for (const { op: o, field } of fileFields) {
+    if (FONT_FILE_FIELDS.has(field)) continue;
+    assert.doesNotMatch(fieldDescription(o, field) ?? "", /\.ttf/, `${o.id}.${field} is an image field`);
+  }
 });
 
 test("the whole request is bounded: the specification's cap where it states one, this server's 100 MB where it does not", () => {

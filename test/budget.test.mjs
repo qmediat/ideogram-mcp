@@ -1,5 +1,6 @@
 // The schema budget of the shipped release (docs/DESIGN-ideogram-v2.md section 5): tools/list as a client receives it,
-// over a real MCP session, is at most 64 KB, and the per-model exactness that costs those bytes is really there.
+// over a real MCP session, is at most 80 KB (16 tools: the eleven image families, measured 2026-10-10), and the
+// per-model exactness that costs those bytes is really there.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -9,7 +10,7 @@ const { createServer } = await import("../dist/server.js");
 const { documentedModelsOf } = await import("../dist/registry.js");
 const { IdeogramClient, defaultClientOptions } = await import("../dist/client.js");
 
-const BUDGET_BYTES = 64 * 1024;
+const BUDGET_BYTES = 80 * 1024;
 
 async function listTools() {
   const ctx = { client: new IdeogramClient(defaultClientOptions("unused")), outputDir: "/tmp/unused", clock: { now: () => 0, sleep: async () => {} } };
@@ -24,7 +25,7 @@ async function listTools() {
   }
 }
 
-test("the serialized tools/list is within the 64 KB budget", async () => {
+test("the serialized tools/list is within the 80 KB budget", async () => {
   const listed = await listTools();
   const bytes = Buffer.byteLength(JSON.stringify(listed));
   assert.ok(bytes <= BUDGET_BYTES, `tools/list is ${bytes} bytes, over ${BUDGET_BYTES}`);
@@ -45,4 +46,14 @@ test("each family tool advertises one exact variant per documented model, and th
   assert.ok("quality" in variant("ideogram-4-5").properties && !("rendering_speed" in variant("ideogram-4-5").properties));
   assert.ok("rendering_speed" in variant("ideogram-3").properties && !("quality" in variant("ideogram-3").properties));
   assert.equal(variant("ideogram-3").required?.includes("model") ?? false, false, "the default model's variant does not require model");
+});
+
+test("a definition shorter than its $ref is inlined, and every $ref that remains resolves", async () => {
+  const { tools } = await listTools();
+  for (const t of tools) {
+    const definitions = t.inputSchema.definitions ?? {};
+    for (const [name, def] of Object.entries(definitions)) assert.ok(JSON.stringify(def).length > 34, `${t.name}: ${name} is shorter than a $ref`);
+    const refs = JSON.stringify(t.inputSchema).match(/"#\/definitions\/[^"]+"/g) ?? [];
+    for (const ref of refs) assert.ok(JSON.parse(ref).replace("#/definitions/", "") in definitions, `${t.name}: ${ref} resolves`);
+  }
 });

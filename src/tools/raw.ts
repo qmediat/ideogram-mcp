@@ -50,7 +50,7 @@ type RawArgs = z.infer<typeof RawInput>;
 export function rawRefusal(op: Operation, allowUndocumented: boolean): string | null {
   const byClass = CLASS_REFUSAL[op.class];
   if (byClass !== undefined) return `${op.id} ${byClass}`;
-  if (!servedByRawCall(op)) return `${op.id} is ${supportOf(op)} for a later release of this server, not served by 2.0.0`;
+  if (!servedByRawCall(op)) return `${op.id} is ${supportOf(op)} for a later release of this server, not served by this release`;
   if (op.class === "spec_only" && !allowUndocumented) {
     return `${op.id} is in Ideogram's specification but not in its documentation; set allow_undocumented: true to call it anyway`;
   }

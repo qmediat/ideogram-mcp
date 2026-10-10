@@ -72,7 +72,7 @@ function minimalArguments(spec, variant) {
   const fileFields = new Set(variant.op.facts.fileFields.map((f) => f.name));
   const source = ["image", "images"].find((f) => fileFields.has(f));
   if (source !== undefined && !(source in args) && spec.family !== "generate") args[source] = MINIMAL[source]; // generate is quoted as text-to-image
-  if (spec.family === "inpaint") args.mask = mask;
+  if (spec.family === "inpaint" || spec.family === "remove_object") args.mask = mask;
   if (variant.fields.has("character_reference_images")) args.character_reference_images = MINIMAL.character_reference_images; // the API requires one; the schema does not say so
   return { args };
 }

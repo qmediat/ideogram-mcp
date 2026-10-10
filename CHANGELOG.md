@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Step 1 of `docs/DESIGN-ideogram-v2.md`: every image family of Ideogram's documentation index has its own tool.
+
+### Added
+
+- `ideogram_precise_edit` (Ideogram 4.5: the image, an optional mask, up to four `reference_images` or
+  `reference_image_asset_identifiers`, `context_window`), `ideogram_remove_background` and `ideogram_remove_object`
+  (ideogram-1), `ideogram_layerize` (Ideogram 3.0: the text-free base image is saved, the detected text blocks are
+  returned as JSON; `font_candidate_files` are sent as fonts — .ttf, .otf, .woff, .woff2 — and refused as images, and
+  an image is refused as a font). Each is priced by `ideogram_quote` and collected by `ideogram_generation` like any
+  other; the four were reachable through `ideogram_api` only in 2.0.0.
+- The rules the specification states in prose for these operations, refused before any request (`src/spec/overlay.ts`,
+  each anchored to its phrase): references by reference need the edited image by reference and no mask; a mask leaves
+  room for three reference images; `context_window` needs the image as a file and `"auto"` needs a mask; remove object
+  needs its source and its mask.
+- A `layered` payload in the lifecycle: a `layerized_image` / `layerized_design.generation` entry of a generation is
+  shown as its base image (saved, or withheld by the safety check) and its text blocks, never as a raw record.
+
+### Changed
+
+- tools/list carries 16 tools; a definition shorter than its `$ref` is inlined (lossless, 1.3 KB), and the advertised
+  schema budget is 80 KB measured (70 821 bytes over a real session on 2026-10-10; the 64 KB of 2.0.0 was the
+  estimate before step 1 — `test/budget.test.mjs`, design note section 5).
+- `ideogram_api`'s refusal of a planned operation names "this release", not a version.
+- The plan's order after step 2 (design note section 8, operator decision 2026-10-10): custom-model training (v1)
+  before video, the commercial tools last; step 1 also brings inline image content and URL input, opt-in, for clients
+  without file access.
+- `docs/COMPETITION-2026-10-01.md`: the official MCP page names 12 tools (`generate_image` and
+  `get_images_by_collection_id` were missing from the list).
+
 - `scripts/spec-gen/`: js-yaml 4.3.2 through an exact `overrides` entry — the nested 4.2.0 openapi-ts' ref-parser pinned
   carried GHSA-52cp-r559-cp3m, GHSA-5p4m-2wfm-xmqj and GHSA-2883-xcg3-v3hh (three high Dependabot alerts at the 2.0.0
   release); the lockfile regenerated under the override (`npm ls js-yaml`: one 4.3.2); CI audits that lockfile (#38).

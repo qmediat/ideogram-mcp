@@ -7,9 +7,14 @@ was read from the linked page on 2026-10-01; "unverified" marks what could not b
 ## The provider: Ideogram
 
 - **Official MCP server** — `https://mcp.ideogram.ai/mcp`, streamable HTTP, OAuth with the Ideogram account, billed to
-  the Ideogram app subscription ("no separate billing for MCP requests"). Tools shown on
-  <https://ideogram.ai/features/mcp/>: `generate_images_bulk`, `edit_image`, `reframe_image`, `upscale_image`,
-  `remove_background`, `upload_image`, `create_collection`, `create_dataset`, `upload_dataset_assets`, `train_model`.
+  the Ideogram app subscription ("no separate billing for MCP requests"). Tools named on
+  <https://ideogram.ai/features/mcp/> (12, read from the page's HTML on 2026-10-10; the full list needs an OAuth
+  session): `generate_image`, `generate_images_bulk`, `edit_image`, `reframe_image`, `upscale_image`,
+  `remove_background`, `upload_image`, `create_collection`, `get_images_by_collection_id`, `create_dataset`,
+  `upload_dataset_assets`, `train_model`. Not named: remix, describe, replace background, precise edit, third-party
+  models, a price quote. The endpoint answers an unauthenticated `tools/list` with 401 and
+  `WWW-Authenticate: Bearer resource_metadata=…`; its authorization server offers dynamic client registration, PKCE
+  S256 and the scopes `openid email profile`.
   Clients listed: Claude, ChatGPT, Cursor, Cline, OpenCode, Hermes. Its FAQ sends server-to-server use to the REST API,
   which is this package's niche (stdio + the user's own API key).
 - **Docs MCP** — `https://developer.ideogram.ai/_mcp/server`, one tool `searchDocs` (probed with `tools/list`).

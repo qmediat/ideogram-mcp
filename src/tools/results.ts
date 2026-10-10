@@ -7,7 +7,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { COUNTERS } from "../counters.js";
 import { IdeogramApiError } from "../errors.js";
 import { microsToUsd } from "../cost.js";
-import type { ImageItem, Outcome, Payload } from "../lifecycle.js";
+import type { ImageItem, LayeredItem, Outcome, Payload } from "../lifecycle.js";
 import type { ToolContext } from "./context.js";
 
 /** JSON text of a value that may hold bigints (the generated schemas parse int64 as bigint). */
@@ -43,6 +43,14 @@ async function saveImages(ctx: ToolContext, items: readonly ImageItem[]): Promis
   return { lines, saved };
 }
 
+/** A layerized design: its base image is saved as any image is; its text blocks follow as JSON. */
+async function layeredResult(ctx: ToolContext, items: readonly LayeredItem[]): Promise<{ lines: string[]; isError: boolean }> {
+  const base: ImageItem[] = items.map((item) => ({ url: item.baseImageUrl, resolution: item.resolution, seed: item.seed, prompt: null, isImageSafe: item.isImageSafe }));
+  const images = await saveImages(ctx, base);
+  const blocks = items.map((item, i) => `Text blocks of design ${i + 1} (${item.textBlocks.length}):\n${jsonText(item.textBlocks)}`);
+  return { lines: [`${images.saved} of ${items.length} base image(s) saved.`, ...images.lines, ...blocks], isError: images.saved === 0 };
+}
+
 function descriptionLines(payload: Extract<Payload, { kind: "description" }>): string[] {
   const lines = payload.texts.map((text, i) => `${i + 1}. ${text}`);
   if (payload.jsonPrompt !== null) lines.push(`JSON prompt:\n${jsonText(payload.jsonPrompt)}`);
@@ -55,6 +63,10 @@ async function completedResult(ctx: ToolContext, outcome: Extract<Outcome, { kin
   const payload = outcome.payload;
   if (payload.kind === "description") return { lines: [...head, ...descriptionLines(payload)], isError: false };
   if (payload.kind === "record") return { lines: [...head, jsonText(payload.body)], isError: false };
+  if (payload.kind === "layered") {
+    const layered = await layeredResult(ctx, payload.items);
+    return { lines: [...head, ...layered.lines], isError: layered.isError };
+  }
   if (payload.items.length === 0) return { lines: [...head, "Ideogram listed no image for this generation (nothing to save)."], isError: true };
   const images = await saveImages(ctx, payload.items);
   const summary = `${images.saved} of ${payload.items.length} image(s) saved.`;

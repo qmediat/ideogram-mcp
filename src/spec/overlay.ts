@@ -31,6 +31,10 @@ export interface RequestLimit {
   readonly stated: boolean;
 }
 
+/** The file fields that take font files, not images: every file field whose description states the font formats
+ * (".ttf, .otf, .woff, .woff2"); test/overlay.test.mjs derives the same set from the specification. */
+export const FONT_FILE_FIELDS: ReadonlySet<string> = new Set(["font_candidate_files", "font_file_body", "font_file_h1", "font_file_h2", "font_file_small"]);
+
 export function quoteAllowed(op: Operation): boolean {
   return isExposable(op) && op.dryRun;
 }
@@ -211,6 +215,41 @@ export const CONSTRAINTS: readonly Constraint[] = [
     anchor: { field: "character_reference_images", phrase: /character/ },
     text: "a character model needs a character reference: character_reference_images, character_reference_asset_identifiers or character_reference_collection_id",
     violated: (f) => !anyGiven(f, ["character_reference_images", "character_reference_asset_identifiers", "character_reference_collection_id"]),
+  },
+  {
+    id: "references-by-reference-need-the-image-by-reference",
+    operations: new Set(["post_precise_edit_image_v2_ideogram45"]),
+    anchor: { field: "reference_image_asset_identifiers", phrase: /Requires the image being edited to be supplied by reference too, and cannot be combined with `?mask`?/ },
+    text: "reference_image_asset_identifiers needs the edited image by reference too (image_asset_identifier) and cannot be combined with mask",
+    violated: (f) => given(f, "reference_image_asset_identifiers") && (!given(f, "image_asset_identifier") || given(f, "mask")),
+  },
+  {
+    id: "mask-leaves-three-references",
+    operations: new Set(["post_precise_edit_image_v2_ideogram45"]),
+    anchor: { field: "reference_images", phrase: /A request with a `?mask`? can include at most three/ },
+    text: "with a mask, reference_images takes at most three files",
+    violated: (f) => given(f, "mask") && Array.isArray(f.reference_images) && f.reference_images.length > 3,
+  },
+  {
+    id: "context-window-needs-image",
+    operations: new Set(["post_precise_edit_image_v2_ideogram45"]),
+    anchor: { field: "image", phrase: /Required when supplying a `?mask`? or a `?context_window`?/ },
+    text: "context_window needs the image as a file in the same request (image)",
+    violated: (f) => given(f, "context_window") && !given(f, "image"),
+  },
+  {
+    id: "context-window-auto-needs-mask",
+    operations: new Set(["post_precise_edit_image_v2_ideogram45"]),
+    anchor: { field: "context_window", phrase: /`?auto`? requires a `?mask`?/ },
+    text: 'context_window "auto" needs a mask',
+    violated: (f) => f.context_window === "auto" && !given(f, "mask"),
+  },
+  {
+    id: "remove-object-source-and-mask",
+    operations: new Set(["post_remove_object_from_v2_assets"]),
+    anchor: { field: "mask", phrase: /marks the region to remove/ },
+    text: "remove object needs the source (image or image_asset_identifier) and the mask (mask or mask_asset_identifier)",
+    violated: (f) => !anyGiven(f, ["image", "image_asset_identifier"]) || !anyGiven(f, ["mask", "mask_asset_identifier"]),
   },
   {
     id: "source-size-needs-images",
