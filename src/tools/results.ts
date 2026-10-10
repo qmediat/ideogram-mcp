@@ -41,14 +41,15 @@ async function saveImages(ctx: ToolContext, items: readonly ImageItem[]): Promis
     lines.push(`Not saved: ${safe[i].url} — ${reason}${later}`);
   });
   const unsafe = items.length - safe.length;
-  if (unsafe > 0) lines.push(`${unsafe} image(s) withheld by Ideogram's safety check (no URL, nothing downloaded)`);
+  if (unsafe > 0) lines.push(`${unsafe} image(s) withheld by Ideogram's safety check (nothing downloaded)`);
   return { lines, saved };
 }
 
+/** A withheld design is said and nothing of it is shown; a safe one lists what Ideogram gave. */
 function designLines(item: LayeredItem, i: number): string[] {
+  if (!item.isImageSafe) return [`Design ${i + 1} withheld by Ideogram's safety check (nothing shown, nothing downloaded)`];
   return [
-    ...(item.isImageSafe ? [] : [`Design ${i + 1} withheld by Ideogram's safety check`]),
-    ...(item.isImageSafe && item.baseImageUrl === null ? [`Design ${i + 1}: no base image listed by Ideogram`] : []),
+    ...(item.baseImageUrl === null ? [`Design ${i + 1}: no base image listed by Ideogram`] : []),
     ...(item.url === null ? [] : [`Design ${i + 1}: ${item.url} (Ideogram's links expire; download it to keep it)`]),
     ...(item.htmlUrl === null ? [] : [`Editable page of design ${i + 1}: ${item.htmlUrl} (expires as well)`]),
     `Text blocks of design ${i + 1} (${item.textBlocks.length}):\n${jsonText(item.textBlocks)}`,

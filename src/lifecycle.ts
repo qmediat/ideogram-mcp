@@ -143,7 +143,7 @@ function layeredItems(data: readonly unknown[]): LayeredItem[] | null {
       htmlUrl: d.html_url ?? null,
       resolution: d.resolution ?? null,
       seed: d.seed ?? null,
-      isImageSafe: d.is_image_safe ?? (d.base_image_url != null || d.url != null || d.html_url != null), // the flag is required by the schema; absent, anything listed counts as safe
+      isImageSafe: d.is_image_safe ?? (d.base_image_url != null || d.url != null || d.html_url != null || (d.text_blocks ?? []).length > 0), // the flag is required by the schema; absent, anything listed counts as safe
       textBlocks: d.text_blocks ?? [],
     });
   }

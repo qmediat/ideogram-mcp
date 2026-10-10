@@ -405,8 +405,8 @@ test("ideogram_generation shows a layerized design collected by id the same way;
   const { result, requests } = await call("ideogram_generation", { generation_id: "L2", wait_s: 0 }, () => ({ json: done }));
   assert.equal(result.isError, true, "nothing usable");
   assert.match(text(result), /0 of 0 base image\(s\) saved \(1 design\(s\)\)\./);
-  assert.match(text(result), /Design 1 withheld by Ideogram's safety check/);
-  assert.match(text(result), /Text blocks of design 1 \(0\)/);
+  assert.match(text(result), /Design 1 withheld by Ideogram's safety check \(nothing shown, nothing downloaded\)/);
+  assert.doesNotMatch(text(result), /Text blocks/);
   assert.equal(requests.length, 1, "no download attempted");
 });
 
@@ -493,8 +493,16 @@ test("private: null is 'not set' and becomes true; an image flagged unsafe is no
   };
   const { result, requests } = await call("ideogram_generate", { prompt: "x" }, handler);
   assert.equal(requests.filter((r) => r.url.startsWith("/img/")).length, 0, "nothing downloaded");
-  assert.match(text(result), /1 image\(s\) withheld by Ideogram's safety check/);
+  assert.match(text(result), /1 image\(s\) withheld by Ideogram's safety check \(nothing downloaded\)/);
   assert.equal(result.isError, true);
+  const withheldDesign = { generation_id: "L5", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "layerized_image", base_image_url: null, url: "https://ideogram.ai/d/L5.psd", is_image_safe: false, resolution: "1024x1024", seed: 1, text_blocks: [{ text: "X", alignment: "left", formatting: [], x: 0, y: 0, width: 1, height: 1 }] }] };
+  const design = await call("ideogram_generation", { generation_id: "L5", wait_s: 0 }, () => ({ json: withheldDesign }));
+  assert.equal(design.result.isError, true);
+  assert.match(text(design.result), /Design 1 withheld by Ideogram's safety check \(nothing shown, nothing downloaded\)/);
+  assert.doesNotMatch(text(design.result), /L5\.psd|Text blocks/, "nothing of a withheld design is shown");
+  const { payloadOf } = await import("../dist/lifecycle.js");
+  const blocksOnly = payloadOf({ data: [{ object_type: "layerized_image", text_blocks: [{ text: "Y" }] }] });
+  assert.equal(blocksOnly.items[0].isImageSafe, true, "text blocks alone count as listed when the flag is absent");
 });
 
 test("a safe layerized design that lists only text blocks is a result, not an error; a flag Ideogram omitted is inferred from what is listed", async () => {

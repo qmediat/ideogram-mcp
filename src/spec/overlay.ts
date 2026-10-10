@@ -93,6 +93,8 @@ export function requestBytesRefusal(op: Operation, bodyBytes: number): string | 
 
 export interface Constraint {
   readonly id: string;
+  /** The rule names the missing source itself (inpaint, remove object): the shared source rule is not repeated beside it. */
+  readonly coversSource?: boolean;
   /** The operation ids the rule applies to. */
   readonly operations: ReadonlySet<string>;
   /** The request field whose description states the rule, and the phrase that states it. */
@@ -198,6 +200,7 @@ export const CONSTRAINTS: readonly Constraint[] = [
   },
   {
     id: "inpaint-source-and-mask",
+    coversSource: true,
     operations: new Set([
       "post_inpaint_image_v2_ideogram_v3",
       "post_inpaint_image_v2_ideogram_v3_character",
@@ -283,6 +286,7 @@ export const CONSTRAINTS: readonly Constraint[] = [
   },
   {
     id: "remove-object-source-and-mask",
+    coversSource: true,
     operations: new Set(["post_remove_object_from_v2_assets"]),
     anchor: { field: "mask", phrase: /marks the region to remove/ },
     text: "remove object needs the source (image or image_asset_identifier) and the mask (mask or mask_asset_identifier)",
@@ -312,6 +316,7 @@ export function needsSource(op: Operation): boolean {
 
 export function sourceRefusal(op: Operation, fields: BodyFields): string | null {
   if (!needsSource(op) || anyGiven(fields, SOURCE_FIELDS)) return null;
+  if (CONSTRAINTS.some((c) => c.coversSource === true && c.operations.has(op.id) && c.violated(fields))) return null; // said by that rule
   return `${op.id} ${SOURCE_RULE_TEXT}`;
 }
 

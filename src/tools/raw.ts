@@ -102,10 +102,8 @@ async function buildRawRequest(op: Operation, args: RawArgs): Promise<ApiRequest
   if (op.body === "none") {
     if (Object.keys(withFiles).length > 0) throw new Error(`body: ${op.id} takes no body; given ${Object.keys(withFiles).join(", ")}`);
   } else check("body", bodySchemaFor(op, media), withFiles);
-  const noSource = sourceRefusal(op, withFiles);
-  const rules = constraintViolations(op, withFiles);
-  // a family rule that already names the missing source (inpaint, remove object) is not repeated by the shared one
-  const violations = noSource === null || rules.some((text) => /needs the source/.test(text)) ? rules : [...rules, noSource];
+  const noSource = sourceRefusal(op, withFiles); // null when a family rule names the missing source itself
+  const violations = [...constraintViolations(op, withFiles), ...(noSource === null ? [] : [noSource])];
   if (violations.length > 0) throw new Error(violations.join("\n"));
   if (body.async === false && args.dry_run !== true) {
     // a quote prices the request as given; a run with async: false would carry its result only in the POST answer
