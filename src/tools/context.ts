@@ -8,6 +8,8 @@ import { SYSTEM_CLOCK, toolCallBudget } from "../budget.js";
 import type { CallBudget, Clock } from "../budget.js";
 import { defaultClientOptions, IdeogramClient } from "../client.js";
 import type { Config } from "../config.js";
+import { fetchRemoteInput } from "../remote-input.js";
+import type { RemoteFetcher } from "../remote-input.js";
 import type { ToolArguments } from "./family.js";
 
 /** What the server holds for every call. */
@@ -17,9 +19,16 @@ export interface ServerContext {
   readonly clock: Clock;
 }
 
-/** The server context plus the budget of ONE call. */
+/** The server context plus the budget of ONE call and the remote-input fetcher bound to it. */
 export interface ToolContext extends ServerContext {
   readonly budget: CallBudget;
+  readonly remote: RemoteFetcher;
+}
+
+/** The fetcher of one call: public HTTPS hosts only, unless the client was built for a loopback test server. */
+export function remoteFetcherFor(server: ServerContext, budget: CallBudget): RemoteFetcher {
+  const allowPrivate = server.client.options.allowHttpDownloads;
+  return (url, maxBytes, accepted) => fetchRemoteInput(url, { maxBytes, accepted, budget, allowPrivate });
 }
 
 export function contextFromConfig(config: Config): ServerContext {
@@ -28,7 +37,8 @@ export function contextFromConfig(config: Config): ServerContext {
 
 /** The context of one call: the caller's cancellation signal (when the transport gives one) joins the server's limit. */
 export function callContext(server: ServerContext, cancel?: AbortSignal): ToolContext {
-  return { ...server, budget: toolCallBudget(server.clock, cancel) };
+  const budget = toolCallBudget(server.clock, cancel);
+  return { ...server, budget, remote: remoteFetcherFor(server, budget) };
 }
 
 /** One registered tool: its name, our reviewed description, the schema tools/list advertises, its handler. */

@@ -249,6 +249,35 @@ commercial tools last because part of them are one customer's endpoints). The fa
 Bearer-only and internal operations (the web app's); remote HTTP transport and OAuth (Ideogram's own MCP owns that
 niche); a local price table (the quote is the price); exposing `legacy` paths.
 
+## 9b. Remote inputs and inline results — threat model (step 1, 2026-10-10)
+
+A client without access to this machine's files (ChatGPT's connectors, Claude Desktop) holds its images as URLs and
+reads a result only from the tool's answer. Two opt-in surfaces serve it; both are bounded as what they are.
+
+**An image given as an https URL** (`image`, `images`, `mask`, every image file field; `src/remote-input.ts`,
+`src/uploads.ts`). The URL comes from the model, so the server makes a request on the model's say-so.
+
+| asset | threat | control |
+|---|---|---|
+| this machine's network | the model is talked into fetching an internal address (a metadata service, a database admin page, a printer) — SSRF | https only; no credentials in the URL; no IP literal; no local or single-label host name (`localhost`, `*.local`, `*.internal`, `*.home.arpa`, …); every address the host resolves to must be public (loopback, RFC 1918, link-local, carrier-grade NAT, reserved, multicast and their IPv6 forms refused); the lookup is a separate step before the fetch |
+| the same, through a hop | a public host answers with a redirect to a private one | a 3xx is refused, never followed (as the download client does) |
+| this process's memory and the call's time | a huge or slow body | the body is read with a byte counter under the FIELD's own limit (as a local file is), the declared length checked first; the fetch runs under the call's budget and its cancellation signal |
+| the request to Ideogram | a non-image body sent as an image | the Content-Type must be one the field takes (the three image types, or the font types for a font field); the part is named `<field>.<ext>` from that type, never from the URL |
+| the local files | a URL input weakening the local checks | local files are checked first and a failing one stops the call before any fetch; the request cap is checked on the parts as sent |
+
+Residual, named: a host that answers the lookup with a public address and the connection with a private one (DNS
+rebinding) is not caught — Node's `fetch` cannot pin the socket to the resolved address — so the guard keeps the
+model from naming an internal target, not a hostile DNS operator from reaching one; a public host is reachable by
+anyone on the internet anyway. A test server on the loopback is reachable only with the client built for it
+(`allowHttpDownloads`, the same switch the download client's tests use); the server never sets it.
+
+**Images returned inline** (`inline_images: true` on every tool that saves images: the family tools,
+`ideogram_generation`, `ideogram_api`). Each saved image under 4 MB (`INLINE_MAX_BYTES`: the model APIs behind the
+clients take about 5 MB per image) is also returned as MCP image content (base64, its media type); a larger one is
+named with its size and stays by path. Opt-in because base64 bytes land in the client's context on every call, and
+default off so a file-reading client pays nothing. The file is read back from the output directory, never held in
+memory twice.
+
 ## 10. Open questions — answered by the consult (section 12)
 
 1. One tool per family with a `model` enum and a union of fields, or one tool per (family, model)? The first keeps ~15

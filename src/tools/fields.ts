@@ -13,7 +13,12 @@ export const RESERVED_FIELDS: ReadonlySet<string> = new Set(["async", "internal"
 export const PRIVATE_FIELD = "private";
 
 /** Inputs of every curated tool that are not request fields. */
-export const CONTROL_FIELDS: ReadonlySet<string> = new Set(["model", "wait_s"]);
+export const CONTROL_FIELDS: ReadonlySet<string> = new Set(["model", "wait_s", "inline_images"]);
+
+/** The largest image returned inline: the model APIs behind the clients take an image of about 5 MB. */
+export const INLINE_MAX_BYTES = 4 * 1024 * 1024;
+
+export const INLINE_TEXT = "true: each saved image is also returned as image content (base64; one over 4 MB by path only), for a client without file access";
 
 export const WAIT_TEXT =
   "Seconds to wait for the result (0-50, default 45). The job is accepted first; if it is still running when the wait ends, the result is its generation_id for ideogram_generation (never resubmitted, never billed twice).";
@@ -40,7 +45,7 @@ export const FIELD_TEXT: Readonly<Record<string, string>> = {
   character_reference_images: "Local image files of the character to keep consistent",
   character_reference_mask: "Local grayscale mask of where the character is in its reference image",
   character_reference_asset_identifiers: "Ideogram assets to use as the character reference",
-  image: "Local image file to work on",
+  image: "Local image file to work on, or a public https URL of one",
   reference_images: "Local image files that guide the edit (never edited themselves); at most 4, at most 3 with a mask",
   reference_image_asset_identifiers: "Ideogram assets that guide the edit; needs the edited image by reference too, not with a mask",
   context_window: 'Where to edit: "none" (whole image, default), "auto" (around the mask) or "y_min,x_min,y_max,x_max"',

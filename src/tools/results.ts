@@ -2,9 +2,14 @@
  * An Outcome as the text a tool returns. Images are downloaded into the output directory (an unsafe image — no URL —
  * is counted, never fetched; a failed download is counted and listed); the generation id is always shown so a client
  * never resubmits paid work; a cost is shown when the API reports one; every 1.x mapping the adapter made is said.
+ * With `inline_images` each saved image under INLINE_MAX_BYTES is also returned as image content (base64), for a
+ * client that cannot read this machine's files; a larger one is listed by path only, and said.
  */
+import { readFile } from "node:fs/promises";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { SavedFile } from "../client.js";
 import { COUNTERS } from "../counters.js";
+import { INLINE_MAX_BYTES } from "./fields.js";
 import { IdeogramApiError } from "../errors.js";
 import { microsToUsd } from "../cost.js";
 import type { ImageItem, LayeredItem, Outcome, Payload } from "../lifecycle.js";
@@ -22,16 +27,24 @@ function imageLine(path: string, item: ImageItem): string {
   return lines.join("\n");
 }
 
+interface Saved {
+  readonly lines: string[];
+  readonly saved: number;
+  readonly files: SavedFile[];
+}
+
 /** Downloads the images Ideogram's safety check passed and that have a URL (the specification says a withheld image
  * has none; one that carries both is still withheld, never fetched). */
-async function saveImages(ctx: ToolContext, items: readonly ImageItem[]): Promise<{ lines: string[]; saved: number }> {
+async function saveImages(ctx: ToolContext, items: readonly ImageItem[]): Promise<Saved> {
   const safe = items.filter((item) => item.url !== null && item.isImageSafe);
   const results = await Promise.allSettled(safe.map((item) => ctx.client.download(item.url as string, ctx.outputDir, ctx.budget)));
   const lines: string[] = [];
+  const files: SavedFile[] = [];
   let saved = 0;
   results.forEach((result, i) => {
     if (result.status === "fulfilled") {
       saved += 1;
+      files.push(result.value);
       lines.push(imageLine(result.value.path, safe[i]));
       return;
     }
@@ -42,7 +55,33 @@ async function saveImages(ctx: ToolContext, items: readonly ImageItem[]): Promis
   });
   const unsafe = items.length - safe.length;
   if (unsafe > 0) lines.push(`${unsafe} image(s) withheld by Ideogram's safety check (nothing downloaded)`);
-  return { lines, saved };
+  return { lines, saved, files };
+}
+
+type ImageContent = { type: "image"; data: string; mimeType: string };
+
+/** The saved images as content items, each under the inline cap; a larger one is named with its size instead. */
+async function inlineContent(files: readonly SavedFile[]): Promise<{ items: ImageContent[]; lines: string[] }> {
+  const items: ImageContent[] = [];
+  const lines: string[] = [];
+  for (const file of files) {
+    if (file.bytes > INLINE_MAX_BYTES) {
+      lines.push(`Not returned inline: ${file.path} is ${(file.bytes / 1_048_576).toFixed(1)} MB, over ${INLINE_MAX_BYTES / 1_048_576} MB`);
+      continue;
+    }
+    items.push({ type: "image", data: (await readFile(file.path)).toString("base64"), mimeType: file.contentType });
+  }
+  return { items, lines };
+}
+
+export interface ResultOptions {
+  readonly inlineImages?: boolean;
+}
+
+interface Shaped {
+  readonly lines: string[];
+  readonly isError: boolean;
+  readonly files?: SavedFile[];
 }
 
 /** A withheld design is said and nothing of it is shown; a safe one lists what Ideogram gave. */
@@ -59,13 +98,13 @@ function designLines(item: LayeredItem, i: number): string[] {
 /** A layerized design: its base image (when listed) is saved as any image is; its link, its editable page and its
  * text blocks follow. A design is usable by its base image, its link, its page or its text blocks; only one Ideogram
  * withheld, or one that lists none of them, is an error. */
-async function layeredResult(ctx: ToolContext, items: readonly LayeredItem[]): Promise<{ lines: string[]; isError: boolean }> {
+async function layeredResult(ctx: ToolContext, items: readonly LayeredItem[]): Promise<Shaped> {
   const withBase = items.filter((item) => item.isImageSafe && item.baseImageUrl !== null);
   const base: ImageItem[] = withBase.map((item) => ({ url: item.baseImageUrl, resolution: item.resolution, seed: item.seed, prompt: null, isImageSafe: true }));
   const images = await saveImages(ctx, base);
   const usable = items.some((item) => item.isImageSafe && (item.url !== null || item.htmlUrl !== null || item.textBlocks.length > 0)) || images.saved > 0;
   const head = `${images.saved} of ${withBase.length} base image(s) saved (${items.length} design(s)).`;
-  return { lines: [head, ...images.lines, ...items.flatMap(designLines)], isError: !usable };
+  return { lines: [head, ...images.lines, ...items.flatMap(designLines)], isError: !usable, files: images.files };
 }
 
 function descriptionLines(payload: Extract<Payload, { kind: "description" }>): string[] {
@@ -74,7 +113,7 @@ function descriptionLines(payload: Extract<Payload, { kind: "description" }>): s
   return lines;
 }
 
-async function completedResult(ctx: ToolContext, outcome: Extract<Outcome, { kind: "completed" }>): Promise<{ lines: string[]; isError: boolean }> {
+async function completedResult(ctx: ToolContext, outcome: Extract<Outcome, { kind: "completed" }>): Promise<Shaped> {
   const head = outcome.generationId === null ? [] : [`Generation ${outcome.generationId} completed.`];
   if (outcome.usageCostUsdMicros !== null) head.push(`Cost reported by Ideogram: ${microsToUsd(outcome.usageCostUsdMicros)} USD`);
   const payload = outcome.payload;
@@ -82,15 +121,15 @@ async function completedResult(ctx: ToolContext, outcome: Extract<Outcome, { kin
   if (payload.kind === "record") return { lines: [...head, jsonText(payload.body)], isError: false };
   if (payload.kind === "layered") {
     const layered = await layeredResult(ctx, payload.items);
-    return { lines: [...head, ...layered.lines], isError: layered.isError };
+    return { lines: [...head, ...layered.lines], isError: layered.isError, files: layered.files };
   }
   if (payload.items.length === 0) return { lines: [...head, "Ideogram listed no image for this generation (nothing to save)."], isError: true };
   const images = await saveImages(ctx, payload.items);
   const summary = `${images.saved} of ${payload.items.length} image(s) saved.`;
-  return { lines: [...head, summary, ...images.lines], isError: images.saved === 0 };
+  return { lines: [...head, summary, ...images.lines], isError: images.saved === 0, files: images.files };
 }
 
-function otherResult(outcome: Exclude<Outcome, { kind: "completed" }>): { lines: string[]; isError: boolean } {
+function otherResult(outcome: Exclude<Outcome, { kind: "completed" }>): Shaped {
   switch (outcome.kind) {
     case "pending":
       return {
@@ -116,10 +155,12 @@ function otherResult(outcome: Exclude<Outcome, { kind: "completed" }>): { lines:
   }
 }
 
-export async function outcomeResult(ctx: ToolContext, outcome: Outcome, notes: readonly string[]): Promise<CallToolResult> {
+export async function outcomeResult(ctx: ToolContext, outcome: Outcome, notes: readonly string[], options: ResultOptions = {}): Promise<CallToolResult> {
   const shaped = outcome.kind === "completed" ? await completedResult(ctx, outcome) : otherResult(outcome);
-  const lines = notes.length === 0 ? shaped.lines : [...shaped.lines, `Mapped from the 1.x inputs: ${notes.join("; ")}`];
-  return { content: [{ type: "text", text: lines.join("\n") }], ...(shaped.isError ? { isError: true } : {}) };
+  const inline = options.inlineImages === true && shaped.files !== undefined ? await inlineContent(shaped.files) : { items: [], lines: [] };
+  const lines = [...shaped.lines, ...inline.lines];
+  if (notes.length > 0) lines.push(`Mapped from the 1.x inputs: ${notes.join("; ")}`);
+  return { content: [{ type: "text", text: lines.join("\n") }, ...inline.items], ...(shaped.isError ? { isError: true } : {}) };
 }
 
 export function textResult(text: string, isError = false): CallToolResult {

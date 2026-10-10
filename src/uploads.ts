@@ -3,13 +3,17 @@
  * must be one of the operation's file fields, a single-file field takes one file, an array field at most its
  * `maxItems`, each file at most its field's limit (src/spec/overlay.ts), all of them together at most the request cap
  * when the specification states one. A symlink is refused (its target could be any file on the machine). A file is
- * sent as `<field>.<ext>`: the local file name never leaves the machine.
+ * sent as `<field>.<ext>`: the local file name never leaves the machine. An `https://` path is a remote input: fetched
+ * by the call's RemoteFetcher (src/remote-input.ts: public hosts only) under the same limit and types, after every
+ * local file passed its checks.
  */
 import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { extname, resolve } from "node:path";
 import { fileLimitsOf, FONT_FILE_FIELDS, MB, requestLimitOf } from "./spec/overlay.js";
 import type { FileLimit } from "./spec/overlay.js";
 import type { Operation } from "./spec/operations.js";
+import { isRemoteInput } from "./remote-input.js";
+import type { RemoteFetcher } from "./remote-input.js";
 import type { UploadPart } from "./wire.js";
 
 /** One local file for one file field. */
@@ -80,23 +84,43 @@ function checkCounts(op: Operation, files: readonly FileRef[], limits: ReadonlyM
   }
 }
 
-/** Checks every file against the operation's limits, then reads them; nothing is read when any check fails. */
-export async function loadUploads(op: Operation, files: readonly FileRef[]): Promise<UploadPart[]> {
+function extensionFor(types: Readonly<Record<string, string>>, contentType: string): string {
+  return Object.entries(types).find(([, type]) => type === contentType)?.[0] ?? "";
+}
+
+/** A remote input as the upload part it becomes: fetched under the field's limit, accepted only as a type the field takes. */
+async function fetchRemote(ref: FileRef, limit: FileLimit, remote: RemoteFetcher | undefined): Promise<UploadPart> {
+  if (remote === undefined) throw new Error(`${ref.field}: a URL input needs a running call (not available here): ${ref.path}`);
+  const types = uploadTypesFor(ref.field);
+  const accepted = [...new Set(Object.values(types))];
+  const got = await remote(ref.path, limit.maxBytes, accepted).catch((error: unknown) => {
+    throw new Error(`${ref.field}: ${error instanceof Error ? error.message : String(error)}`);
+  });
+  return { field: ref.field, filename: `${ref.field}${extensionFor(types, got.contentType)}`, contentType: got.contentType, bytes: got.bytes };
+}
+
+function checkRequestCap(op: Operation, total: number): void {
+  const cap = requestLimitOf(op);
+  if (total <= cap.maxBytes) return;
+  const source = cap.stated ? "the limit Ideogram states for this request" : "this server's cap for a request Ideogram states no limit for";
+  throw new Error(`the files together are ${mb(total)}; ${op.id} takes a request under ${mb(cap.maxBytes)} (${source})`);
+}
+
+/** Checks every local file against the operation's limits, then reads them and fetches the remote inputs; nothing is
+ * read or fetched when any check fails. The parts keep the caller's order. */
+export async function loadUploads(op: Operation, files: readonly FileRef[], remote?: RemoteFetcher): Promise<UploadPart[]> {
   const limits = new Map(fileLimitsOf(op).map((l) => [l.field, l]));
   checkCounts(op, files, limits);
-  const checked = await Promise.all(files.map((f) => checkFile(f, limits.get(f.field) as FileLimit)));
-  const total = checked.reduce((sum, f) => sum + f.bytes, 0);
-  const cap = requestLimitOf(op);
-  if (total > cap.maxBytes) {
-    const source = cap.stated ? "the limit Ideogram states for this request" : "this server's cap for a request Ideogram states no limit for";
-    throw new Error(`the files together are ${mb(total)}; ${op.id} takes a request under ${mb(cap.maxBytes)} (${source})`);
-  }
-  return Promise.all(
-    checked.map(async (f) => ({
-      field: f.ref.field,
-      filename: `${f.ref.field}${extname(f.realPath).toLowerCase()}`,
-      contentType: f.contentType,
-      bytes: new Uint8Array(await readFile(f.realPath)),
-    })),
+  const local = files.filter((f) => !isRemoteInput(f.path));
+  const checked = new Map(await Promise.all(local.map(async (f) => [f, await checkFile(f, limits.get(f.field) as FileLimit)] as const)));
+  checkRequestCap(op, [...checked.values()].reduce((sum, f) => sum + f.bytes, 0));
+  const parts = await Promise.all(
+    files.map(async (f): Promise<UploadPart> => {
+      const own = checked.get(f);
+      if (own === undefined) return fetchRemote(f, limits.get(f.field) as FileLimit, remote);
+      return { field: f.field, filename: `${f.field}${extname(own.realPath).toLowerCase()}`, contentType: own.contentType, bytes: new Uint8Array(await readFile(own.realPath)) };
+    }),
   );
+  checkRequestCap(op, parts.reduce((sum, p) => sum + p.bytes.byteLength, 0));
+  return parts;
 }

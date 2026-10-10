@@ -15,12 +15,13 @@ await writeFile(png, PNG);
 const accepted = (id) => ({ json: { generation_id: id, seed: 1 } });
 const pending = (id) => ({ json: { generation_id: id, status: "pending", created: "2026-10-07T00:00:00Z" } });
 
-/** Runs one tool call against a fake API; the handler answers each request. */
+/** Runs one tool call against a fake API; the handler answers each request. `__BASE__` in an argument is the fake server. */
 async function call(name, args, handler = (req) => (req.method === "POST" ? accepted("g") : pending("g"))) {
   const api = await startFakeApi((req, n) => handler(req, n, api));
   try {
     const ctx = await testContext(api.base, join(dir, `out-${Math.random().toString(16).slice(2)}`));
-    const result = await (await tool(name)).handler(ctx, args);
+    const withBase = JSON.parse(JSON.stringify(args).replaceAll("__BASE__", api.base));
+    const result = await (await tool(name)).handler(ctx, withBase);
     return { result, requests: api.requests, ctx, api };
   } finally {
     await api.close();
@@ -522,4 +523,42 @@ test("ideogram_api says the missing source once: the inpaint rule names it, the 
   const lines = text(result).split("\n");
   assert.equal(lines.filter((l) => /source/.test(l)).length, 1, text(result));
   assert.match(text(result), /inpaint needs the source/);
+});
+
+test("a file field takes a URL: fetched under the field's limit and sent as the upload the local file would be; a local file that fails stops everything first", async () => {
+  const handler = (req) => (req.url === "/remote/a.png" ? { status: 200, headers: { "content-type": "image/png" }, body: PNG } : req.method === "POST" ? accepted("u1") : pending("u1"));
+  const { requests } = await call("ideogram_remix", { prompt: "x", image: "__BASE__/remote/a.png", wait_s: 0 }, handler);
+  assert.equal(requests[0].url, "/remote/a.png", "the image is fetched first");
+  assert.equal(requests[1].url, "/v2/image/remix/ideogram-3");
+  assert.match(requests[1].body.toString("latin1"), /name="image"; filename="image.png"\r\nContent-Type: image\/png/);
+  const typo = await call("ideogram_remix", { prompt: "x", image: "__BASE__/remote/a.png", style_reference_images: [join(dir, "missing.png")] }, handler).catch((e) => e);
+  assert.match(typo.message, /ENOENT|no such file/);
+  const html = await call("ideogram_remix", { prompt: "x", image: "__BASE__/remote/page" }, (req) => (req.url === "/remote/page" ? { status: 200, headers: { "content-type": "text/html" }, body: "<p>" } : accepted("u2"))).catch((e) => e);
+  assert.match(html.message, /image: .*is text\/html, not one of image\/png/);
+});
+
+test("inline_images: each saved image comes back as image content beside the text; a large one is listed by path only; nothing inline by default", async () => {
+  const handler = (req, _n, api) => {
+    if (req.url === "/img/small.png") return { status: 200, headers: { "content-type": "image/png" }, body: PNG };
+    if (req.url === "/img/big.png") return { status: 200, headers: { "content-type": "image/png" }, body: Buffer.alloc(4 * 1024 * 1024 + 1, 7) };
+    if (req.method === "POST") return accepted("i1");
+    return { json: { generation_id: "i1", status: "completed", created: "2026-10-07T00:00:00Z", data: [
+      { object_type: "image.generation", url: `${api.base}/img/small.png`, prompt: "p", resolution: "1024x1024", is_image_safe: true, seed: 1 },
+      { object_type: "image.generation", url: `${api.base}/img/big.png`, prompt: "p", resolution: "4096x4096", is_image_safe: true, seed: 2 },
+    ] } };
+  };
+  const { result } = await call("ideogram_generate", { prompt: "x", inline_images: true }, handler);
+  assert.equal(result.content[0].type, "text");
+  assert.match(result.content[0].text, /2 of 2 image\(s\) saved\./);
+  assert.match(result.content[0].text, /Not returned inline: .*\.png is 4\.0 MB, over 4 MB/);
+  assert.equal(result.content.length, 2, "one image item: the small one");
+  assert.deepEqual(result.content[1], { type: "image", data: PNG.toString("base64"), mimeType: "image/png" });
+  const plain = await call("ideogram_generate", { prompt: "x" }, handler);
+  assert.equal(plain.result.content.length, 1, "text only by default");
+  const collected = await call("ideogram_generation", { generation_id: "i1", wait_s: 0, inline_images: true }, handler);
+  assert.equal(collected.result.content.length, 2);
+  const raw = await call("ideogram_api", { operation: "post_generate_image_v2_ideogram_v3", params: { body: { prompt: "x" } }, inline_images: true }, handler);
+  assert.equal(raw.result.content.length, 2, "ideogram_api inlines the same way");
+  const bad = await call("ideogram_generate", { prompt: "x", inline_images: "yes" }).catch((e) => e);
+  assert.match(bad.message, /inline_images must be true or false/);
 });

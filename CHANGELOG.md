@@ -11,6 +11,13 @@ Step 1 of `docs/DESIGN-ideogram-v2.md`: every image family of Ideogram's documen
 
 ### Added
 
+- An image file field takes a public `https://` URL beside a local path, on every tool (the family tools, `ideogram_quote`,
+  `ideogram_api`): fetched under the field's own limit and types, from a public host only — no IP literal, no local
+  name, no private / loopback / link-local / carrier address after resolution, no redirect followed — inside the
+  call's budget; the threat model and the one residual (DNS rebinding) are in the design note, section 9b.
+- `inline_images: true` on every tool that saves images (the family tools, `ideogram_generation`, `ideogram_api`):
+  each saved image under 4 MB is also returned as MCP image content, for a client without access to this machine's
+  files; a larger one is named with its size and stays by path. Off by default.
 - `ideogram_precise_edit` (Ideogram 4.5: the image, an optional mask, up to four `reference_images` or
   `reference_image_asset_identifiers`, `context_window`), `ideogram_remove_background` and `ideogram_remove_object`
   (ideogram-1), `ideogram_layerize` (Ideogram 3.0: the text-free base image is saved, the detected text blocks are

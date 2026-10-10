@@ -104,6 +104,14 @@ Add to `claude_desktop_config.json`:
 
 Each model's fields are listed in the tool's schema (one variant per model) and in [docs/API-REFERENCE.md](https://github.com/qmediat/ideogram-mcp/blob/main/docs/API-REFERENCE.md), generated from the specification. Image inputs are local file paths (or Ideogram asset identifiers where a model takes them); each operation's own upload limits apply, checked each file against its field's limit before any is read, the whole encoded request against the request cap before it is sent.
 
+### A client without files: URL inputs and inline images
+
+Any image file field (`image`, `images`, `mask`, the reference images) takes a public `https://` URL beside a local
+path: the image is fetched under the field's own limit and types, from a public host only (no IP address, no local
+name, no private address, no redirect), inside the call's budget. `inline_images: true` on any tool that saves images
+returns each saved image under 4 MB as image content beside the text (a larger one stays by path), so a client that
+cannot read this machine's files still sees the result. Both are off unless asked.
+
 ### Waiting, and collecting later
 
 A generation is sent asynchronously and returned the moment Ideogram accepts it. The tool then waits up to `wait_s` seconds (default 45, at most 50: MCP clients time a call out at 60 s), polling at 2 s, ×1.5, up to 30 s apart. A job still running at the end of the wait comes back as its `generation_id`: `ideogram_generation {"generation_id": "…"}` collects it later, in this session or another. Sending the request again would start — and bill — a second job.
