@@ -10,13 +10,14 @@ import { OPERATIONS_TOOL } from "./tools/discovery.js";
 import { GENERATION_TOOL } from "./tools/generation.js";
 import { QUOTE_TOOL } from "./tools/quote.js";
 import { RAW_TOOL } from "./tools/raw.js";
+import { TRAINING_TOOLS } from "./tools/training.js";
 
 // dist/server.js → ../package.json is the package root both in the repository and when installed from npm.
 const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
 
 /** Every tool of this release, in the order tools/list shows them. */
 export function toolDefinitions(): ToolDefinition[] {
-  return [...curatedDefinitions(), QUOTE_TOOL, GENERATION_TOOL, ...ACCOUNT_TOOLS, OPERATIONS_TOOL, RAW_TOOL];
+  return [...curatedDefinitions(), QUOTE_TOOL, GENERATION_TOOL, ...ACCOUNT_TOOLS, ...TRAINING_TOOLS, OPERATIONS_TOOL, RAW_TOOL];
 }
 
 /** A tool failure as the text the client sees: the API's typed error, or the refusal's own sentence. */

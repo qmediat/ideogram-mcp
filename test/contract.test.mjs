@@ -22,6 +22,12 @@ const EXAMPLES_CONTRADICTING_THEIR_SCHEMA = {
   ToolRemixResponse: 'seed is "" in the example, an integer in the schema',
   ListAccountApiKeysResponse: "status is null in the example, an enum (active | disabled | archived) in the schema",
   AssetReferenceUsageResponse: "attributes[].value_type is null in the example, an enum (TEXT | NUMBER) in the schema",
+  Dataset: "cover_asset_identifier.asset_type is null and collection_id a placeholder in the example, an enum and a 22-character id in the schema",
+  GetDatasetResponse: "dataset.cover_asset_identifier as in Dataset",
+  ListDatasetsResponse: "datasets[].cover_asset_identifier as in Dataset",
+  GetModelResponse: "model.status and training_runs[].status are null in the example, enums in the schema",
+  ListModelsResponse: "models[].status and training_runs[].status as in GetModelResponse",
+  UploadDatasetAssetsResponse: "failed_assets[].failure_reason is null and successful_assets[].asset_identifier a string in the example, an enum and an object in the schema",
 };
 
 test("every served operation's response example parses with its generated schema, except the provider's own contradictions", () => {

@@ -9,7 +9,7 @@
  */
 import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { extname, resolve } from "node:path";
-import { fileLimitsOf, FONT_FILE_FIELDS, mbText, requestLimitOf } from "./spec/overlay.js";
+import { DATASET_UPLOAD_OPERATIONS, fileLimitsOf, FONT_FILE_FIELDS, mbText, requestLimitOf } from "./spec/overlay.js";
 import type { FileLimit } from "./spec/overlay.js";
 import type { Operation } from "./spec/operations.js";
 import { isRemoteInput } from "./remote-input.js";
@@ -39,9 +39,14 @@ export const FONT_TYPES: Readonly<Record<string, string>> = {
   ".woff2": "font/woff2",
 };
 
-/** The types a field's files may have: fonts for a font field, images for every other. */
-export function uploadTypesFor(field: string): Readonly<Record<string, string>> {
-  return FONT_FILE_FIELDS.has(field) ? FONT_TYPES : UPLOAD_TYPES;
+/** The media types a training asset is sent as: the images, a caption sidecar, an archive of both. */
+export const DATASET_TYPES: Readonly<Record<string, string>> = { ...UPLOAD_TYPES, ".txt": "text/plain", ".zip": "application/zip" };
+
+/** The types a field's files may have: fonts for a font field, training assets for a dataset upload, images for every other. */
+export function uploadTypesFor(field: string, op?: Operation): Readonly<Record<string, string>> {
+  if (FONT_FILE_FIELDS.has(field)) return FONT_TYPES;
+  if (op !== undefined && DATASET_UPLOAD_OPERATIONS.has(op.id)) return DATASET_TYPES;
+  return UPLOAD_TYPES;
 }
 
 interface CheckedFile {
@@ -53,11 +58,11 @@ interface CheckedFile {
 
 const mb = mbText;
 
-async function checkFile(ref: FileRef, limit: FileLimit): Promise<CheckedFile> {
+async function checkFile(ref: FileRef, limit: FileLimit, op: Operation): Promise<CheckedFile> {
   const resolved = resolve(ref.path);
   if ((await lstat(resolved)).isSymbolicLink()) throw new Error(`${ref.field}: symlinks are not uploaded (${ref.path})`);
   const realPath = await realpath(resolved);
-  const types = uploadTypesFor(ref.field);
+  const types = uploadTypesFor(ref.field, op);
   const contentType = types[extname(realPath).toLowerCase()];
   if (contentType === undefined) {
     throw new Error(`${ref.field}: unsupported file type ${extname(realPath) || "(none)"}; one of ${Object.keys(types).join(", ")}`);
@@ -90,9 +95,9 @@ function extensionFor(types: Readonly<Record<string, string>>, contentType: stri
 
 /** A remote input as the upload part it becomes: fetched under the field's limit and the room the request cap leaves,
  * accepted only as a type the field takes. */
-async function fetchRemote(ref: FileRef, limit: FileLimit, room: number, remote: RemoteFetcher | undefined): Promise<UploadPart> {
+async function fetchRemote(op: Operation, ref: FileRef, limit: FileLimit, room: number, remote: RemoteFetcher | undefined): Promise<UploadPart> {
   if (remote === undefined) throw new Error(`${ref.field}: a URL input needs a running call (not available here): ${ref.path}`);
-  const types = uploadTypesFor(ref.field);
+  const types = uploadTypesFor(ref.field, op);
   const accepted = [...new Set(Object.values(types))];
   const got = await remote(ref.path, Math.min(limit.maxBytes, room), accepted).catch((error: unknown) => {
     throw new Error(`${ref.field}: ${error instanceof Error ? error.message : String(error)}`);
@@ -122,7 +127,7 @@ export async function loadUploads(op: Operation, files: readonly FileRef[], remo
   const limits = new Map(fileLimitsOf(op).map((l) => [l.field, l]));
   checkCounts(op, files, limits);
   const local = files.filter((f) => !isRemoteInput(f.path));
-  const checked = new Map(await Promise.all(local.map(async (f) => [f, await checkFile(f, limits.get(f.field) as FileLimit)] as const)));
+  const checked = new Map(await Promise.all(local.map(async (f) => [f, await checkFile(f, limits.get(f.field) as FileLimit, op)] as const)));
   checkRequestCap(op, [...checked.values()].reduce((sum, f) => sum + f.bytes, 0));
   const read = new Map(await Promise.all([...checked].map(async ([f, own]) => [f, await readLocal(own, limits.get(f.field) as FileLimit)] as const)));
   let total = [...read.values()].reduce((sum, p) => sum + p.bytes.byteLength, 0);
@@ -136,7 +141,7 @@ export async function loadUploads(op: Operation, files: readonly FileRef[], remo
       continue;
     }
     if (cap - total <= 0) checkRequestCap(op, total + 1); // the local files already fill the request: said as the cap, not as a 0.0 MB limit
-    const part = await fetchRemote(f, limits.get(f.field) as FileLimit, cap - total, remote);
+    const part = await fetchRemote(op, f, limits.get(f.field) as FileLimit, cap - total, remote);
     total += part.bytes.byteLength;
     parts.push(part);
   }

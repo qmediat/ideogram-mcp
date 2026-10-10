@@ -46,6 +46,10 @@ export interface RequestLimit {
  * (".ttf, .otf, .woff, .woff2"); test/overlay.test.mjs derives the same set from the specification. */
 export const FONT_FILE_FIELDS: ReadonlySet<string> = new Set(["font_candidate_files", "font_file_body", "font_file_h1", "font_file_h2", "font_file_small"]);
 
+/** The operations whose file field takes training assets — images, .txt caption sidecars and .zip archives — as the
+ * field's description states ("Image files (JPEG, PNG, WebP), .txt caption sidecar files, and/or ZIP archives"). */
+export const DATASET_UPLOAD_OPERATIONS: ReadonlySet<string> = new Set(["upload_dataset_assets"]);
+
 export function quoteAllowed(op: Operation): boolean {
   return isExposable(op) && op.dryRun;
 }
