@@ -28,7 +28,7 @@ export function mbText(bytes: number, places = 1): string {
 /** The largest image returned inline (`inline_images`), in raw bytes: the model APIs behind the clients take at most
  * 5 MiB of base64 per image (5 242 880 B, i.e. 3 932 160 raw bytes); 3.75 MB stays under it. */
 export const INLINE_MAX_BYTES = 3_750_000;
-/** The most image bytes one result carries inline; the rest stay by path (eight images are not 30 MB of base64). */
+/** The most image bytes (raw) one result carries inline; the rest stay by path (eight 3.75 MB images would be 30 MB raw, 40 MB of base64). */
 export const INLINE_MAX_TOTAL_BYTES = 10_000_000;
 /** The per-file limit of a file field whose description states none: the largest one the specification states. */
 export const UNSTATED_FILE_BYTES = 50 * MB;
@@ -99,7 +99,7 @@ export function requestBytesRefusal(op: Operation, bodyBytes: number): string | 
   const limit = requestLimitOf(op);
   if (bodyBytes <= limit.maxBytes) return null;
   const source = limit.stated ? "the limit Ideogram states for this request" : "this server's cap for a request Ideogram states no limit for";
-  return `the request body is ${(bodyBytes / MB).toFixed(1)} MB; ${op.id} takes at most ${(limit.maxBytes / MB).toFixed(0)} MB (${source})`;
+  return `the request body is ${mbText(bodyBytes)}; ${op.id} takes at most ${mbText(limit.maxBytes, 0)} (${source})`;
 }
 
 export interface Constraint {
