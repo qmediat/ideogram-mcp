@@ -4,14 +4,18 @@
  * model, so this is a server-side request on the model's say-so and is bounded like one (docs/DESIGN-ideogram-v2.md
  * section 9b): HTTPS only, a public host only — no IP literal, no local name, no address of a private, loopback,
  * link-local, carrier, site-local, mapped, translated or reserved range after resolution —, no redirect followed, the
- * body a type the field takes, at most the field's limit, inside the call's budget, never empty. What stays: a host
- * that answers the lookup with a public address and the connection with a private one (DNS rebinding) is not caught;
- * a public host is reachable by anyone anyway. A loopback test server is reached only with `loopback: true` (the
- * client option `loopbackRemoteInputs`), which relaxes the scheme, the IP-literal and the address checks and nothing
- * else; the server never sets it. The lookup runs under the call's budget as the fetch does: a resolver that stalls
- * ends the call, not the caller's patience (the lookup itself cannot be cancelled; its answer is dropped).
+ * body a type the field takes, at most the field's limit, inside the call's budget, never empty. The connection goes to
+ * the very address the lookup answered and was judged (node:https with that address as its lookup, the host name as
+ * SNI and Host): a host that answers the lookup with a public address and a later one with a private address (DNS
+ * rebinding) reaches nothing. A loopback test server is reached only with `loopback: true` (the client option
+ * `loopbackRemoteInputs`), which relaxes the scheme, the IP-literal and the address checks and nothing else; the
+ * server never sets it. The lookup runs under the call's budget as the fetch does: a resolver that stalls ends the
+ * call, not the caller's patience (the lookup itself cannot be cancelled; its answer is dropped).
  */
 import { lookup } from "node:dns/promises";
+import { request as httpRequest } from "node:http";
+import type { IncomingMessage } from "node:http";
+import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
 import type { CallBudget } from "./budget.js";
 
@@ -78,7 +82,8 @@ function ipv4Private(a: number, b: number, c: number): boolean {
 function embeddedIpv4(groups: readonly number[], lower: string): string | null {
   const dotted = (hi: number, lo: number): string => `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`;
   if (groups.slice(0, 5).every((g) => g === 0) && groups[5] === 0xffff) return dotted(groups[6], groups[7]);
-  if (groups[0] === 0x64 && groups[1] === 0xff9b && groups.slice(2, 6).every((g) => g === 0)) return dotted(groups[6], groups[7]);
+  if (groups[0] === 0x64 && groups[1] === 0xff9b && groups.slice(2, 6).every((g) => g === 0)) return dotted(groups[6], groups[7]); // NAT64 64:ff9b::/96
+  if (groups[0] === 0x64 && groups[1] === 0xff9b && groups[2] === 1) return dotted(groups[6], groups[7]); // NAT64 local-use 64:ff9b:1::/48
   if (groups[0] === 0x2002) return dotted(groups[1], groups[2]);
   if (groups.slice(0, 6).every((g) => g === 0) && lower !== "::1" && lower !== "::") return dotted(groups[6], groups[7]);
   return null;
@@ -149,32 +154,58 @@ function fetchError(url: string, budget: CallBudget, error: unknown): Error {
   return new Error(`${url}: network error while fetching it (${describe(error)})`);
 }
 
-async function readCapped(response: Response, cap: number, url: string): Promise<Uint8Array<ArrayBuffer>> {
-  if (response.body === null) throw new Error(`${url} answered without a body`);
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
-    total += chunk.value.byteLength;
-    if (total > cap) {
-      await reader.cancel();
-      throw new Error(`${url} is over ${(cap / 1_000_000).toFixed(1)} MB, the limit here`);
-    }
-    chunks.push(chunk.value);
-  }
-  if (total === 0) throw new Error(`${url} answered an empty body`);
-  const out = new Uint8Array(new ArrayBuffer(total));
-  let offset = 0;
-  for (const chunk of chunks) {
-    out.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return out;
+/** The body read with a byte counter under the cap; the response destroyed the moment it goes over. */
+function readCapped(response: IncomingMessage, cap: number, url: string): Promise<Uint8Array<ArrayBuffer>> {
+  return new Promise((done, fail) => {
+    const chunks: Buffer[] = [];
+    let total = 0;
+    response.on("data", (chunk: Buffer) => {
+      total += chunk.byteLength;
+      if (total > cap) {
+        response.destroy();
+        fail(new Error(`${url} is over ${(cap / 1_000_000).toFixed(1)} MB, the limit here`));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    response.on("error", fail);
+    response.on("end", () => {
+      if (total === 0) {
+        fail(new Error(`${url} answered an empty body`));
+        return;
+      }
+      const out = new Uint8Array(new ArrayBuffer(total));
+      let offset = 0;
+      for (const chunk of chunks) {
+        out.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      done(out);
+    });
+  });
 }
 
-async function refuse(response: Response, message: string): Promise<never> {
-  await response.body?.cancel().catch(() => undefined);
+function refuse(response: IncomingMessage, message: string): never {
+  response.destroy();
   throw new Error(message);
+}
+
+/** One GET of the URL, the socket connected to `address` when one was judged (the host name stays the SNI and the
+ * Host header), aborted by the budget's signal; the response head, its body not yet read. */
+function requestHead(url: URL, address: string | null, budget: CallBudget): Promise<IncomingMessage> {
+  const request = url.protocol === "https:" ? httpsRequest : httpRequest;
+  // net.connect asks its lookup with `all: true` (happy eyeballs) or without: both answers name the one judged address
+  const family = address === null ? 0 : isIP(address);
+  const lookupPinned = address === null ? undefined : (_host: string, options: { all?: boolean }, callback: (err: Error | null, result: unknown, family?: number) => void): void => {
+    if (options.all === true) callback(null, [{ address, family }]);
+    else callback(null, address, family);
+  };
+  return new Promise((done, fail) => {
+    // agent: false — a fresh socket per fetch, never a pooled one that another lookup's judgement opened
+    const req = request(url, { method: "GET", signal: budget.signal, servername: url.hostname, lookup: lookupPinned as never, agent: false }, done);
+    req.on("error", fail);
+    req.end();
+  });
 }
 
 /** The promise, or the budget's end if it comes first (the work behind it goes on unobserved — a lookup cannot be cancelled). */
@@ -193,7 +224,9 @@ class BudgetEndedHere extends Error {
   }
 }
 
-async function checkHost(url: string, options: RemoteFetchOptions): Promise<void> {
+/** The host's addresses, judged (unless `judge` is off: the loopback test of the pinning itself); the first one is
+ * the address the connection is pinned to. */
+async function checkHost(url: string, options: RemoteFetchOptions, judge: boolean): Promise<string> {
   const host = hostOf(new URL(url));
   let addresses: readonly string[];
   try {
@@ -202,29 +235,32 @@ async function checkHost(url: string, options: RemoteFetchOptions): Promise<void
     if (error instanceof BudgetEndedHere) throw fetchError(url, options.budget, error);
     throw new Error(`${url}: ${host} could not be resolved (${describe(error)})`);
   }
-  const byAddress = addressRefusal(host, addresses);
+  const byAddress = judge ? addressRefusal(host, addresses) : addresses.length === 0 ? `${host} resolves to no address` : null;
   if (byAddress !== null) throw new Error(`${url}: ${byAddress}`);
+  return addresses[0];
 }
 
-/** Fetches one input from a public HTTPS URL under the rules above; every refusal is a sentence naming the URL. */
+/** Fetches one input from a public HTTPS URL under the rules above; every refusal is a sentence naming the URL. In
+ * loopback mode a given `resolve` still pins the connection (the test of the pinning itself). */
 export async function fetchRemoteInput(url: string, options: RemoteFetchOptions): Promise<RemoteBytes> {
   const loopback = options.loopback === true;
   const refused = urlRefusal(url, loopback);
   if (refused !== null) throw new Error(refused);
-  if (!loopback) await checkHost(url, options);
-  let response: Response;
+  const pinned = loopback && options.resolve === undefined ? null : await checkHost(url, options, !loopback);
+  let response: IncomingMessage;
   try {
-    response = await fetch(url, { method: "GET", redirect: "manual", signal: options.budget.signal });
+    response = await requestHead(new URL(url), pinned, options.budget);
   } catch (error) {
     throw fetchError(url, options.budget, error);
   }
-  if (response.status >= 300 && response.status < 400) return refuse(response, `${url} redirects (${response.status}); a redirect is not followed — give the final URL`);
-  if (!response.ok) return refuse(response, `${url} answered ${response.status} ${response.statusText}`);
-  const contentType = (response.headers.get("Content-Type") ?? "").split(";")[0].trim().toLowerCase();
-  if (!options.accepted.includes(contentType)) return refuse(response, `${url} is ${contentType || "(no content type)"}, not one of ${options.accepted.join(", ")}`);
-  const declared = Number.parseInt(response.headers.get("Content-Length") ?? "", 10);
+  const status = response.statusCode ?? 0;
+  if (status >= 300 && status < 400) refuse(response, `${url} redirects (${status}); a redirect is not followed — give the final URL`);
+  if (status < 200 || status >= 300) refuse(response, `${url} answered ${status} ${response.statusMessage ?? ""}`.trim());
+  const contentType = (response.headers["content-type"] ?? "").split(";")[0].trim().toLowerCase();
+  if (!options.accepted.includes(contentType)) refuse(response, `${url} is ${contentType || "(no content type)"}, not one of ${options.accepted.join(", ")}`);
+  const declared = Number.parseInt(response.headers["content-length"] ?? "", 10);
   if (Number.isFinite(declared) && declared > options.maxBytes) {
-    return refuse(response, `${url} is ${(declared / 1_000_000).toFixed(1)} MB by its Content-Length, over ${(options.maxBytes / 1_000_000).toFixed(1)} MB, the limit here`);
+    refuse(response, `${url} is ${(declared / 1_000_000).toFixed(1)} MB by its Content-Length, over ${(options.maxBytes / 1_000_000).toFixed(1)} MB, the limit here`);
   }
   try {
     return { bytes: await readCapped(response, options.maxBytes, url), contentType };

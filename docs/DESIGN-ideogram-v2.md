@@ -265,10 +265,11 @@ reads a result only from the tool's answer. Two opt-in surfaces serve it; both a
 | the request to Ideogram | a non-image body sent as an image | the Content-Type must be one the field takes (the three image types, or the font types for a font field); the part is named `<field>.<ext>` from that type, never from the URL |
 | the local files | a URL input weakening the local checks | local files are checked first and a failing one stops the call before any fetch; the request cap is checked on the parts as sent |
 
-Residual, named: a host that answers the lookup with a public address and the connection with a private one (DNS
-rebinding) is not caught — Node's `fetch` cannot pin the socket to the resolved address — so the guard keeps the
-model from naming an internal target, not a hostile DNS operator from reaching one; a public host is reachable by
-anyone on the internet anyway. A test server on the loopback is reachable only with the client built for it
+| the lookup's answer | a host that answers the lookup with a public address and the connection with a private one (DNS rebinding, TTL 0) | the connection is made to the very address the lookup answered and was judged (`node:https` with that address as the socket's lookup, the host name as SNI and `Host`); the name is never resolved a second time — a test pins a name that resolves nowhere to the loopback and reads the Host header |
+| a local file beside a URL | a local file replaced while a remote input downloads | every local file is checked and READ before any fetch; the bytes read are held to the field's limit (a file that grew is refused) |
+
+No residual on the fetch itself remains named; the lookup cannot be cancelled (it ends the call, its answer is
+dropped) and a public host is reachable by anyone on the internet anyway. A test server on the loopback is reachable only with the client built for it
 (`allowHttpDownloads`, the same switch the download client's tests use: it relaxes the scheme, the IP-literal and the
 address checks and nothing else — a URL with credentials stays refused); the server never sets it, and a test proves
 the default context refuses an http loopback URL, an IP literal and a local name.

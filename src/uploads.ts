@@ -107,23 +107,32 @@ function checkRequestCap(op: Operation, total: number): void {
   throw new Error(`the files together are ${mb(total)}; ${op.id} takes a request under ${mb(cap.maxBytes)} (${source})`);
 }
 
-/** Checks every local file against the operation's limits, then reads them and fetches the remote inputs one after
- * another, each under the room the request cap still leaves (a body over it is cut as it arrives, never held whole);
- * nothing is read or fetched when any local check fails. The parts keep the caller's order. */
+/** A checked local file read whole; a file that grew since its check is refused by the bytes actually read. */
+async function readLocal(f: CheckedFile, limit: FileLimit): Promise<UploadPart> {
+  const bytes = new Uint8Array(await readFile(f.realPath));
+  if (bytes.byteLength > limit.maxBytes) throw new Error(`${f.ref.field}: ${f.ref.path} grew to ${mb(bytes.byteLength)} while it was read, over ${mb(limit.maxBytes)}`);
+  return { field: f.ref.field, filename: `${f.ref.field}${extname(f.realPath).toLowerCase()}`, contentType: f.contentType, bytes };
+}
+
+/** Checks every local file against the operation's limits, reads them (before any fetch, so nothing changes under
+ * a download), then fetches the remote inputs one after another, each under the room the request cap still leaves (a
+ * body over it is cut as it arrives, never held whole); nothing is read or fetched when any local check fails. The
+ * parts keep the caller's order. */
 export async function loadUploads(op: Operation, files: readonly FileRef[], remote?: RemoteFetcher): Promise<UploadPart[]> {
   const limits = new Map(fileLimitsOf(op).map((l) => [l.field, l]));
   checkCounts(op, files, limits);
   const local = files.filter((f) => !isRemoteInput(f.path));
   const checked = new Map(await Promise.all(local.map(async (f) => [f, await checkFile(f, limits.get(f.field) as FileLimit)] as const)));
-  const localBytes = [...checked.values()].reduce((sum, f) => sum + f.bytes, 0);
-  checkRequestCap(op, localBytes);
+  checkRequestCap(op, [...checked.values()].reduce((sum, f) => sum + f.bytes, 0));
+  const read = new Map(await Promise.all([...checked].map(async ([f, own]) => [f, await readLocal(own, limits.get(f.field) as FileLimit)] as const)));
+  let total = [...read.values()].reduce((sum, p) => sum + p.bytes.byteLength, 0);
+  checkRequestCap(op, total);
   const cap = requestLimitOf(op).maxBytes;
-  let total = localBytes;
   const parts: UploadPart[] = [];
   for (const f of files) {
-    const own = checked.get(f);
+    const own = read.get(f);
     if (own !== undefined) {
-      parts.push({ field: f.field, filename: `${f.field}${extname(own.realPath).toLowerCase()}`, contentType: own.contentType, bytes: new Uint8Array(await readFile(own.realPath)) });
+      parts.push(own);
       continue;
     }
     if (cap - total <= 0) checkRequestCap(op, total + 1); // the local files already fill the request: said as the cap, not as a 0.0 MB limit

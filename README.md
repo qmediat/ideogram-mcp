@@ -154,7 +154,7 @@ A 1.x field that the chosen v2 model does not take is refused with the models th
 
 A defensive, minimal-dependency design:
 
-- **SSRF protection** — downloads over HTTPS only, from allow-listed hosts, redirects blocked; a URL given as an input is fetched from a public host only (no IP literal, no local name, no private or special-purpose address after resolution, no redirect), under the call's budget — the one residual, DNS rebinding, is named in the design note
+- **SSRF protection** — downloads over HTTPS only, from allow-listed hosts, redirects blocked; a URL given as an input is fetched from a public host only (no IP literal, no local name, no private or special-purpose address after resolution, no redirect), under the call's budget, over a connection pinned to the address that was judged (a DNS rebinding reaches nothing)
 - **Symlink rejection** — `lstat()` rejects a symlinked input file before reading (a symlinked parent directory is resolved)
 - **Upload limits per operation** — each file checked with `stat()` against its field's limit before any is read; the local file name is never sent (a file goes as `<field>.<ext>`)
 - **Streamed, capped downloads** — written to disk with a byte counter, stopped at 50 MB, the partial file removed; `image/*` or `video/mp4` required

@@ -27,10 +27,10 @@ test("the URL itself: https only, no credentials, no IP literal, no local or sin
 });
 
 test("the resolved addresses: loopback, private, link-local, carrier, reserved and their IPv6 forms are refused; a public one passes", () => {
-  for (const ip of ["127.0.0.1", "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.1.1", "169.254.169.254", "100.64.0.1", "0.0.0.0", "224.0.0.1", "192.0.0.1", "192.0.2.1", "198.18.0.1", "198.19.255.1", "198.51.100.1", "203.0.113.1", "192.88.99.1", "240.0.0.1", "::1", "fc00::1", "fd12::1", "fe80::1", "fec0::1", "2001:db8::1", "100::1", "::ffff:10.0.0.1", "::ffff:127.0.0.1", "::ffff:7f00:1", "64:ff9b::7f00:1", "64:ff9b::10.0.0.1", "2002:7f00:1::1", "2002:c0a8:101::1", "::7f00:1", "::10.0.0.1", "ff02::1"]) {
+  for (const ip of ["127.0.0.1", "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.1.1", "169.254.169.254", "100.64.0.1", "0.0.0.0", "224.0.0.1", "192.0.0.1", "192.0.2.1", "198.18.0.1", "198.19.255.1", "198.51.100.1", "203.0.113.1", "192.88.99.1", "240.0.0.1", "::1", "fc00::1", "fd12::1", "fe80::1", "fec0::1", "2001:db8::1", "100::1", "::ffff:10.0.0.1", "::ffff:127.0.0.1", "::ffff:7f00:1", "64:ff9b::7f00:1", "64:ff9b::10.0.0.1", "64:ff9b:1::a00:1", "64:ff9b:1:ffff::c0a8:1", "2002:7f00:1::1", "2002:c0a8:101::1", "::7f00:1", "::10.0.0.1", "ff02::1"]) {
     assert.equal(isPrivateAddress(ip), true, ip);
   }
-  for (const ip of ["93.184.216.34", "172.32.0.1", "100.128.0.1", "192.0.1.1", "192.1.2.1", "198.20.0.1", "198.51.101.1", "203.0.114.1", "2606:2800:220:1:248:1893:25c8:1946", "2001:db9::1", "101::1", "::ffff:93.184.216.34", "64:ff9b::5db8:d822", "2002:5db8:d822::1"]) {
+  for (const ip of ["93.184.216.34", "172.32.0.1", "100.128.0.1", "192.0.1.1", "192.1.2.1", "198.20.0.1", "198.51.101.1", "203.0.114.1", "2606:2800:220:1:248:1893:25c8:1946", "2001:db9::1", "101::1", "::ffff:93.184.216.34", "64:ff9b::5db8:d822", "64:ff9b:1::5db8:d822", "2002:5db8:d822::1"]) {
     assert.equal(isPrivateAddress(ip), false, ip);
   }
   assert.equal(addressRefusal("cdn.example.com", ["93.184.216.34"]), null);
@@ -124,4 +124,21 @@ test("the lookup runs under the call's budget: a resolver that never answers end
   const pending = fetchRemoteInput("https://cdn.example.com/a.png", options);
   setTimeout(() => cancel.abort(new Error("the caller gave up")), 20);
   await assert.rejects(() => pending, /not fetched, the call's time ran out or the caller cancelled/);
+});
+
+test("the connection is pinned to the address the lookup answered: the name is never resolved again (a rebinding reaches nothing) and stays the Host header", async () => {
+  const api = await startFakeApi(() => ({ status: 200, headers: { "content-type": "image/png" }, body: PNG }));
+  try {
+    const port = new URL(api.base).port;
+    const options = { maxBytes: 1000, accepted: ["image/png"], budget: openBudget(), loopback: true, resolve: async () => ["127.0.0.1"] };
+    const got = await fetchRemoteInput(`http://pinned.example:${port}/a.png`, options); // pinned.example resolves nowhere: only the pinned address can answer
+    assert.deepEqual(Buffer.from(got.bytes), PNG);
+    assert.equal(api.requests[0].headers.host, `pinned.example:${port}`, "the Host header is the name, the socket the judged address");
+    const { toolCallBudget, SYSTEM_CLOCK } = await import("../dist/budget.js");
+    const rebound = { ...options, resolve: async () => ["192.0.2.1"], budget: toolCallBudget(SYSTEM_CLOCK, undefined, 1500) }; // the judged address is where the socket goes: here a documentation address nothing answers from
+    await assert.rejects(() => fetchRemoteInput(`http://pinned.example:${port}/a.png`, rebound), /network error|not fetched/);
+    assert.equal(api.requests.length, 1, "the loopback server was not reached by the second fetch");
+  } finally {
+    await api.close();
+  }
 });

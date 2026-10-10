@@ -535,6 +535,14 @@ test("a file field takes a URL: fetched under the field's limit and sent as the 
   const typo = await call("ideogram_remix", { prompt: "x", image: "__BASE__/remote/a.png", style_reference_images: [join(dir, "missing.png")] }, (req) => { seen.push(req.url); return handler(req); }).catch((e) => e);
   assert.match(typo.message, /ENOENT|no such file/);
   assert.deepEqual(seen, [], "a failing local file stops the call before any fetch");
+  const original = join(dir, "original.png");
+  await writeFile(original, PNG);
+  const swapped = await call("ideogram_api", { operation: "post_generate_image_v2_gpt_image2", params: { body: { prompt: "x" } }, files: [{ field: "images", path: original }, { field: "images", path: "__BASE__/remote/a.png" }], wait_s: 0 }, async (req) => {
+    if (req.url === "/remote/a.png") { await writeFile(original, Buffer.alloc(64, 1)); return { status: 200, headers: { "content-type": "image/png" }, body: PNG }; } // the local file changes while the remote one downloads
+    return handler(req);
+  });
+  const sent = swapped.requests.find((r) => r.url.startsWith("/v2/")).body.toString("latin1");
+  assert.equal(sent.split(PNG.toString("latin1")).length - 1, 2, "both parts carry the ORIGINAL bytes: the local file was read before any fetch");
   const roomy = await call("ideogram_api", { operation: "post_generate_image_v2_gpt_image2", params: { body: { prompt: "x" } }, files: [{ field: "images", path: "__BASE__/remote/a.png" }, { field: "images", path: "__BASE__/remote/a.png" }], wait_s: 0 }, handler);
   assert.equal(roomy.requests.filter((r) => r.url === "/remote/a.png").length, 2, "remote inputs are fetched one after another");
   assert.ok(roomy.requests.findIndex((r) => r.url === "/remote/a.png") < roomy.requests.findIndex((r) => r.url.startsWith("/v2/")));
