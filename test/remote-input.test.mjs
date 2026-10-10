@@ -167,3 +167,16 @@ test("every judged address is handed to the socket: an unreachable first address
     await api.close();
   }
 });
+
+test("the budget's end mid-body ends the read: a server that sends part of an image and then holds does not keep the call", async () => {
+  const api = await startFakeApi(() => (res) => { res.writeHead(200, { "content-type": "image/png" }); res.write(PNG.subarray(0, 8)); /* and never ends */ });
+  try {
+    const { toolCallBudget, SYSTEM_CLOCK } = await import("../dist/budget.js");
+    const options = { maxBytes: 1000, accepted: ["image/png"], budget: toolCallBudget(SYSTEM_CLOCK, undefined, 400), loopback: true };
+    const t0 = Date.now();
+    await assert.rejects(() => fetchRemoteInput(`${api.base}/held.png`, options), /not fetched, the call's time ran out|ended before it was complete/);
+    assert.ok(Date.now() - t0 < 5000, "ended with the budget, not with the server");
+  } finally {
+    await api.close();
+  }
+});

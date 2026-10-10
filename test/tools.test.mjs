@@ -582,6 +582,14 @@ test("inline_images: each saved image comes back as image content beside the tex
   const capped = await call("ideogram_generate", { prompt: "x", inline_images: true }, many);
   assert.equal(capped.result.content.length, 4, "three of four 3 MB images fit under the 10 MB total");
   assert.equal(capped.result.content[1].mimeType, "image/jpeg", "the media type is normalized");
+  const svg = (req, _n, api) => {
+    if (req.url.startsWith("/img/")) return { status: 200, headers: { "content-type": "image/svg+xml" }, body: "<svg xmlns='http://www.w3.org/2000/svg'/>" };
+    if (req.method === "POST") return accepted("i4");
+    return { json: { generation_id: "i4", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "image.generation", url: `${api.base}/img/v.svg`, prompt: "p", resolution: "1024x1024", is_image_safe: true, seed: 1 }] } };
+  };
+  const vector = await call("ideogram_generate", { prompt: "x", inline_images: true }, svg);
+  assert.equal(vector.result.content.length, 1, "an SVG is saved, never inlined as image content");
+  assert.match(vector.result.content[0].text, /Not returned inline: .* is image\/svg\+xml, not a raster image/);
   assert.match(capped.result.content[0].text, /would take this result past 10\.00 MB of images/);
 });
 

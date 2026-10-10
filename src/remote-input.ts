@@ -169,6 +169,9 @@ function readCapped(response: IncomingMessage, cap: number, url: string): Promis
       chunks.push(chunk);
     });
     response.on("error", fail);
+    response.on("close", () => {
+      if (!response.complete) fail(new Error(`${url}: the body ended before it was complete`)); // an abort mid-body (the budget's end) lands here
+    });
     response.on("end", () => {
       if (total === 0) {
         fail(new Error(`${url} answered an empty body`));

@@ -60,6 +60,9 @@ async function saveImages(ctx: ToolContext, items: readonly ImageItem[]): Promis
 
 type ImageContent = { type: "image"; data: string; mimeType: string };
 
+/** The raster image types a client renders as image content; an SVG or a video is saved, never inlined. */
+const INLINE_TYPES: ReadonlySet<string> = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+
 /** The media type as a client expects it: no parameters, `image/jpg` as `image/jpeg`. */
 function inlineMimeType(contentType: string): string {
   const bare = contentType.split(";")[0].trim().toLowerCase();
@@ -74,6 +77,11 @@ async function inlineContent(files: readonly SavedFile[]): Promise<{ items: Imag
   const lines: string[] = [];
   let total = 0;
   for (const file of files) {
+    const mimeType = inlineMimeType(file.contentType);
+    if (!INLINE_TYPES.has(mimeType)) {
+      lines.push(`Not returned inline: ${file.path} is ${mimeType}, not a raster image`);
+      continue;
+    }
     if (file.bytes > INLINE_MAX_BYTES) {
       lines.push(`Not returned inline: ${file.path} is ${mbText(file.bytes, 2)}, over ${mbText(INLINE_MAX_BYTES, 2)}`);
       continue;
@@ -83,7 +91,7 @@ async function inlineContent(files: readonly SavedFile[]): Promise<{ items: Imag
       continue;
     }
     try {
-      items.push({ type: "image", data: (await readFile(file.path)).toString("base64"), mimeType: inlineMimeType(file.contentType) });
+      items.push({ type: "image", data: (await readFile(file.path)).toString("base64"), mimeType });
       total += file.bytes;
     } catch (error) {
       COUNTERS.downloadFailures += 1;
