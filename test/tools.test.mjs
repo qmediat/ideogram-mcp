@@ -477,3 +477,19 @@ test("the schema inliner ends on a cycle of aliases and keeps the $ref that cann
   for (const ref of refs) assert.ok(ref.replace("#/definitions/", "") in json.definitions, `${ref} resolves`);
   assert.equal("z" in json.definitions, false, "an unreferenced short definition is dropped");
 });
+
+test("private: null is 'not set' and becomes true; an image flagged unsafe is not fetched even when a URL comes with it", async () => {
+  const nul = await call("ideogram_generate", { prompt: "x", private: null, wait_s: 0 });
+  assert.deepEqual(sentJson(nul.requests), { prompt: "x", private: true, async: true });
+  const handler = (req, _n, api) => {
+    if (req.url.startsWith("/img/")) return { status: 200, headers: { "content-type": "image/png" }, body: PNG };
+    if (req.method === "POST") return accepted("s1");
+    return { json: { generation_id: "s1", status: "completed", created: "2026-10-07T00:00:00Z", data: [
+      { object_type: "image.generation", url: `${api.base}/img/flagged.png`, prompt: "p", resolution: "1024x1024", is_image_safe: false, seed: 1 },
+    ] } };
+  };
+  const { result, requests } = await call("ideogram_generate", { prompt: "x" }, handler);
+  assert.equal(requests.filter((r) => r.url.startsWith("/img/")).length, 0, "nothing downloaded");
+  assert.match(text(result), /1 image\(s\) withheld by Ideogram's safety check/);
+  assert.equal(result.isError, true);
+});

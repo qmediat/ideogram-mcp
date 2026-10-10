@@ -228,9 +228,10 @@ function checkSource(spec: FamilyToolSpec, variant: ModelVariant, fields: Readon
   if (refusal !== null) throw new Error(refusal.replace(variant.op.id, spec.name));
 }
 
-/** `private: true` unless the caller set it, on a model that takes the field. */
+/** `private: true` unless the caller set it, on a model that takes the field; a null is "not set" (the schemas accept
+ * it, multipart would drop it and JSON would send it — either way the API's own default would apply). */
 function withPrivateDefault(variant: ModelVariant, fields: Record<string, unknown>): Record<string, unknown> {
-  if (!variant.fields.has(PRIVATE_FIELD) || fields[PRIVATE_FIELD] !== undefined) return fields;
+  if (!variant.fields.has(PRIVATE_FIELD) || (fields[PRIVATE_FIELD] !== undefined && fields[PRIVATE_FIELD] !== null)) return fields;
   return { ...fields, [PRIVATE_FIELD]: true };
 }
 

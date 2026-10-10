@@ -22,8 +22,10 @@ function imageLine(path: string, item: ImageItem): string {
   return lines.join("\n");
 }
 
+/** Downloads the images Ideogram's safety check passed and that have a URL (the specification says a withheld image
+ * has none; one that carries both is still withheld, never fetched). */
 async function saveImages(ctx: ToolContext, items: readonly ImageItem[]): Promise<{ lines: string[]; saved: number }> {
-  const safe = items.filter((item) => item.url !== null);
+  const safe = items.filter((item) => item.url !== null && item.isImageSafe);
   const results = await Promise.allSettled(safe.map((item) => ctx.client.download(item.url as string, ctx.outputDir, ctx.budget)));
   const lines: string[] = [];
   let saved = 0;
