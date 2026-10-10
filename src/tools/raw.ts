@@ -150,7 +150,7 @@ export const RAW_TOOL: ToolDefinition = {
   inputSchema: z.object({
     operation: z.string().min(1).describe("The operation id, e.g. post_precise_edit_image_v2_ideogram45"),
     params: z.record(z.string(), z.unknown()).optional().describe("{path?, query?, headers?, body?}: each an object of that location's parameters"),
-    files: z.array(z.object({ field: z.string(), path: z.string() })).optional().describe("Local files, each for one file field"),
+    files: z.array(z.object({ field: z.string(), path: z.string() })).optional().describe("Files for the file fields: each a local path or a public https URL"),
     dry_run: z.boolean().optional().describe("Price the call instead of running it (only operations that offer it)"),
     wait_s: z.number().int().min(0).max(WAIT_MAX_S).optional().describe("Seconds to wait for the result (0-50, default 45)"),
     allow_undocumented: z.boolean().optional().describe("Allow an operation Ideogram's documentation does not list"),

@@ -15,10 +15,13 @@ export const PRIVATE_FIELD = "private";
 /** Inputs of every curated tool that are not request fields. */
 export const CONTROL_FIELDS: ReadonlySet<string> = new Set(["model", "wait_s", "inline_images"]);
 
-/** The largest image returned inline: the model APIs behind the clients take an image of about 5 MB. */
-export const INLINE_MAX_BYTES = 4 * 1024 * 1024;
+/** The largest image returned inline, in raw bytes: the model APIs behind the clients take at most 5 MiB of base64
+ * per image (5 242 880 B, i.e. 3 932 160 raw bytes); 3.75 MB (decimal, as every size here) stays under it. */
+export const INLINE_MAX_BYTES = 3_750_000;
+/** The most image bytes one result carries inline; the rest stay by path (a result of eight images is not 30 MB of base64). */
+export const INLINE_MAX_TOTAL_BYTES = 10_000_000;
 
-export const INLINE_TEXT = "true: each saved image is also returned as image content (base64; one over 4 MB by path only), for a client without file access";
+export const INLINE_TEXT = "true: each saved image is also returned as image content (base64; one over 3.75 MB, or past 10 MB in total, by path only), for a client without file access";
 
 export const WAIT_TEXT =
   "Seconds to wait for the result (0-50, default 45). The job is accepted first; if it is still running when the wait ends, the result is its generation_id for ideogram_generation (never resubmitted, never billed twice).";
@@ -38,22 +41,22 @@ export const FIELD_TEXT: Readonly<Record<string, string>> = {
   style_preset: "A named style preset; not with style codes or style references",
   style_codes: "8-character hexadecimal style codes",
   color_palette: "A preset palette by name, or explicit hex colours with weights",
-  style_reference_images: "Local image files whose style the result follows",
+  style_reference_images: "Local image files (or public https URLs) whose style the result follows",
   style_reference_asset_identifiers: "Ideogram assets (uploads or earlier results) to use as style references",
   style_reference_collection_id: "A saved style collection to apply",
   style_reference_collection_version_id: "A version of the saved style collection",
-  character_reference_images: "Local image files of the character to keep consistent",
-  character_reference_mask: "Local grayscale mask of where the character is in its reference image",
+  character_reference_images: "Local image files (or public https URLs) of the character to keep consistent",
+  character_reference_mask: "Local grayscale mask (or a public https URL) of where the character is in its reference image",
   character_reference_asset_identifiers: "Ideogram assets to use as the character reference",
   image: "Local image file to work on, or a public https URL of one",
-  reference_images: "Local image files that guide the edit (never edited themselves); at most 4, at most 3 with a mask",
+  reference_images: "Local image files (or public https URLs) that guide the edit (never edited themselves); at most 4, at most 3 with a mask",
   reference_image_asset_identifiers: "Ideogram assets that guide the edit; needs the edited image by reference too, not with a mask",
   context_window: 'Where to edit: "none" (whole image, default), "auto" (around the mask) or "y_min,x_min,y_max,x_max"',
   store_assets: "Keep the result on Ideogram as an asset (accepted by the API, not yet enforced by it)",
   private: "Keep the result out of Ideogram's public feed; true unless you set false (enterprise accounts are always private)",
-  font_candidate_files: "Local font files (.ttf, .otf, .woff, .woff2, at most 5) to match the detected text against",
-  images: "Local source image files (the first is the one edited)",
-  mask: "Local mask image file, the same size as the source",
+  font_candidate_files: "Local font files or public https URLs (.ttf, .otf, .woff, .woff2, at most 5) to match the detected text against",
+  images: "Local source image files or public https URLs (the first is the one edited)",
+  mask: "Local mask image file or a public https URL, the same size as the source",
   image_asset_identifier: "An Ideogram asset (an upload or an earlier result) instead of a local image",
   image_asset_identifiers: "Ideogram assets instead of local source images",
   mask_asset_identifier: "An Ideogram asset to use as the mask",

@@ -23,14 +23,14 @@ Fields of the operations this release serves (curated or raw) are listed below t
 |---|---|
 | `ideogram_generate` | Create images from a text prompt with any image model Ideogram's API sells: Ideogram 4.5, 4.0 and 3.0 (with transparent, character and custom-model variants), 2a and 2.0, GPT Image, Nano Banana, P-Image, Z-Image, or auto. Each model takes its own fields (one variant per model in this schema). Default model: ideogram-3. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
 | `ideogram_precise_edit` | Edit an image with Ideogram 4.5 at its exact size: pixels the edit does not change stay as they are. Takes the image, an optional mask (black = edit), up to 4 reference images that guide the edit, and context_window to confine it. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
-| `ideogram_inpaint` | Repaint the masked part of an image (black in the mask = repaint) with Ideogram 3.0 or its character / custom-model variants. Needs the source and the mask, each a local file or an Ideogram asset. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
+| `ideogram_inpaint` | Repaint the masked part of an image (black in the mask = repaint) with Ideogram 3.0 or its character / custom-model variants. Needs the source and the mask, each a local file, a public https URL or an Ideogram asset. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
 | `ideogram_remix` | Make new images from a source image and a prompt (Ideogram 3.0 and its variants, Ideogram 4.0, or auto); image_weight sets how closely the result follows the source. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
 | `ideogram_reframe` | Extend an image to a new size by outpainting (Ideogram 3.0 or Nano Banana 2). Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
 | `ideogram_replace_background` | Replace the background of an image and keep its subject (Ideogram 3.0 or GPT Image 2); the prompt describes the new background. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
-| `ideogram_remove_background` | Remove the background of an image: the foreground comes back as a transparent PNG. Takes a local file or an Ideogram asset. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
-| `ideogram_remove_object` | Remove a masked object from an image (white in the mask = remove) and fill the gap. Needs the source and a mask of the same size, each a local file or an Ideogram asset. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
+| `ideogram_remove_background` | Remove the background of an image: the foreground comes back as a transparent PNG. Takes a local file, a public https URL or an Ideogram asset. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
+| `ideogram_remove_object` | Remove a masked object from an image (white in the mask = remove) and fill the gap. Needs the source and a mask of the same size, each a local file, a public https URL or an Ideogram asset. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
 | `ideogram_upscale` | Enlarge an image (auto, Topaz Bloom, Redefine, Standard, Text Refine and Wonder, or Nano Banana Pro); each model takes its own controls. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
-| `ideogram_describe` | Describe an image in words (Ideogram 3.0) or as a structured JSON prompt (Ideogram 4.0). Takes a local file or an Ideogram asset. Describe has no price quote (the API offers no dry run for it). |
+| `ideogram_describe` | Describe an image in words (Ideogram 3.0) or as a structured JSON prompt (Ideogram 4.0). Takes a local file, a public https URL or an Ideogram asset. Describe has no price quote (the API offers no dry run for it). |
 | `ideogram_layerize` | Turn a flat image into an editable design (Ideogram 3.0): the detected text comes back as positioned text blocks with matched fonts, sizes and colours, beside a text-free base image that is saved. Optional font files to match against; ideogram_quote prices a call first. |
 | `ideogram_edit` | Deprecated alias of ideogram_inpaint, kept through 2.x for 1.x callers: the same arguments and models (see ideogram_inpaint's schema). |
 | `ideogram_quote` | Ask Ideogram what a call would cost before making it: give the curated tool's name and the arguments you would pass it. Answers USD and credits from the API's own dry run (exact, or an estimate with its upper bound). Nothing is generated or billed. |
@@ -93,7 +93,7 @@ Generate with automatic model selection
 | `async` | boolean |  |
 | `category_id` | string |  |
 | `image_asset_identifiers` | array of object |  |
-| `images` | local file paths |  |
+| `images` | local file paths or public https URLs |  |
 | `magic_prompt` | one of auto, on, off |  |
 | `negative_prompt` | string |  |
 | `num_images` | integer |  |
@@ -116,7 +116,7 @@ Generate with GPT Image 2
 | `aspect_ratio` | string |  |
 | `async` | boolean |  |
 | `image_asset_identifiers` | array of object |  |
-| `images` | local file paths |  |
+| `images` | local file paths or public https URLs |  |
 | `num_images` | integer |  |
 | `private` | boolean \| null |  |
 | `prompt` | string | yes |
@@ -137,8 +137,8 @@ Generate with GPT Image 2.5 Flare
 | `async` | boolean |  |
 | `background` | one of auto, transparent, opaque |  |
 | `image_asset_identifiers` | array of object |  |
-| `images` | local file paths |  |
-| `mask` | local file path |  |
+| `images` | local file paths or public https URLs |  |
+| `mask` | local file path or public https URL |  |
 | `num_images` | integer |  |
 | `private` | boolean \| null |  |
 | `prompt` | string | yes |
@@ -163,8 +163,8 @@ Generate with GPT Image 2.5 Sunburst
 | `async` | boolean |  |
 | `background` | one of auto, transparent, opaque |  |
 | `image_asset_identifiers` | array of object |  |
-| `images` | local file paths |  |
-| `mask` | local file path |  |
+| `images` | local file paths or public https URLs |  |
+| `mask` | local file path or public https URL |  |
 | `num_images` | integer |  |
 | `private` | boolean \| null |  |
 | `prompt` | string | yes |
@@ -247,7 +247,7 @@ Generate with Ideogram 3.0
 | `style_reference_asset_identifiers` | array of object |  |
 | `style_reference_collection_id` | string |  |
 | `style_reference_collection_version_id` | string |  |
-| `style_reference_images` | local file paths |  |
+| `style_reference_images` | local file paths or public https URLs |  |
 | `style_type` | one of auto, general, realistic, design, custom, fiction, stylized |  |
 | `target_collection_id` | string |  |
 | `webhook_url` | string |  |
@@ -269,8 +269,8 @@ Generate a consistent character with Ideogram 3.0
 | `character_reference_asset_identifiers` | array of object |  |
 | `character_reference_collection_id` | string |  |
 | `character_reference_collection_version_id` | string |  |
-| `character_reference_images` | local file paths |  |
-| `character_reference_mask` | local file path |  |
+| `character_reference_images` | local file paths or public https URLs |  |
+| `character_reference_mask` | local file path or public https URL |  |
 | `enable_copyright_detection` | boolean \| null |  |
 | `magic_prompt` | one of auto, on, off |  |
 | `negative_prompt` | string |  |
@@ -283,7 +283,7 @@ Generate a consistent character with Ideogram 3.0
 | `style_reference_asset_identifiers` | array of object |  |
 | `style_reference_collection_id` | string |  |
 | `style_reference_collection_version_id` | string |  |
-| `style_reference_images` | local file paths |  |
+| `style_reference_images` | local file paths or public https URLs |  |
 | `style_type` | one of auto, realistic, fiction |  |
 | `target_collection_id` | string |  |
 | `webhook_url` | string |  |
@@ -317,7 +317,7 @@ Generate with a custom Ideogram 3.0 model
 | `style_codes` | array of string |  |
 | `style_preset` | one of 80s_illustration, 90s_nostalgia, abstract_organic, analog_nostalgia, art_brut, art_deco, art_poster, aura, avant_garde, bauhaus, blueprint, blurry_motion, … (62) |  |
 | `style_reference_asset_identifiers` | array of object |  |
-| `style_reference_images` | local file paths |  |
+| `style_reference_images` | local file paths or public https URLs |  |
 | `target_collection_id` | string |  |
 | `webhook_url` | string |  |
 
@@ -377,9 +377,9 @@ Generate with Ideogram 4.5
 | `async` | boolean |  |
 | `enable_copyright_detection` | boolean \| null |  |
 | `image_asset_identifiers` | array of object |  |
-| `images` | local file paths |  |
+| `images` | local file paths or public https URLs |  |
 | `magic_prompt` | one of auto, on, off |  |
-| `mask` | local file path |  |
+| `mask` | local file path or public https URL |  |
 | `num_images` | integer |  |
 | `private` | boolean \| null |  |
 | `prompt` | string | yes |
@@ -442,7 +442,7 @@ Generate with Nano Banana 2
 | `aspect_ratio` | one of auto, 1:1, 3:2, 2:3, 4:3, 3:4, 5:4, 4:5, 16:9, 9:16, 21:9, 4:1, … (15) |  |
 | `async` | boolean |  |
 | `image_asset_identifiers` | array of object |  |
-| `images` | local file paths |  |
+| `images` | local file paths or public https URLs |  |
 | `num_images` | integer |  |
 | `private` | boolean \| null |  |
 | `prompt` | string | yes |
@@ -462,7 +462,7 @@ Generate with Nano Banana Pro
 | `aspect_ratio` | one of auto, 1:1, 3:2, 2:3, 4:3, 3:4, 5:4, 4:5, 16:9, 9:16, 21:9 |  |
 | `async` | boolean |  |
 | `image_asset_identifiers` | array of object |  |
-| `images` | local file paths |  |
+| `images` | local file paths or public https URLs |  |
 | `num_images` | integer |  |
 | `private` | boolean \| null |  |
 | `prompt` | string | yes |
@@ -530,15 +530,15 @@ Precise edit with Ideogram 4.5
 | `async` | boolean |  |
 | `context_window` | string |  |
 | `enable_copyright_detection` | boolean \| null |  |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
-| `mask` | local file path |  |
+| `mask` | local file path or public https URL |  |
 | `num_images` | integer |  |
 | `private` | boolean \| null |  |
 | `prompt` | string | yes |
 | `quality` | one of very_low, low, medium, high |  |
 | `reference_image_asset_identifiers` | array of object |  |
-| `reference_images` | local file paths |  |
+| `reference_images` | local file paths or public https URLs |  |
 | `seed` | integer |  |
 | `target_collection_id` | string |  |
 | `webhook_url` | string |  |
@@ -572,10 +572,10 @@ Inpaint with Ideogram 3.0
 |---|---|---|
 | `async` | boolean |  |
 | `enable_copyright_detection` | boolean \| null |  |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `magic_prompt` | one of auto, on, off |  |
-| `mask` | local file path |  |
+| `mask` | local file path or public https URL |  |
 | `mask_asset_identifier` | object |  |
 | `num_images` | integer |  |
 | `private` | boolean \| null |  |
@@ -587,7 +587,7 @@ Inpaint with Ideogram 3.0
 | `style_reference_asset_identifiers` | array of object |  |
 | `style_reference_collection_id` | string |  |
 | `style_reference_collection_version_id` | string |  |
-| `style_reference_images` | local file paths |  |
+| `style_reference_images` | local file paths or public https URLs |  |
 | `style_type` | one of auto, general, realistic, design, custom, fiction, stylized |  |
 | `target_collection_id` | string |  |
 | `webhook_url` | string |  |
@@ -609,13 +609,13 @@ Inpaint a consistent character with Ideogram 3.0
 | `character_reference_asset_identifiers` | array of object |  |
 | `character_reference_collection_id` | string |  |
 | `character_reference_collection_version_id` | string |  |
-| `character_reference_images` | local file paths |  |
-| `character_reference_mask` | local file path |  |
+| `character_reference_images` | local file paths or public https URLs |  |
+| `character_reference_mask` | local file path or public https URL |  |
 | `enable_copyright_detection` | boolean \| null |  |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `magic_prompt` | one of auto, on, off |  |
-| `mask` | local file path |  |
+| `mask` | local file path or public https URL |  |
 | `mask_asset_identifier` | object |  |
 | `num_images` | integer |  |
 | `private` | boolean \| null |  |
@@ -626,7 +626,7 @@ Inpaint a consistent character with Ideogram 3.0
 | `style_reference_asset_identifiers` | array of object |  |
 | `style_reference_collection_id` | string |  |
 | `style_reference_collection_version_id` | string |  |
-| `style_reference_images` | local file paths |  |
+| `style_reference_images` | local file paths or public https URLs |  |
 | `style_type` | one of auto, realistic, fiction |  |
 | `target_collection_id` | string |  |
 | `webhook_url` | string |  |
@@ -648,10 +648,10 @@ Inpaint with a custom Ideogram 3.0 model
 | `async` | boolean |  |
 | `custom_model_uri` | string | yes |
 | `enable_copyright_detection` | boolean \| null |  |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `magic_prompt` | one of auto, on, off |  |
-| `mask` | local file path |  |
+| `mask` | local file path or public https URL |  |
 | `mask_asset_identifier` | object |  |
 | `num_images` | integer |  |
 | `private` | boolean \| null |  |
@@ -663,7 +663,7 @@ Inpaint with a custom Ideogram 3.0 model
 | `style_reference_asset_identifiers` | array of object |  |
 | `style_reference_collection_id` | string |  |
 | `style_reference_collection_version_id` | string |  |
-| `style_reference_images` | local file paths |  |
+| `style_reference_images` | local file paths or public https URLs |  |
 | `target_collection_id` | string |  |
 
 File limits: `image` 25 MB; `mask` 50 MB (not stated; this server's cap); `style_reference_images` 25 MB × 10.
@@ -695,7 +695,7 @@ Remix with automatic model selection
 | `async` | boolean |  |
 | `color_palette` | one of several shapes |  |
 | `enable_copyright_detection` | boolean \| null |  |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `image_weight` | integer |  |
 | `magic_prompt` | one of auto, on, off |  |
@@ -731,7 +731,7 @@ Remix with Ideogram 3.0
 | `async` | boolean |  |
 | `color_palette` | one of several shapes |  |
 | `enable_copyright_detection` | boolean \| null |  |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `image_weight` | integer |  |
 | `magic_prompt` | one of auto, on, off |  |
@@ -747,7 +747,7 @@ Remix with Ideogram 3.0
 | `style_reference_asset_identifiers` | array of object |  |
 | `style_reference_collection_id` | string |  |
 | `style_reference_collection_version_id` | string |  |
-| `style_reference_images` | local file paths |  |
+| `style_reference_images` | local file paths or public https URLs |  |
 | `style_type` | one of auto, general, realistic, design, custom, fiction, stylized |  |
 | `target_collection_id` | string |  |
 | `webhook_url` | string |  |
@@ -771,10 +771,10 @@ Remix a consistent character with Ideogram 3.0
 | `character_reference_asset_identifiers` | array of object |  |
 | `character_reference_collection_id` | string |  |
 | `character_reference_collection_version_id` | string |  |
-| `character_reference_images` | local file paths |  |
-| `character_reference_mask` | local file path |  |
+| `character_reference_images` | local file paths or public https URLs |  |
+| `character_reference_mask` | local file path or public https URL |  |
 | `enable_copyright_detection` | boolean \| null |  |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `image_weight` | integer |  |
 | `magic_prompt` | one of auto, on, off |  |
@@ -788,7 +788,7 @@ Remix a consistent character with Ideogram 3.0
 | `style_reference_asset_identifiers` | array of object |  |
 | `style_reference_collection_id` | string |  |
 | `style_reference_collection_version_id` | string |  |
-| `style_reference_images` | local file paths |  |
+| `style_reference_images` | local file paths or public https URLs |  |
 | `style_type` | one of auto, realistic, fiction |  |
 | `target_collection_id` | string |  |
 | `webhook_url` | string |  |
@@ -813,7 +813,7 @@ Remix with a custom Ideogram 3.0 model
 | `color_palette` | one of several shapes |  |
 | `custom_model_uri` | string | yes |
 | `enable_copyright_detection` | boolean \| null |  |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `image_weight` | integer |  |
 | `magic_prompt` | one of auto, on, off |  |
@@ -827,7 +827,7 @@ Remix with a custom Ideogram 3.0 model
 | `style_codes` | array of string |  |
 | `style_preset` | one of 80s_illustration, 90s_nostalgia, abstract_organic, analog_nostalgia, art_brut, art_deco, art_poster, aura, avant_garde, bauhaus, blueprint, blurry_motion, … (62) |  |
 | `style_reference_asset_identifiers` | array of object |  |
-| `style_reference_images` | local file paths |  |
+| `style_reference_images` | local file paths or public https URLs |  |
 | `target_collection_id` | string |  |
 | `webhook_url` | string |  |
 
@@ -847,7 +847,7 @@ Remix with Ideogram 4.0
 |---|---|---|
 | `async` | boolean |  |
 | `enable_copyright_detection` | boolean \| null |  |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `image_weight` | integer |  |
 | `num_images` | integer |  |
@@ -882,7 +882,7 @@ Reframe an image, letting Ideogram pick the model
 | field | kind | required |
 |---|---|---|
 | `aspect_ratio` | string | yes |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `num_images` | integer |  |
 | `private` | boolean |  |
@@ -900,7 +900,7 @@ Reframe an image with Bria Expand
 | field | kind | required |
 |---|---|---|
 | `aspect_ratio` | string | yes |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `private` | boolean |  |
 | `seed` | integer |  |
@@ -917,7 +917,7 @@ Reframe an image with GPT Image 2.5 Flare
 | field | kind | required |
 |---|---|---|
 | `aspect_ratio` | string | yes |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `num_images` | integer |  |
 | `private` | boolean |  |
@@ -937,7 +937,7 @@ Reframe with Ideogram 3.0
 |---|---|---|
 | `async` | boolean |  |
 | `color_palette` | one of several shapes |  |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `num_images` | integer |  |
 | `rendering_speed` | one of turbo, default, quality |  |
@@ -946,7 +946,7 @@ Reframe with Ideogram 3.0
 | `style_codes` | array of string |  |
 | `style_preset` | one of 80s_illustration, 90s_nostalgia, abstract_organic, analog_nostalgia, art_brut, art_deco, art_poster, aura, avant_garde, bauhaus, blueprint, blurry_motion, … (62) |  |
 | `style_reference_asset_identifiers` | array of object |  |
-| `style_reference_images` | local file paths |  |
+| `style_reference_images` | local file paths or public https URLs |  |
 
 File limits: `image` 25 MB; `style_reference_images` 25 MB × 10.
 
@@ -960,7 +960,7 @@ Reframe with Nano Banana 2
 | field | kind | required |
 |---|---|---|
 | `aspect_ratio` | one of 1:1, 3:2, 2:3, 4:3, 3:4, 5:4, 4:5, 16:9, 9:16, 21:9, 4:1, 1:4, … (14) | yes |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `num_images` | integer |  |
 | `private` | boolean |  |
@@ -978,7 +978,7 @@ Reframe an image with Nano Banana Pro
 | field | kind | required |
 |---|---|---|
 | `aspect_ratio` | one of 1:1, 3:2, 2:3, 4:3, 3:4, 5:4, 4:5, 16:9, 9:16, 21:9 | yes |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `num_images` | integer |  |
 | `private` | boolean |  |
@@ -1009,7 +1009,7 @@ Upscale with automatic model selection
 | field | kind | required |
 |---|---|---|
 | `async` | boolean |  |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `internal` | boolean |  |
 | `private` | boolean \| null |  |
@@ -1030,7 +1030,7 @@ Upscale with Nano Banana Pro
 | field | kind | required |
 |---|---|---|
 | `async` | boolean |  |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `private` | boolean \| null |  |
 | `prompt` | string |  |
@@ -1053,7 +1053,7 @@ Upscale with Topaz Bloom 2
 | `async` | boolean |  |
 | `color_preservation` | boolean |  |
 | `creativity` | integer |  |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `private` | boolean \| null |  |
 | `prompt` | string |  |
@@ -1082,7 +1082,7 @@ Upscale with Topaz Redefine
 | `face_enhancement` | boolean |  |
 | `face_enhancement_creativity` | number |  |
 | `face_enhancement_strength` | number |  |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `private` | boolean \| null |  |
 | `prompt` | string |  |
@@ -1111,7 +1111,7 @@ Upscale with Topaz Standard V2
 | `face_enhancement_creativity` | number |  |
 | `face_enhancement_strength` | number |  |
 | `fix_compression` | number |  |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `private` | boolean \| null |  |
 | `sharpen` | number |  |
@@ -1138,7 +1138,7 @@ Upscale with Topaz Text Refine
 | `face_enhancement_creativity` | number |  |
 | `face_enhancement_strength` | number |  |
 | `fix_compression` | number |  |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `private` | boolean \| null |  |
 | `seed` | integer |  |
@@ -1162,7 +1162,7 @@ Upscale with Topaz Wonder 3.5
 |---|---|---|
 | `async` | boolean |  |
 | `enhancement_strength` | one of low, medium, high |  |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `private` | boolean \| null |  |
 | `seed` | integer |  |
@@ -1188,7 +1188,7 @@ Replace background with GPT Image 2
 
 | field | kind | required |
 |---|---|---|
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `num_images` | integer |  |
 | `private` | boolean |  |
@@ -1207,7 +1207,7 @@ Replace background with Ideogram 3.0
 
 | field | kind | required |
 |---|---|---|
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `num_images` | integer |  |
 | `private` | boolean |  |
@@ -1233,7 +1233,7 @@ Remove background
 | field | kind | required |
 |---|---|---|
 | `async` | boolean |  |
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `private` | boolean |  |
 | `target_collection_id` | string |  |
@@ -1255,9 +1255,9 @@ Remove an object
 
 | field | kind | required |
 |---|---|---|
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
-| `mask` | local file path |  |
+| `mask` | local file path or public https URL |  |
 | `mask_asset_identifier` | object |  |
 | `seed` | integer |  |
 | `store_assets` | boolean |  |
@@ -1282,7 +1282,7 @@ Describe with Ideogram 3.0
 
 | field | kind | required |
 |---|---|---|
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 
 File limits: `image` 10 MB.
@@ -1296,7 +1296,7 @@ Describe with Ideogram 4.0
 
 | field | kind | required |
 |---|---|---|
-| `image` | local file path |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `include_bbox` | boolean |  |
 | `include_style_descriptions` | boolean |  |
@@ -1321,8 +1321,8 @@ Layerize text with Ideogram 3.0
 | field | kind | required |
 |---|---|---|
 | `async` | boolean |  |
-| `font_candidate_files` | local file paths |  |
-| `image` | local file path |  |
+| `font_candidate_files` | local file paths or public https URLs |  |
+| `image` | local file path or public https URL |  |
 | `image_asset_identifier` | object |  |
 | `private` | boolean \| null |  |
 | `prompt` | one of several shapes |  |

@@ -11,13 +11,16 @@ Step 1 of `docs/DESIGN-ideogram-v2.md`: every image family of Ideogram's documen
 
 ### Added
 
-- An image file field takes a public `https://` URL beside a local path, on every tool (the family tools, `ideogram_quote`,
-  `ideogram_api`): fetched under the field's own limit and types, from a public host only — no IP literal, no local
-  name, no private / loopback / link-local / carrier address after resolution, no redirect followed — inside the
-  call's budget; the threat model and the one residual (DNS rebinding) are in the design note, section 9b.
+- A file field (image, mask, reference and style images, fonts) takes a public `https://` URL beside a local path, on
+  every tool (the family tools, `ideogram_quote`, `ideogram_api`): fetched one after another under the field's own
+  limit and the room the request cap leaves, as a type the field takes, from a public host only — no IP literal, no
+  local name, no private / loopback / link-local / carrier / site-local / mapped / translated address after
+  resolution, no redirect followed, never an empty body — inside the call's budget, every failure named with the URL
+  and its cause; the threat model and the one residual (DNS rebinding) are in the design note, section 9b.
 - `inline_images: true` on every tool that saves images (the family tools, `ideogram_generation`, `ideogram_api`):
-  each saved image under 4 MB is also returned as MCP image content, for a client without access to this machine's
-  files; a larger one is named with its size and stays by path. Off by default.
+  each saved image under 3.75 MB (the model APIs behind the clients take 5 MiB of base64 per image), up to 10 MB per
+  result, is also returned as MCP image content with its media type normalized, for a client without access to this
+  machine's files; the others are named with their size and stay by path. Off by default.
 - `ideogram_precise_edit` (Ideogram 4.5: the image, an optional mask, up to four `reference_images` or
   `reference_image_asset_identifiers`, `context_window`), `ideogram_remove_background` and `ideogram_remove_object`
   (ideogram-1), `ideogram_layerize` (Ideogram 3.0: the text-free base image is saved, the detected text blocks are

@@ -21,7 +21,7 @@ interface JsonProperty {
 const ENUM_SHOWN = 12;
 
 function kindOf(property: JsonProperty, file: boolean): string {
-  if (file) return property.type === "array" ? "local file paths" : "local file path";
+  if (file) return property.type === "array" ? "local file paths or public https URLs" : "local file path or public https URL";
   if (property.enum !== undefined) {
     const more = property.enum.length > ENUM_SHOWN ? `, … (${property.enum.length})` : "";
     return `one of ${property.enum.slice(0, ENUM_SHOWN).join(", ")}${more}`;

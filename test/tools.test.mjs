@@ -531,8 +531,13 @@ test("a file field takes a URL: fetched under the field's limit and sent as the 
   assert.equal(requests[0].url, "/remote/a.png", "the image is fetched first");
   assert.equal(requests[1].url, "/v2/image/remix/ideogram-3");
   assert.match(requests[1].body.toString("latin1"), /name="image"; filename="image.png"\r\nContent-Type: image\/png/);
-  const typo = await call("ideogram_remix", { prompt: "x", image: "__BASE__/remote/a.png", style_reference_images: [join(dir, "missing.png")] }, handler).catch((e) => e);
+  const seen = [];
+  const typo = await call("ideogram_remix", { prompt: "x", image: "__BASE__/remote/a.png", style_reference_images: [join(dir, "missing.png")] }, (req) => { seen.push(req.url); return handler(req); }).catch((e) => e);
   assert.match(typo.message, /ENOENT|no such file/);
+  assert.deepEqual(seen, [], "a failing local file stops the call before any fetch");
+  const roomy = await call("ideogram_api", { operation: "post_generate_image_v2_gpt_image2", params: { body: { prompt: "x" } }, files: [{ field: "images", path: "__BASE__/remote/a.png" }, { field: "images", path: "__BASE__/remote/a.png" }], wait_s: 0 }, handler);
+  assert.equal(roomy.requests.filter((r) => r.url === "/remote/a.png").length, 2, "remote inputs are fetched one after another");
+  assert.ok(roomy.requests.findIndex((r) => r.url === "/remote/a.png") < roomy.requests.findIndex((r) => r.url.startsWith("/v2/")));
   const html = await call("ideogram_remix", { prompt: "x", image: "__BASE__/remote/page" }, (req) => (req.url === "/remote/page" ? { status: 200, headers: { "content-type": "text/html" }, body: "<p>" } : accepted("u2"))).catch((e) => e);
   assert.match(html.message, /image: .*is text\/html, not one of image\/png/);
 });
@@ -540,7 +545,7 @@ test("a file field takes a URL: fetched under the field's limit and sent as the 
 test("inline_images: each saved image comes back as image content beside the text; a large one is listed by path only; nothing inline by default", async () => {
   const handler = (req, _n, api) => {
     if (req.url === "/img/small.png") return { status: 200, headers: { "content-type": "image/png" }, body: PNG };
-    if (req.url === "/img/big.png") return { status: 200, headers: { "content-type": "image/png" }, body: Buffer.alloc(4 * 1024 * 1024 + 1, 7) };
+    if (req.url === "/img/big.png") return { status: 200, headers: { "content-type": "image/png" }, body: Buffer.alloc(3_750_001, 7) };
     if (req.method === "POST") return accepted("i1");
     return { json: { generation_id: "i1", status: "completed", created: "2026-10-07T00:00:00Z", data: [
       { object_type: "image.generation", url: `${api.base}/img/small.png`, prompt: "p", resolution: "1024x1024", is_image_safe: true, seed: 1 },
@@ -550,7 +555,7 @@ test("inline_images: each saved image comes back as image content beside the tex
   const { result } = await call("ideogram_generate", { prompt: "x", inline_images: true }, handler);
   assert.equal(result.content[0].type, "text");
   assert.match(result.content[0].text, /2 of 2 image\(s\) saved\./);
-  assert.match(result.content[0].text, /Not returned inline: .*\.png is 4\.0 MB, over 4 MB/);
+  assert.match(result.content[0].text, /Not returned inline: .*\.png is 3\.75 MB, over 3\.75 MB/);
   assert.equal(result.content.length, 2, "one image item: the small one");
   assert.deepEqual(result.content[1], { type: "image", data: PNG.toString("base64"), mimeType: "image/png" });
   const plain = await call("ideogram_generate", { prompt: "x" }, handler);
@@ -561,4 +566,13 @@ test("inline_images: each saved image comes back as image content beside the tex
   assert.equal(raw.result.content.length, 2, "ideogram_api inlines the same way");
   const bad = await call("ideogram_generate", { prompt: "x", inline_images: "yes" }).catch((e) => e);
   assert.match(bad.message, /inline_images must be true or false/);
+  const many = (req, _n, api) => {
+    if (req.url.startsWith("/img/")) return { status: 200, headers: { "content-type": "image/jpg; charset=binary" }, body: Buffer.alloc(3_000_000, 9) };
+    if (req.method === "POST") return accepted("i2");
+    return { json: { generation_id: "i2", status: "completed", created: "2026-10-07T00:00:00Z", data: [1, 2, 3, 4].map((n) => ({ object_type: "image.generation", url: `${api.base}/img/${n}.jpg`, prompt: "p", resolution: "1024x1024", is_image_safe: true, seed: n })) } };
+  };
+  const capped = await call("ideogram_generate", { prompt: "x", inline_images: true }, many);
+  assert.equal(capped.result.content.length, 4, "three of four 3 MB images fit under the 10 MB total");
+  assert.equal(capped.result.content[1].mimeType, "image/jpeg", "the media type is normalized");
+  assert.match(capped.result.content[0].text, /would take this result past 10\.00 MB of images/);
 });

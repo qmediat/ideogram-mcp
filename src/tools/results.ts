@@ -9,7 +9,7 @@ import { readFile } from "node:fs/promises";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { SavedFile } from "../client.js";
 import { COUNTERS } from "../counters.js";
-import { INLINE_MAX_BYTES } from "./fields.js";
+import { INLINE_MAX_BYTES, INLINE_MAX_TOTAL_BYTES } from "./fields.js";
 import { IdeogramApiError } from "../errors.js";
 import { microsToUsd } from "../cost.js";
 import type { ImageItem, LayeredItem, Outcome, Payload } from "../lifecycle.js";
@@ -60,16 +60,31 @@ async function saveImages(ctx: ToolContext, items: readonly ImageItem[]): Promis
 
 type ImageContent = { type: "image"; data: string; mimeType: string };
 
-/** The saved images as content items, each under the inline cap; a larger one is named with its size instead. */
+const mb = (bytes: number): string => `${(bytes / 1_000_000).toFixed(2)} MB`;
+
+/** The media type as a client expects it: no parameters, `image/jpg` as `image/jpeg`. */
+function inlineMimeType(contentType: string): string {
+  const bare = contentType.split(";")[0].trim().toLowerCase();
+  return bare === "image/jpg" ? "image/jpeg" : bare;
+}
+
+/** The saved images as content items, each under the inline cap and all of them under the total; the rest are named
+ * with their size instead. */
 async function inlineContent(files: readonly SavedFile[]): Promise<{ items: ImageContent[]; lines: string[] }> {
   const items: ImageContent[] = [];
   const lines: string[] = [];
+  let total = 0;
   for (const file of files) {
     if (file.bytes > INLINE_MAX_BYTES) {
-      lines.push(`Not returned inline: ${file.path} is ${(file.bytes / 1_048_576).toFixed(1)} MB, over ${INLINE_MAX_BYTES / 1_048_576} MB`);
+      lines.push(`Not returned inline: ${file.path} is ${mb(file.bytes)}, over ${mb(INLINE_MAX_BYTES)}`);
       continue;
     }
-    items.push({ type: "image", data: (await readFile(file.path)).toString("base64"), mimeType: file.contentType });
+    if (total + file.bytes > INLINE_MAX_TOTAL_BYTES) {
+      lines.push(`Not returned inline: ${file.path} would take this result past ${mb(INLINE_MAX_TOTAL_BYTES)} of images`);
+      continue;
+    }
+    total += file.bytes;
+    items.push({ type: "image", data: (await readFile(file.path)).toString("base64"), mimeType: inlineMimeType(file.contentType) });
   }
   return { items, lines };
 }

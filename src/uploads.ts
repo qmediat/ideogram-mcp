@@ -88,12 +88,13 @@ function extensionFor(types: Readonly<Record<string, string>>, contentType: stri
   return Object.entries(types).find(([, type]) => type === contentType)?.[0] ?? "";
 }
 
-/** A remote input as the upload part it becomes: fetched under the field's limit, accepted only as a type the field takes. */
-async function fetchRemote(ref: FileRef, limit: FileLimit, remote: RemoteFetcher | undefined): Promise<UploadPart> {
+/** A remote input as the upload part it becomes: fetched under the field's limit and the room the request cap leaves,
+ * accepted only as a type the field takes. */
+async function fetchRemote(ref: FileRef, limit: FileLimit, room: number, remote: RemoteFetcher | undefined): Promise<UploadPart> {
   if (remote === undefined) throw new Error(`${ref.field}: a URL input needs a running call (not available here): ${ref.path}`);
   const types = uploadTypesFor(ref.field);
   const accepted = [...new Set(Object.values(types))];
-  const got = await remote(ref.path, limit.maxBytes, accepted).catch((error: unknown) => {
+  const got = await remote(ref.path, Math.min(limit.maxBytes, room), accepted).catch((error: unknown) => {
     throw new Error(`${ref.field}: ${error instanceof Error ? error.message : String(error)}`);
   });
   return { field: ref.field, filename: `${ref.field}${extensionFor(types, got.contentType)}`, contentType: got.contentType, bytes: got.bytes };
@@ -106,21 +107,28 @@ function checkRequestCap(op: Operation, total: number): void {
   throw new Error(`the files together are ${mb(total)}; ${op.id} takes a request under ${mb(cap.maxBytes)} (${source})`);
 }
 
-/** Checks every local file against the operation's limits, then reads them and fetches the remote inputs; nothing is
- * read or fetched when any check fails. The parts keep the caller's order. */
+/** Checks every local file against the operation's limits, then reads them and fetches the remote inputs one after
+ * another, each under the room the request cap still leaves (a body over it is cut as it arrives, never held whole);
+ * nothing is read or fetched when any local check fails. The parts keep the caller's order. */
 export async function loadUploads(op: Operation, files: readonly FileRef[], remote?: RemoteFetcher): Promise<UploadPart[]> {
   const limits = new Map(fileLimitsOf(op).map((l) => [l.field, l]));
   checkCounts(op, files, limits);
   const local = files.filter((f) => !isRemoteInput(f.path));
   const checked = new Map(await Promise.all(local.map(async (f) => [f, await checkFile(f, limits.get(f.field) as FileLimit)] as const)));
-  checkRequestCap(op, [...checked.values()].reduce((sum, f) => sum + f.bytes, 0));
-  const parts = await Promise.all(
-    files.map(async (f): Promise<UploadPart> => {
-      const own = checked.get(f);
-      if (own === undefined) return fetchRemote(f, limits.get(f.field) as FileLimit, remote);
-      return { field: f.field, filename: `${f.field}${extname(own.realPath).toLowerCase()}`, contentType: own.contentType, bytes: new Uint8Array(await readFile(own.realPath)) };
-    }),
-  );
-  checkRequestCap(op, parts.reduce((sum, p) => sum + p.bytes.byteLength, 0));
+  const localBytes = [...checked.values()].reduce((sum, f) => sum + f.bytes, 0);
+  checkRequestCap(op, localBytes);
+  const cap = requestLimitOf(op).maxBytes;
+  let total = localBytes;
+  const parts: UploadPart[] = [];
+  for (const f of files) {
+    const own = checked.get(f);
+    if (own !== undefined) {
+      parts.push({ field: f.field, filename: `${f.field}${extname(own.realPath).toLowerCase()}`, contentType: own.contentType, bytes: new Uint8Array(await readFile(own.realPath)) });
+      continue;
+    }
+    const part = await fetchRemote(f, limits.get(f.field) as FileLimit, cap - total, remote);
+    total += part.bytes.byteLength;
+    parts.push(part);
+  }
   return parts;
 }
