@@ -31,6 +31,21 @@ test("a signature verifies against the named key, a rotated key still verifies, 
   assert.equal(verifyWebhook({ ...delivery, signature: oldSig.toString("base64"), keyId: "v2" }, jwks), "v1", "a key recently rotated out still verifies");
 });
 
+test("a replay is refused only when the receiver sets maxAgeS; a header the receiver did not get is null, not a throw; an unknown key id still verifies against the set", () => {
+  const ours = keyPair("v1");
+  const good = sign(null, canonicalMessage(delivery), ours.privateKey).toString("base64");
+  const jwks = { keys: [ours.jwk] };
+  const at = Date.parse(delivery.timestamp);
+  assert.equal(verifyWebhook({ ...delivery, signature: good }, jwks, { maxAgeS: 300, now: at + 200_000 }), "v1");
+  assert.equal(verifyWebhook({ ...delivery, signature: good }, jwks, { maxAgeS: 300, now: at + 400_000 }), null, "older than maxAgeS");
+  assert.equal(verifyWebhook({ ...delivery, signature: good }, jwks, { maxAgeS: 300, now: at - 400_000 }), null, "from the future as well");
+  assert.equal(verifyWebhook({ ...delivery, timestamp: String(Math.floor(at / 1000)), signature: sign(null, canonicalMessage({ ...delivery, timestamp: String(Math.floor(at / 1000)) }), ours.privateKey).toString("base64") }, jwks, { maxAgeS: 300, now: at + 1000 }), "v1", "epoch seconds are read too");
+  assert.equal(verifyWebhook({ ...delivery, signature: good }, jwks), "v1", "no maxAgeS: not judged");
+  assert.equal(verifyWebhook({ ...delivery, signature: undefined }, jwks), null);
+  assert.equal(verifyWebhook({ ...delivery, signature: ["a", "b"] }, jwks), null, "a repeated header");
+  assert.equal(verifyWebhook({ ...delivery, signature: good, keyId: "unknown" }, jwks), "v1");
+});
+
 test("a tampered body, a foreign key, a key that is not Ed25519 and a malformed signature are refused", () => {
   const ours = keyPair("v1");
   const theirs = keyPair("x");

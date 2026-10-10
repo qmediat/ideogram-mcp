@@ -298,6 +298,9 @@ test("ideogram_operations lists a family and details one operation with its fiel
   assert.match(text(one.result), /image: 10 MB/);
   assert.doesNotMatch(text(one.result), /quotable/);
   assert.match(text(one.result), /Rules:\n  needs a source image: image \(a local file or a public https URL\) or image_asset_identifier/);
+  assert.match(text(one.result), /Rules:\n  needs a source image: image \(a local file\) or image_asset_identifier/);
+  const query = await call("ideogram_operations", { operation: "get_asset_reference_usage" });
+  assert.match(text(query.result), /Parameters:\n  limit \(query\)\n  collection_ids \(query, repeated\)\n  include_collections \(query\)\n  start_date \(query, required\)/);
   const gen = await call("ideogram_operations", { operation: "post_generate_image_v2_ideogram_v3" });
   assert.doesNotMatch(text(gen.result), /needs a source image/, "generate has no source rule");
 });

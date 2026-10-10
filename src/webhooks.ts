@@ -4,7 +4,11 @@
  * `X-Ideogram-Webhook-Signature` (the key's id in `X-Ideogram-Webhook-Key-Id`); the public keys are the JWKS at
  * GET /v1/.well-known/jwks.json (public, cache up to 24 h, refresh when a signature fails). A helper for the
  * receiver — this server receives no webhook itself (a stdio process has no public URL). The JWKS is given, never
- * fetched here; the signature is accepted as base64, base64url or hex.
+ * fetched here; the signature is accepted as base64, base64url or hex. Where `request_id`, `user_id` and `timestamp`
+ * travel is not stated by the specification (it names the two signature headers only): the receiver takes them from
+ * the delivery as Ideogram's webhook documentation says and passes them in. A replay is refused only when the
+ * receiver sets `maxAgeS` (the signature alone is valid forever): then a timestamp (RFC 3339 or epoch seconds)
+ * farther than that from `now` is refused.
  */
 import { createHash, createPublicKey, verify } from "node:crypto";
 
@@ -18,6 +22,13 @@ export interface WebhookJwk {
 
 export interface WebhookJwks {
   readonly keys: readonly WebhookJwk[];
+}
+
+export interface VerifyOptions {
+  /** The most a delivery's timestamp may be from `now`, in seconds; unset, the timestamp is not judged. */
+  readonly maxAgeS?: number;
+  /** Milliseconds since the epoch; Date.now() by default. */
+  readonly now?: number;
 }
 
 export interface WebhookDelivery {
@@ -58,8 +69,19 @@ function ed25519Key(jwk: WebhookJwk): ReturnType<typeof createPublicKey> | null 
   }
 }
 
-/** The id of the key the signature verifies against (the header's key first, then every other), or null. */
-export function verifyWebhook(delivery: WebhookDelivery, jwks: WebhookJwks): string | null {
+function timestampMs(text: string): number {
+  if (/^\d{9,13}$/.test(text)) return Number(text) * (text.length <= 10 ? 1000 : 1);
+  return Date.parse(text);
+}
+
+/** The id of the key the signature verifies against (the header's key first, then every other), or null: a missing
+ * or malformed signature, a key set without an Ed25519 key, or a timestamp past `maxAgeS` is null, never a throw. */
+export function verifyWebhook(delivery: WebhookDelivery, jwks: WebhookJwks, options: VerifyOptions = {}): string | null {
+  if (typeof delivery.signature !== "string" || typeof delivery.requestId !== "string" || typeof delivery.userId !== "string" || typeof delivery.timestamp !== "string") return null;
+  if (options.maxAgeS !== undefined) {
+    const at = timestampMs(delivery.timestamp);
+    if (!Number.isFinite(at) || Math.abs((options.now ?? Date.now()) - at) > options.maxAgeS * 1000) return null;
+  }
   const message = canonicalMessage(delivery);
   const signatures = signatureBytes(delivery.signature);
   if (signatures.length === 0) return null;

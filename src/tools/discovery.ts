@@ -24,6 +24,12 @@ function fieldLines(op: Operation): string[] {
   return fieldSummaries(op).map((f) => `  ${f.name}${f.required ? " (required)" : ""}: ${f.kind}`);
 }
 
+function parameterLines(op: Operation): string[] {
+  const params = op.facts.parameters.filter((p) => p.location !== "header");
+  if (params.length === 0) return [];
+  return ["Parameters:", ...params.map((p) => `  ${p.name} (${p.location}${p.required ? ", required" : ""}${p.array ? ", repeated" : ""})`)];
+}
+
 function detail(op: Operation): string {
   const limits = fileLimitsOf(op).map((l) => `  ${l.field}: ${(l.maxBytes / MB).toFixed(0)} MB${l.stated ? "" : " (not stated by Ideogram; this server's cap)"}${l.maxItems === null ? "" : `, at most ${l.maxItems} files`}`);
   const rules = rulesOf(op).map((text) => `  ${text}`);
@@ -31,6 +37,7 @@ function detail(op: Operation): string {
     opLine(op),
     op.summary,
     `Body: ${op.body}; async: ${op.async}; call it with ideogram_api {"operation": "${op.id}", …}`,
+    ...parameterLines(op),
     "Fields:",
     ...fieldLines(op),
     ...(limits.length > 0 ? ["File limits:", ...limits] : []),

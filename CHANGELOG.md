@@ -25,13 +25,19 @@ Step 2: the account — usage and spend, invoices, API keys — and the webhook 
   machine's files; the others are named with their size and stay by path. Off by default.
 - `ideogram_usage`: the organization's billed API usage as Ideogram reports it (`GET /v2/account/usage`: dense time
   buckets of line items — product, endpoint, cost, billed units, the redacted API key, the source), the last 7 days
-  by day unless told otherwise, summed per product and per currency as decimal strings (never floats), the buckets
-  handed on unchanged: the shape ai-cost reads. `ideogram_invoices` and `ideogram_api_keys` list what their
-  endpoints return; a 404 is said as what it is (an organization-admin key is needed). Reads only, never billed.
+  by day (24 hours by hour) unless told otherwise, a range over the API's span (92 days at `1d`, 168 hours at `1h`)
+  refused before asking, summed per product, unit and currency as decimal strings (never floats; an amount the sums
+  cannot read is counted and listed, not summed), the buckets written exactly as received to a JSON file in the
+  output directory and printed too when under 64 KB: the shape ai-cost reads. `ideogram_invoices` and
+  `ideogram_api_keys` list what their endpoints return as received. All three need an organization-admin key: a 404
+  is said as that, with Ideogram's words. Reads only, never billed.
 - `verifyWebhook` (`dist/webhooks.js`): the canonical message Ideogram signs
   (`request_id\nuser_id\ntimestamp\nsha256_hex(body)`) checked against the JWKS of `GET /v1/.well-known/jwks.json`
-  with Ed25519, the header's key first, a rotated key still accepted, the signature as base64, base64url or hex.
-  A helper for the receiver: this server receives no webhook itself (a stdio process has no public URL).
+  with Ed25519, the header's key first, a rotated key still accepted, the signature as base64, base64url or hex; a
+  replay refused when the receiver sets `maxAgeS` (the signature alone never expires); a missing header is null,
+  never a throw. A helper for the receiver: this server receives no webhook itself (a stdio process has no public
+  URL); where `request_id`, `user_id` and `timestamp` travel is not stated by the specification.
+- `ideogram_operations` and the API reference list an operation's path and query parameters.
 - `get_asset_reference_usage` (spec-only) is served by `ideogram_api` behind `allow_undocumented`: a spec-only
   operation of a curated family is raw, as the undocumented reframe models are. Support: curated 47 · raw 5 ·
   planned 75. tools/list: 19 tools.

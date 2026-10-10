@@ -118,19 +118,28 @@ sees the result. Both are off unless asked.
 
 ### Usage, invoices, webhooks
 
-`ideogram_usage` asks `GET /v2/account/usage` for a range (RFC 3339 times, `1d` or `1h` buckets, the `api` and `app`
-sources) and answers with the sums per product and per currency — decimal strings, never floats — followed by the
-buckets exactly as Ideogram sent them, the shape a cost tool reads. `ideogram_invoices` and `ideogram_api_keys` need
-an API key owned by an organization admin (Ideogram answers 404 to any other key, and the tool says so).
+`ideogram_usage` asks `GET /v2/account/usage` for a range (RFC 3339 times; `1d` buckets over at most 92 days, `1h`
+over at most 168 hours — the tool refuses a longer one before asking; the `api` and `app` sources) and answers with
+the sums per product, unit and currency — decimal strings, never floats; an amount it cannot read is counted, not
+summed — and writes the buckets exactly as Ideogram sent them to a JSON file in the output directory (printed too
+when under 64 KB): the shape a cost tool reads. All three account tools need an API key owned by an organization
+admin (Ideogram answers 404 to any other key, and the tool says so with Ideogram's words).
 
 Ideogram signs its webhooks with Ed25519: the canonical message is `request_id\nuser_id\ntimestamp\nsha256_hex(body)`,
 the signature travels in `X-Ideogram-Webhook-Signature` (the key id in `X-Ideogram-Webhook-Key-Id`), the public keys
-are the JWKS at `GET https://api.ideogram.ai/v1/.well-known/jwks.json` (public; cache up to 24 h). The receiver — not
-this server, which has no public URL — verifies with the helper this package ships:
+are the JWKS at `GET https://api.ideogram.ai/v1/.well-known/jwks.json` (public; cache up to 24 h). Where `request_id`,
+`user_id` and `timestamp` travel is not stated by the specification (it names the two signature headers only): take
+them from the delivery as Ideogram's webhook documentation says. The receiver — not this server, which has no public
+URL — verifies with the helper this package ships; a replay is refused only when you set `maxAgeS` (the signature
+alone never expires):
 
 ```js
 import { verifyWebhook } from "@qmediat.io/ideogram-mcp/dist/webhooks.js";
-const kid = verifyWebhook({ body, requestId, userId, timestamp, signature: headers["x-ideogram-webhook-signature"], keyId: headers["x-ideogram-webhook-key-id"] }, jwks);
+const kid = verifyWebhook(
+  { body, requestId, userId, timestamp, signature: headers["x-ideogram-webhook-signature"], keyId: headers["x-ideogram-webhook-key-id"] },
+  jwks,
+  { maxAgeS: 300 },
+);
 if (kid === null) reject(); // the key id that verified, else null
 ```
 
@@ -169,7 +178,7 @@ A 1.x field that the chosen v2 model does not take is refused with the models th
 
 ### The raw call
 
-`ideogram_api` runs any operation this release serves — the curated ones and every other `/v2/image` operation (the reframe models the documentation index does not list) — by its id, with its parameters kept in their places: `{"operation": "…", "params": {"path": {}, "query": {}, "body": {}}, "files": [{"field": "image", "path": "…"}], "dry_run": false}`. The parameters are checked against the operation's own schema and rules before anything is sent. Operations Ideogram's documentation does not list need `allow_undocumented: true`; web-app (Bearer) and internal operations are refused; video, the commercial tools and account usage come in later releases ([plan](https://github.com/qmediat/ideogram-mcp/blob/main/docs/DESIGN-ideogram-v2.md#8-steps-one-release-per-finished-family--invariant-15)).
+`ideogram_api` runs any operation this release serves — the curated ones and every other `/v2/image` operation (the reframe models the documentation index does not list) — by its id, with its parameters kept in their places: `{"operation": "…", "params": {"path": {}, "query": {}, "body": {}}, "files": [{"field": "image", "path": "…"}], "dry_run": false}`. The parameters are checked against the operation's own schema and rules before anything is sent. Operations Ideogram's documentation does not list need `allow_undocumented: true`; web-app (Bearer) and internal operations are refused; the undocumented `get_asset_reference_usage` of the account family too; video, the commercial tools and the v1-only operations come in later releases ([plan](https://github.com/qmediat/ideogram-mcp/blob/main/docs/DESIGN-ideogram-v2.md#8-steps-one-release-per-finished-family--invariant-15)).
 
 ## Security
 
