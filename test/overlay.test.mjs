@@ -109,6 +109,13 @@ test("the constraints refuse what the API refuses and pass what it takes", () =>
     ["post_precise_edit_image_v2_ideogram45", { prompt: "x", image_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" }, context_window: "none" }, /context_window needs the image/],
     ["post_precise_edit_image_v2_ideogram45", { prompt: "x", image: "a.png", context_window: "auto" }, /"auto" needs a mask/],
     ["post_remove_object_from_v2_assets", { image: "a.png" }, /remove object needs the source .* and the mask/],
+    ["post_precise_edit_image_v2_ideogram45", { prompt: "x", image_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" }, reference_images: ["r.png"], reference_image_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "r" }] }, /reference_images and reference_image_asset_identifiers are alternatives/],
+    ["post_precise_edit_image_v2_ideogram45", { prompt: "x", image: "a.png", context_window: "0,0,10,10" }, /each side at least 256 px/],
+    ["post_precise_edit_image_v2_ideogram45", { prompt: "x", image: "a.png", context_window: "0,0,256,2048" }, /aspect ratio/],
+    ["post_precise_edit_image_v2_ideogram45", { prompt: "x", image: "a.png", context_window: "0,0,2048,2049" }, /4194304 pixels/],
+    ["post_precise_edit_image_v2_ideogram45", { prompt: "x", image: "a.png", context_window: "512,1024,256,3072" }, /max above min/],
+    ["post_precise_edit_image_v2_ideogram45", { prompt: "x", image: "a.png", context_window: "a,b,c,d" }, /whole numbers/],
+    ["post_layerize_design_ideogram_v3", { image: "a.png", font_candidate_files: ["1.ttf", "2.ttf", "3.ttf", "4.ttf", "5.ttf", "6.ttf"] }, /at most 5 files/],
     ["post_remove_object_from_v2_assets", { mask_asset_identifier: { asset_type: "UPLOAD", asset_id: "m" } }, /remove object needs the source/],
   ];
   for (const [id, fields, message] of cases) {
@@ -127,6 +134,9 @@ test("the constraints refuse what the API refuses and pass what it takes", () =>
     ["post_precise_edit_image_v2_ideogram45", { prompt: "x", image: "a.png", mask: "m.png", reference_images: ["1.png", "2.png", "3.png"], context_window: "auto" }],
     ["post_precise_edit_image_v2_ideogram45", { prompt: "x", image_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" }, reference_image_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "r" }] }],
     ["post_remove_object_from_v2_assets", { image: "a.png", mask_asset_identifier: { asset_type: "UPLOAD", asset_id: "m" } }],
+    ["post_precise_edit_image_v2_ideogram45", { prompt: "x", image: "a.png", context_window: "512,1024,2048,3072" }],
+    ["post_precise_edit_image_v2_ideogram45", { prompt: "x", image: "a.png", context_window: "0,0,2048,2048" }],
+    ["post_layerize_design_ideogram_v3", { image: "a.png", font_candidate_files: ["1.ttf", "2.ttf", "3.ttf", "4.ttf", "5.ttf"] }],
     ["post_generate_image_v2_ideogram_v3_character", { prompt: "x", character_reference_collection_id: "c" }],
     ["post_inpaint_image_v2_ideogram_v3_character", { prompt: "x", image: "a.png", mask: "m.png", character_reference_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "a" }] }],
   ];

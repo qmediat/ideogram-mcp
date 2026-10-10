@@ -112,6 +112,22 @@ function anyGiven(fields: BodyFields, names: readonly string[]): boolean {
   return names.some((name) => given(fields, name));
 }
 
+const REGION_MIN_SIDE = 256;
+const REGION_MAX_PIXELS = 4_194_304;
+const REGION_MAX_RATIO = 6;
+
+/** The explicit form of `context_window`, as the specification bounds it (the image's own size is not known here). */
+function regionAllowed(text: string): boolean {
+  const parts = text.split(",").map((p) => p.trim());
+  if (parts.length !== 4 || !parts.every((p) => /^\d+$/.test(p))) return false;
+  const [yMin, xMin, yMax, xMax] = parts.map(Number);
+  const height = yMax - yMin;
+  const width = xMax - xMin;
+  if (height < REGION_MIN_SIDE || width < REGION_MIN_SIDE) return false;
+  if (width > height * REGION_MAX_RATIO || height > width * REGION_MAX_RATIO) return false;
+  return width * height <= REGION_MAX_PIXELS;
+}
+
 const STYLE_REFERENCES: readonly string[] = [
   "style_codes",
   "style_reference_images",
@@ -243,6 +259,27 @@ export const CONSTRAINTS: readonly Constraint[] = [
     anchor: { field: "context_window", phrase: /`?auto`? requires a `?mask`?/ },
     text: 'context_window "auto" needs a mask',
     violated: (f) => f.context_window === "auto" && !given(f, "mask"),
+  },
+  {
+    id: "references-as-files-or-by-reference",
+    operations: new Set(["post_precise_edit_image_v2_ideogram45"]),
+    anchor: { field: "reference_images", phrase: /ignored if `?reference_image_asset_identifiers`? is also supplied/ },
+    text: "reference_images and reference_image_asset_identifiers are alternatives (the files would be ignored); give one",
+    violated: (f) => given(f, "reference_images") && given(f, "reference_image_asset_identifiers"),
+  },
+  {
+    id: "context-window-region",
+    operations: new Set(["post_precise_edit_image_v2_ideogram45"]),
+    anchor: { field: "context_window", phrase: /measure at least 256px on each side, have an aspect ratio between 1:6 and 6:1, and cover no more than 4194304 pixels/ },
+    text: "context_window names a region as y_min,x_min,y_max,x_max: whole numbers, max above min, each side at least 256 px, aspect ratio between 1:6 and 6:1, at most 4194304 pixels",
+    violated: (f) => typeof f.context_window === "string" && !["none", "auto"].includes(f.context_window) && !regionAllowed(f.context_window),
+  },
+  {
+    id: "five-font-files",
+    operations: new Set(["post_layerize_design_ideogram_v3"]),
+    anchor: { field: "font_candidate_files", phrase: /maximum 5 files/ },
+    text: "font_candidate_files takes at most 5 files",
+    violated: (f) => Array.isArray(f.font_candidate_files) && f.font_candidate_files.length > 5,
   },
   {
     id: "remove-object-source-and-mask",

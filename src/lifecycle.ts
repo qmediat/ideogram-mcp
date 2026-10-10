@@ -40,6 +40,10 @@ export interface ImageItem {
  * `LayerizedImageObject` / `TextLayerizerResultObject`; the blocks are passed through as the API lists them). */
 export interface LayeredItem {
   readonly baseImageUrl: string | null;
+  /** The layered design itself, when the API links one. */
+  readonly url: string | null;
+  /** The editable page of a `layerized_design.generation`. */
+  readonly htmlUrl: string | null;
   readonly resolution: string | null;
   readonly seed: number | null;
   readonly isImageSafe: boolean;
@@ -87,6 +91,8 @@ const ImageItemShape = z.looseObject({
 const LayeredItemShape = z.looseObject({
   object_type: z.enum(["layerized_image", "layerized_design.generation"]),
   base_image_url: z.string().nullish(),
+  url: z.string().nullish(),
+  html_url: z.string().nullish(),
   resolution: z.string().optional(),
   seed: z.number().optional(),
   is_image_safe: z.boolean().optional(),
@@ -131,7 +137,15 @@ function layeredItems(data: readonly unknown[]): LayeredItem[] | null {
     const item = LayeredItemShape.safeParse(raw);
     if (!item.success) return null;
     const d = item.data;
-    items.push({ baseImageUrl: d.base_image_url ?? null, resolution: d.resolution ?? null, seed: d.seed ?? null, isImageSafe: d.is_image_safe ?? d.base_image_url != null, textBlocks: d.text_blocks ?? [] });
+    items.push({
+      baseImageUrl: d.base_image_url ?? null,
+      url: d.url ?? null,
+      htmlUrl: d.html_url ?? null,
+      resolution: d.resolution ?? null,
+      seed: d.seed ?? null,
+      isImageSafe: d.is_image_safe ?? d.base_image_url != null,
+      textBlocks: d.text_blocks ?? [],
+    });
   }
   return items;
 }

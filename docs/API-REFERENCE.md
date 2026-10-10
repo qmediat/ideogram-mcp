@@ -552,6 +552,8 @@ Rules:
 - with a mask, reference_images takes at most three files
 - context_window needs the image as a file in the same request (image)
 - context_window "auto" needs a mask
+- reference_images and reference_image_asset_identifiers are alternatives (the files would be ignored); give one
+- context_window names a region as y_min,x_min,y_max,x_max: whole numbers, max above min, each side at least 256 px, aspect ratio between 1:6 and 6:1, at most 4194304 pixels
 
 ### inpaint
 
@@ -1265,6 +1267,9 @@ Layerize text with Ideogram 3.0
 | `webhook_url` | string |  |
 
 File limits: `font_candidate_files` 5 MB; `image` 50 MB.
+
+Rules:
+- font_candidate_files takes at most 5 files
 
 ### video_text
 

@@ -22,13 +22,28 @@ Step 1 of `docs/DESIGN-ideogram-v2.md`: every image family of Ideogram's documen
   room for three reference images; `context_window` needs the image as a file and `"auto"` needs a mask; remove object
   needs its source and its mask.
 - A `layered` payload in the lifecycle: a `layerized_image` / `layerized_design.generation` entry of a generation is
-  shown as its base image (saved, or withheld by the safety check) and its text blocks, never as a raw record.
+  shown as its base image (saved, or withheld by the safety check), the design's own link and editable page when the
+  API gives them, and its text blocks — never as a raw record.
+- `private` is a field of every curated tool whose model takes it, and is sent as `true` unless the caller sets it:
+  on remove background, replace background and the `auto` models an omitted `private` follows the plan's setting,
+  public when the plan has none (the other operations default to private) — a server on an API key never publishes to
+  Ideogram's public feed unless asked. `ideogram_api` sends what the caller gave, as before. (Opus cross-review X1.)
+- A curated tool refuses a call without a source image (image, images or an asset identifier; every family but
+  generate) before the schema and before any request, and checks the body against the schema of the format it is
+  sent in — a call without a file goes as JSON, whose schema may require what the multipart one leaves optional (X3, X4).
+- Three more rules from the prose: `reference_images` and `reference_image_asset_identifiers` are alternatives (the
+  files would be ignored); `context_window`'s explicit region is four whole numbers, max above min, each side at least
+  256 px, aspect ratio within 1:6 and 6:1, at most 4 194 304 pixels; `font_candidate_files` takes at most 5 (X5, X6, X9).
 
 ### Changed
 
-- tools/list carries 16 tools; a definition shorter than its `$ref` is inlined (lossless, 1.3 KB), and the advertised
-  schema budget is 80 KB measured (70 821 bytes over a real session on 2026-10-10; the 64 KB of 2.0.0 was the
-  estimate before step 1 — `test/budget.test.mjs`, design note section 5).
+- tools/list carries 16 tools; a definition shorter than its `$ref` is inlined (lossless, 1.3 KB; an inlined
+  definition is walked again and a definition is dropped only when nothing refers to it any more), and the advertised
+  schema budget is 80 KB measured (73 582 bytes over a real session on 2026-10-10, `private` included; the 64 KB of
+  2.0.0 was the estimate before step 1 — `test/budget.test.mjs`, design note section 5).
+- Verified on the live API on 2026-10-10 (0.07 USD): a precise edit (4.5, `very_low`) and a remove background run
+  through acceptance, poll and download; the remove-background result is listed as an image without prompt or seed
+  and saved like any image (`test/tools.test.mjs` pins the shape).
 - `ideogram_api`'s refusal of a planned operation names "this release", not a version.
 - The plan's order after step 2 (design note section 8, operator decision 2026-10-10): custom-model training (v1)
   before video, the commercial tools last; step 1 also brings inline image content and URL input, opt-in, for clients

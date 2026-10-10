@@ -20,6 +20,7 @@ MCP server for the [Ideogram](https://developer.ideogram.ai) platform through it
 
 - **The platform, not one model** — `model` on every tool, with each model's own fields (a field the model does not take is refused, naming the models that do). The model lists and fields come from Ideogram's specification, so a new model is a reviewed snapshot update, not a rewrite
 - **Price before you pay** — `ideogram_quote` asks the API what exactly this call would cost (USD and credits; nothing generated or billed)
+- **Private by default** — every tool sends `private: true` unless you set it: nothing goes to Ideogram's public feed unless asked (on remove background, replace background and the `auto` models the API's own default is your plan's setting)
 - **Never billed twice** — a job is returned the moment Ideogram accepts it; the tool waits up to `wait_s` and otherwise hands back the `generation_id` for `ideogram_generation`. A request is resent only when it never left the machine or got a 429
 - **Everything else, validated** — `ideogram_operations` lists what the API offers; `ideogram_api` calls any served operation by id, checked against its own schema first
 - **Guarded I/O** — per-operation upload limits checked before any file is read, streamed downloads with a 50 MB cap from allow-listed HTTPS hosts, typed 402/429 errors that say what to do ([details](https://github.com/qmediat/ideogram-mcp/blob/main/SECURITY.md))

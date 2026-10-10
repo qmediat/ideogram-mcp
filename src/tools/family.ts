@@ -17,7 +17,7 @@ import type { Family, Operation } from "../spec/operations.js";
 import { loadUploads } from "../uploads.js";
 import type { FileRef } from "../uploads.js";
 import { adaptFields, resolveModel } from "./compat.js";
-import { CONTROL_FIELDS, FIELD_TEXT, RESERVED_FIELDS, WAIT_TEXT } from "./fields.js";
+import { CONTROL_FIELDS, FIELD_TEXT, PRIVATE_FIELD, RESERVED_FIELDS, WAIT_TEXT } from "./fields.js";
 
 /** A tool's arguments as the MCP client sent them; `prepare` validates them against the chosen model. */
 export type ToolArguments = Readonly<Record<string, unknown>>;
@@ -112,12 +112,14 @@ function inlineSmallDefinitions(json: JsonObject): void {
     if (node === null || typeof node !== "object") return node;
     const o = node as JsonObject;
     const ref = typeof o.$ref === "string" && Object.keys(o).length === 1 ? small.get(o.$ref) : undefined;
-    if (ref !== undefined) return JSON.parse(ref) as unknown;
+    if (ref !== undefined) return walk(JSON.parse(ref)); // an inlined definition may hold a $ref of its own
     return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, walk(v)]));
   };
   json.oneOf = walk(json.oneOf);
   for (const [name, def] of Object.entries(definitions)) definitions[name] = walk(def);
-  for (const ref of small.keys()) delete definitions[ref.replace("#/definitions/", "")];
+  // a definition is dropped only when nothing refers to it any more (a $ref beside other keys is left as it is)
+  const remaining = new Set((JSON.stringify(json).match(/"#\/definitions\/[^"]+"/g) ?? []).map((ref) => JSON.parse(ref) as string));
+  for (const ref of small.keys()) if (!remaining.has(ref)) delete definitions[ref.replace("#/definitions/", "")];
 }
 
 function variantJsonSchemas(spec: FamilyToolSpec): { oneOf: unknown[]; definitions: unknown } {
@@ -193,17 +195,46 @@ export function splitFiles(op: Operation, fields: Readonly<Record<string, unknow
   return { body, files };
 }
 
+/** The body is checked against the schema of the format it is sent in: a call without a file goes as JSON, whose
+ * schema may require what the multipart one leaves optional (remove background by JSON needs the asset). */
+function checkMediaSchema(op: Operation, media: "json" | "multipart", body: Readonly<Record<string, unknown>>): void {
+  const schema = op.schemas.bodyByMedia[media];
+  if (schema === null) return;
+  const parsed = schema.safeParse(body);
+  if (parsed.success) return;
+  const issues = parsed.error.issues.map((i) => `${i.path.join(".") || "(input)"}: ${i.message}`);
+  throw new Error(`${op.id} sent as ${media} refuses the input:\n${issues.join("\n")}`);
+}
+
 /** The request one operation call becomes: multipart when files go with it, else JSON when the operation takes it. */
 export async function buildRequest(op: Operation, fields: Readonly<Record<string, unknown>>): Promise<ApiRequest> {
   const { body, files } = splitFiles(op, fields);
   const takesJson = op.facts.bodies.includes("json");
   if (files.length > 0 && !op.facts.bodies.includes("multipart")) throw new Error(`${op.id} takes no files`);
-  const uploads = await loadUploads(op, files);
   const media = files.length === 0 && takesJson ? "json" : "multipart";
+  checkMediaSchema(op, media, body);
+  const uploads = await loadUploads(op, files);
   return { op, path: {}, query: {}, headers: {}, body: { media, fields: body, files: uploads, jsonParts: op.facts.jsonParts }, dryRun: false };
 }
 
 const WaitInput = z.number().int().min(0).max(WAIT_MAX_S).optional();
+
+/** The fields that carry a tool's source image: a local file or an Ideogram asset. */
+const SOURCE_FIELDS: readonly string[] = ["image", "images", "image_asset_identifier", "image_asset_identifiers"];
+
+/** Every family but generate works on a source image; a call without one is refused here, before the schema (which
+ * leaves the file optional because the asset is the alternative) and before any request. */
+function checkSource(spec: FamilyToolSpec, fields: Readonly<Record<string, unknown>>): void {
+  if (spec.family === "generate") return;
+  const given = SOURCE_FIELDS.some((name) => { const v = fields[name]; return v !== undefined && v !== null && (!Array.isArray(v) || v.length > 0); });
+  if (!given) throw new Error(`${spec.name} needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)`);
+}
+
+/** `private: true` unless the caller set it, on a model that takes the field. */
+function withPrivateDefault(variant: ModelVariant, fields: Record<string, unknown>): Record<string, unknown> {
+  if (!variant.fields.has(PRIVATE_FIELD) || fields[PRIVATE_FIELD] !== undefined) return fields;
+  return { ...fields, [PRIVATE_FIELD]: true };
+}
 
 /** Turns a curated tool's arguments into one checked request of the chosen model. */
 export async function prepare(spec: FamilyToolSpec, args: ToolArguments): Promise<PreparedCall> {
@@ -217,7 +248,9 @@ export async function prepare(spec: FamilyToolSpec, args: ToolArguments): Promis
   const legacy = new Set(Object.keys(spec.legacyInputs ?? {})); // a legacy input of ANOTHER tool is a foreign field, refused by name
   const requestFields = Object.fromEntries(Object.entries(args).filter(([name]) => !CONTROL_FIELDS.has(name) && !legacy.has(name)));
   const adapted = adaptFields(requestFields, variant.fields);
-  checkFields(spec, variant, adapted.fields);
-  const req = await buildRequest(variant.op, adapted.fields);
+  checkSource(spec, adapted.fields);
+  const fields = withPrivateDefault(variant, adapted.fields);
+  checkFields(spec, variant, fields);
+  const req = await buildRequest(variant.op, fields);
   return { req, notes: [...resolved.notes, ...adapted.notes], waitS: wait.data ?? WAIT_DEFAULT_S, variant };
 }

@@ -33,7 +33,7 @@ const sentJson = (requests) => JSON.parse(requests[0].body.toString());
 test("ideogram_generate defaults to ideogram-3 and sends the fields as given, async, to the v2 path", async () => {
   const { requests } = await call("ideogram_generate", { prompt: "a red door", num_images: 2, wait_s: 0 });
   assert.equal(requests[0].url, "/v2/image/generate/ideogram-3");
-  assert.deepEqual(sentJson(requests), { prompt: "a red door", num_images: 2, async: true });
+  assert.deepEqual(sentJson(requests), { prompt: "a red door", num_images: 2, private: true, async: true });
 });
 
 test("each model goes to its own path with its own fields: 4.5 takes quality and source images", async () => {
@@ -74,7 +74,7 @@ test("the 1.x adapter: model 3.0, uppercase speed / magic prompt / style type ar
     model: "3.0", prompt: "x", rendering_speed: "TURBO", magic_prompt: "OFF", style_type: "REALISTIC", wait_s: 0,
   });
   assert.equal(requests[0].url, "/v2/image/generate/ideogram-3");
-  assert.deepEqual(sentJson(requests), { prompt: "x", rendering_speed: "turbo", magic_prompt: "off", style_type: "realistic", async: true });
+  assert.deepEqual(sentJson(requests), { prompt: "x", rendering_speed: "turbo", magic_prompt: "off", style_type: "realistic", private: true, async: true });
   assert.match(text(result), /Mapped from the 1.x inputs: model "3.0" → ideogram-3; rendering_speed TURBO → turbo; magic_prompt OFF → off; style_type REALISTIC → realistic/);
 });
 
@@ -86,7 +86,7 @@ test("the 1.x adapter: a 1.x palette preset name (EMBER) becomes v2's ember", as
 
 test("the 1.x adapter: QUALITY on Ideogram 4.5 becomes quality high; 4.0 keeps rendering_speed; FLASH is refused", async () => {
   const v45 = await call("ideogram_generate", { model: "ideogram-4-5", prompt: "x", rendering_speed: "QUALITY", wait_s: 0 });
-  assert.deepEqual(sentJson(v45.requests), { prompt: "x", quality: "high", async: true });
+  assert.deepEqual(sentJson(v45.requests), { prompt: "x", quality: "high", private: true, async: true });
   assert.match(text(v45.result), /rendering_speed QUALITY → quality high/);
   const v4 = await call("ideogram_generate", { model: "4.0", prompt: "x", rendering_speed: "DEFAULT", wait_s: 0 });
   assert.equal(v4.requests[0].url, "/v2/image/generate/ideogram-4");
@@ -160,7 +160,7 @@ test("ideogram_quote prices exactly the tool's call with dry_run and refuses des
   const priceQuote = { object: "price_quote", billing_identifier: "ideogram-3-turbo", quantity: 1, usd_micros: 30000, credit_millis: 30, qualifier: "exact" };
   const { requests, result } = await call("ideogram_quote", { tool: "ideogram_generate", arguments: { prompt: "x", rendering_speed: "TURBO" } }, () => ({ json: priceQuote }));
   assert.equal(requests[0].url, "/v2/image/generate/ideogram-3?dry_run=true");
-  assert.deepEqual(sentJson(requests), { prompt: "x", rendering_speed: "turbo", async: true }, "exactly the request the tool would send");
+  assert.deepEqual(sentJson(requests), { prompt: "x", rendering_speed: "turbo", private: true, async: true }, "exactly the request the tool would send");
   assert.match(text(result), /0\.030000 USD exact/);
   assert.match(text(result), /Nothing was generated or billed/);
   const describe = await call("ideogram_quote", { tool: "ideogram_describe", arguments: { image: png } });
@@ -336,7 +336,10 @@ test("ideogram_api refuses async: false for a run (its result would arrive only 
 });
 
 test("ideogram_precise_edit: Ideogram 4.5 by default, the image, mask and reference images as parts, the rules before any request", async () => {
-  const { requests } = await call("ideogram_precise_edit", { prompt: "swap the sign", image: png, mask: png, reference_images: [png, png], context_window: "auto", wait_s: 0 });
+  const acceptedEdit = (req) => (req.method === "POST" ? { json: { generation_id: "e", seed: 1, generation_kind: "sampling" } } : pending("e"));
+  const { requests, result } = await call("ideogram_precise_edit", { prompt: "swap the sign", image: png, mask: png, reference_images: [png, png], context_window: "auto", wait_s: 0 }, acceptedEdit);
+  assert.equal(result.isError, undefined, text(result));
+  assert.match(text(result), /Accepted: generation e is still running/);
   assert.equal(requests[0].url, "/v2/image/precise-edit/ideogram-4-5");
   const body = requests[0].body.toString("latin1");
   assert.match(body, /name="image"; filename="image.png"/);
@@ -346,7 +349,7 @@ test("ideogram_precise_edit: Ideogram 4.5 by default, the image, mask and refere
   assert.match(body, /name="async"\r\n\r\ntrue\r\n/);
   const noMask = await call("ideogram_precise_edit", { prompt: "x", image: png, context_window: "auto" }).catch((e) => e);
   assert.match(noMask.message, /context_window "auto" needs a mask/);
-  const speed = await call("ideogram_precise_edit", { prompt: "x", image: png, rendering_speed: "TURBO", wait_s: 0 });
+  const speed = await call("ideogram_precise_edit", { prompt: "x", image: png, rendering_speed: "TURBO", wait_s: 0 }, acceptedEdit);
   assert.match(speed.requests[0].body.toString("latin1"), /name="quality"\r\n\r\nlow\r\n/, "the 1.x speed maps to quality on 4.5");
   assert.match(text(speed.result), /rendering_speed TURBO → quality low/);
 });
@@ -408,4 +411,48 @@ test("ideogram_quote prices the new tools through their own dry run", async () =
   const { requests, result } = await call("ideogram_quote", { tool: "ideogram_remove_background", arguments: { image: png } }, () => ({ json: priceQuote }));
   assert.equal(requests[0].url, "/v2/image/remove-background/ideogram-1?dry_run=true");
   assert.match(text(result), /0\.010000 USD exact/);
+});
+
+test("private is sent as true unless the caller says otherwise, on every model that takes it (remove background follows the plan's setting when omitted)", async () => {
+  const bg = await call("ideogram_remove_background", { image: png, wait_s: 0 });
+  assert.match(bg.requests[0].body.toString("latin1"), /name="private"\r\n\r\ntrue\r\n/);
+  const published = await call("ideogram_replace_background", { image: png, prompt: "a beach", private: false, wait_s: 0 });
+  assert.match(published.requests[0].body.toString("latin1"), /name="private"\r\n\r\nfalse\r\n/, "the caller's false goes through");
+  const gen = await call("ideogram_generate", { prompt: "x", wait_s: 0 });
+  assert.deepEqual(sentJson(gen.requests), { prompt: "x", private: true, async: true });
+  const noField = await call("ideogram_remove_object", { image: png, mask: png, wait_s: 0 });
+  assert.doesNotMatch(noField.requests[0].body.toString("latin1"), /name="private"/, "remove object takes no private field: nothing is invented");
+  const raw = await call("ideogram_api", { operation: "post_remove_background_v2", files: [{ field: "image", path: png }], params: { body: {} }, wait_s: 0 });
+  assert.doesNotMatch(raw.requests[0].body.toString("latin1"), /name="private"/, "ideogram_api sends what the caller gave");
+});
+
+test("a tool that works on an image refuses a call without a source, before any request; a JSON call is checked against the JSON schema", async () => {
+  for (const [name, args] of [["ideogram_remove_background", {}], ["ideogram_precise_edit", { prompt: "x" }], ["ideogram_layerize", {}], ["ideogram_remix", { prompt: "x" }], ["ideogram_upscale", {}], ["ideogram_describe", {}]]) {
+    const { result, requests } = await call(name, args).catch((e) => ({ result: { isError: true, content: [{ text: e.message }] }, requests: [] }));
+    assert.match(text(result), /needs a source image: image \(a local file\) or image_asset_identifier/, name);
+    assert.equal(requests.length, 0, name);
+  }
+  const { buildRequest } = await import("../dist/tools/family.js");
+  const { operationById } = await import("../dist/spec/operations.js");
+  await assert.rejects(() => buildRequest(operationById("post_remove_background_v2"), {}), /post_remove_background_v2 sent as json refuses the input:\nimage_asset_identifier/);
+});
+
+test("a completed remove-background generation (an image without prompt or seed, as the API lists it) is saved like any image", async () => {
+  const handler = (req, _n, api) => {
+    if (req.url.startsWith("/img/")) return { status: 200, headers: { "content-type": "image/png" }, body: PNG };
+    if (req.method === "POST") return accepted("bg1");
+    return { json: { generation_id: "bg1", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "image.without-prompt-or-seed", url: `${api.base}/img/fg.png`, resolution: "1024x1024", is_image_safe: true }] } };
+  };
+  const { result, ctx } = await call("ideogram_remove_background", { image: png }, handler);
+  assert.equal(result.isError, undefined, text(result));
+  assert.match(text(result), /1 of 1 image\(s\) saved\./);
+  assert.doesNotMatch(text(result), /Seed:/);
+  assert.equal((await readdir(ctx.outputDir)).length, 1);
+});
+
+test("a layerized design generation shows the design's own link and its editable page beside the base image", async () => {
+  const done = { generation_id: "L3", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "layerized_design.generation", base_image_url: null, url: "https://ideogram.ai/d/L3.psd", html_url: "https://ideogram.ai/d/L3.html", is_image_safe: true, resolution: "1024x1024", seed: 2, text_blocks: [] }] };
+  const { result } = await call("ideogram_generation", { generation_id: "L3", wait_s: 0 }, () => ({ json: done }));
+  assert.match(text(result), /Design 1: https:\/\/ideogram\.ai\/d\/L3\.psd/);
+  assert.match(text(result), /Editable page of design 1: https:\/\/ideogram\.ai\/d\/L3\.html/);
 });

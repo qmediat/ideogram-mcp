@@ -47,7 +47,11 @@ async function saveImages(ctx: ToolContext, items: readonly ImageItem[]): Promis
 async function layeredResult(ctx: ToolContext, items: readonly LayeredItem[]): Promise<{ lines: string[]; isError: boolean }> {
   const base: ImageItem[] = items.map((item) => ({ url: item.baseImageUrl, resolution: item.resolution, seed: item.seed, prompt: null, isImageSafe: item.isImageSafe }));
   const images = await saveImages(ctx, base);
-  const blocks = items.map((item, i) => `Text blocks of design ${i + 1} (${item.textBlocks.length}):\n${jsonText(item.textBlocks)}`);
+  const blocks = items.flatMap((item, i) => [
+    ...(item.url === null ? [] : [`Design ${i + 1}: ${item.url}`]),
+    ...(item.htmlUrl === null ? [] : [`Editable page of design ${i + 1}: ${item.htmlUrl}`]),
+    `Text blocks of design ${i + 1} (${item.textBlocks.length}):\n${jsonText(item.textBlocks)}`,
+  ]);
   return { lines: [`${images.saved} of ${items.length} base image(s) saved.`, ...images.lines, ...blocks], isError: images.saved === 0 };
 }
 

@@ -5,7 +5,12 @@
  */
 
 /** The fields a curated tool sets itself or leaves to `ideogram_api`: never part of a curated tool's input. */
-export const RESERVED_FIELDS: ReadonlySet<string> = new Set(["async", "internal", "webhook_url", "private", "target_collection_id"]);
+export const RESERVED_FIELDS: ReadonlySet<string> = new Set(["async", "internal", "webhook_url", "target_collection_id"]);
+
+/** Sent as true by every curated tool unless the caller sets it: on some operations (remove background, replace
+ * background, the auto models) an omitted `private` follows the plan's setting, public when the plan has none; a
+ * server on an API key never publishes to Ideogram's public feed unless asked. */
+export const PRIVATE_FIELD = "private";
 
 /** Inputs of every curated tool that are not request fields. */
 export const CONTROL_FIELDS: ReadonlySet<string> = new Set(["model", "wait_s"]);
@@ -39,7 +44,8 @@ export const FIELD_TEXT: Readonly<Record<string, string>> = {
   reference_images: "Local image files that guide the edit (never edited themselves); at most 4, at most 3 with a mask",
   reference_image_asset_identifiers: "Ideogram assets that guide the edit; needs the edited image by reference too, not with a mask",
   context_window: 'Where to edit: "none" (whole image, default), "auto" (around the mask) or "y_min,x_min,y_max,x_max"',
-  store_assets: "Keep the result on Ideogram as an asset",
+  store_assets: "Keep the result on Ideogram as an asset (accepted by the API, not yet enforced by it)",
+  private: "Keep the result out of Ideogram's public feed; true unless you set false (enterprise accounts are always private)",
   font_candidate_files: "Local font files (.ttf, .otf, .woff, .woff2, at most 5) to match the detected text against",
   images: "Local source image files (the first is the one edited)",
   mask: "Local mask image file, the same size as the source",
