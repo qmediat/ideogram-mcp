@@ -123,7 +123,8 @@ over at most 168 hours — the tool refuses a longer one before asking; the `api
 the sums per product, unit and currency — decimal strings, never floats; an amount it cannot read is counted, not
 summed — and writes the buckets exactly as Ideogram sent them to a JSON file in the output directory (named by the
 query, readable by the owner only — the line items carry member emails and key prefixes; printed too when under
-64 KB): the shape a cost tool reads. A listing off its specification is reported as such and still shown as received. All three account tools need an API key owned by an organization
+64 KB): the shape a cost tool reads. The invoices and the API keys are written and shown the same way, and so is an
+answer off its specification (reported as such, never as a success). All three account tools need an API key owned by an organization
 admin (Ideogram answers 404 to any other key, and the tool says so with Ideogram's words).
 
 Ideogram signs its webhooks with Ed25519: the canonical message is `request_id\nuser_id\ntimestamp\nsha256_hex(body)`,

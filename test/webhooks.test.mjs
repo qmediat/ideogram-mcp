@@ -41,7 +41,10 @@ test("a replay is refused only when the receiver sets maxAgeS; a header the rece
   assert.equal(verifyWebhook({ ...delivery, signature: good }, jwks, { maxAgeS: 300, now: at + 400_000 }), null, "older than maxAgeS");
   assert.equal(verifyWebhook({ ...delivery, signature: good }, jwks, { maxAgeS: 300, now: at - 400_000 }), null, "from the future as well");
   assert.equal(verifyWebhook({ ...delivery, timestamp: String(Math.floor(at / 1000)), signature: sign(null, canonicalMessage({ ...delivery, timestamp: String(Math.floor(at / 1000)) }), ours.privateKey).toString("base64") }, jwks, { maxAgeS: 300, now: at + 1000 }), "v1", "epoch seconds are read too");
-  assert.equal(verifyWebhook({ ...delivery, signature: good }, jwks), null, "by default a delivery from 2026-10-10 is a replay now (300 s)");
+  assert.equal(verifyWebhook({ ...delivery, signature: good }, jwks, { now: at + 400_000 }), null, "by default (300 s) a delivery older than that is a replay");
+  assert.equal(verifyWebhook({ ...delivery, signature: good }, jwks, { maxAgeS: Number.NaN, now: at + 400_000 }), null, "NaN is the default window, not none");
+  assert.equal(verifyWebhook({ ...delivery, signature: good }, { keys: undefined }, fresh), null, "a document without keys verifies nothing");
+  assert.equal(verifyWebhook({ ...delivery, signature: good }, {}, fresh), null);
   assert.equal(verifyWebhook({ ...delivery, signature: good }, jwks, { maxAgeS: Infinity }), "v1", "Infinity turns the window off");
   assert.equal(verifyWebhook({ ...delivery, signature: undefined }, jwks, fresh), null);
   assert.equal(verifyWebhook({ ...delivery, signature: ["a", "b"] }, jwks, fresh), null, "a repeated header");

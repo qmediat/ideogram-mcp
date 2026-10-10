@@ -95,7 +95,8 @@ export function verifyWebhook(delivery: WebhookDelivery, jwks: WebhookJwks, opti
   const timestamp = single(delivery.timestamp);
   const message = canonicalMessage(delivery);
   if (signature === null || timestamp === null || message === null) return null;
-  const maxAgeS = options.maxAgeS ?? DEFAULT_MAX_AGE_S;
+  if (!Array.isArray(jwks?.keys)) return null; // a document without keys verifies nothing, never a throw
+  const maxAgeS = options.maxAgeS === undefined || Number.isNaN(options.maxAgeS) ? DEFAULT_MAX_AGE_S : options.maxAgeS; // only Infinity turns the window off
   if (Number.isFinite(maxAgeS)) {
     const at = timestampMs(timestamp);
     if (!Number.isFinite(at) || Math.abs((options.now ?? Date.now()) - at) > maxAgeS * 1000) return null;

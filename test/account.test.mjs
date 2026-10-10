@@ -66,11 +66,11 @@ test("ideogram_usage sums per product, unit and currency as decimals, hands the 
   const [head, json] = out.split(/Buckets as Ideogram sent them \(the shape ai-cost reads\): (\S+) \(\d+ bytes, owner-readable\)\n/).slice(1);
   assert.deepEqual(JSON.parse(json), sent.buckets, "the buckets as received, the unknown field kept");
   const files = await readdir(ctx.outputDir);
-  assert.deepEqual(files, ["ideogram-usage-2026-10-03T000000Z-2026-10-06T000000Z--.json"], "named by the whole query");
+  assert.deepEqual(files, ["ideogram-usage-20261003T000000Z-20261006T000000Z-1d-api,app.json"], "named by the resolved query, the defaults spelled out");
   const { stat } = await import("node:fs/promises");
   assert.equal((await stat(join(ctx.outputDir, files[0]))).mode & 0o777, 0o600, "owner-readable");
   const again = await call("ideogram_usage", { start_time: "2026-10-03T00:00:00Z", end_time: "2026-10-06T00:00:00Z", bucket_width: "1h", sources: ["api"] }, () => ({ json: sent }));
-  assert.deepEqual(await readdir(again.ctx.outputDir), ["ideogram-usage-2026-10-03T000000Z-2026-10-06T000000Z-1h-api.json"], "another width or source is another file");
+  assert.deepEqual(await readdir(again.ctx.outputDir), ["ideogram-usage-20261003T000000Z-20261006T000000Z-1h-api.json"], "another width or source is another file");
   assert.deepEqual(JSON.parse(await readFile(join(ctx.outputDir, files[0]), "utf8")), sent.buckets, "the file is the same JSON");
   assert.ok(head.endsWith(files[0]));
   assert.equal(result.isError, undefined);
@@ -105,18 +105,22 @@ test("ideogram_usage: a bad time, a range over the API's span, a start after the
   const off = await call("ideogram_usage", {}, () => ({ json: { buckets: [{ start_time: "x" }] } }));
   assert.equal(off.result.isError, true);
   assert.match(text(off.result), /does not match its own specification/);
-  assert.match(text(off.result), /As Ideogram sent it \(shown although it is off the specification\):\n\{\n  "buckets"/, "a listing off its schema still shows the data");
+  assert.match(text(off.result), /As Ideogram sent it \(off the specification\): \S+get_account_usage-mismatch-\d+\.json \(\d+ bytes, owner-readable\)\n\{\n  "buckets"/, "a listing off its schema still keeps and shows the data");
 });
 
 test("ideogram_invoices and ideogram_api_keys list what the API returns; a 404 says the key must be an organization admin's", async () => {
   const invoices = { invoices: [{ start_time: "2026-09-01T00:00:00Z", end_time: "2026-10-01T00:00:00Z", issued_time: "2026-10-01T00:00:00Z", paid_time: "2026-10-02T00:00:00Z", status: "paid", total: "12.34", currency_code: "USD", line_items: [{ description: "Ideogram 3.0 generation", cost_total: "12.34", currency_code: "USD", quantity: "205", unit_price: "0.06" }] }] };
   const inv = await call("ideogram_invoices", {}, () => ({ json: invoices }));
   assert.match(text(inv.result), /1 invoice\(s\)\.\n2026-09-01T00:00:00Z → 2026-10-01T00:00:00Z: 12\.34 USD, paid, paid 2026-10-02T00:00:00Z \(1 line item\(s\)\)/);
-  assert.match(text(inv.result), /"description": "Ideogram 3\.0 generation"/, "the invoices as sent follow");
+  assert.match(text(inv.result), /Invoices as Ideogram sent them: \S+invoices-\d+\.json \(\d+ bytes, owner-readable\)\n\[\n  \{/, "the invoices as sent follow, in a file too");
+  assert.match(text(inv.result), /"description": "Ideogram 3\.0 generation"/);
   const keys = { api_keys: [{ api_key_id: "a2V5", creation_time: "2026-09-01T00:00:00Z", redacted_api_key: "ideo••••", status: "active", label: "ci", creator_display_label: "qmt" }] };
   const k = await call("ideogram_api_keys", {}, () => ({ json: keys }));
   assert.match(text(k.result), /1 API key\(s\).*\nideo•••• \(a2V5\) active "ci", created 2026-09-01T00:00:00Z by qmt/);
-  assert.match(text(k.result), /API keys as Ideogram sent them:\n\[\n  \{\n    "api_key_id": "a2V5"/, "the listing as received follows");
+  assert.match(text(k.result), /API keys as Ideogram sent them: \S+api-keys-\d+\.json \(\d+ bytes, owner-readable\)\n\[\n  \{\n    "api_key_id": "a2V5"/, "the listing as received follows, in a file too");
+  const manyKeys = { api_keys: Array.from({ length: 900 }, (_, i) => ({ api_key_id: `k${i}`, creation_time: "2026-09-01T00:00:00Z", redacted_api_key: "ideo••••", status: "active", label: "x".repeat(60) })) };
+  const big = await call("ideogram_api_keys", {}, () => ({ json: manyKeys }));
+  assert.match(text(big.result), /not printed here, over 65536 bytes/, "a long listing stays in its file");
   const denied = await call("ideogram_invoices", {}, () => ({ status: 404, json: { error: "not found" } }));
   assert.equal(denied.result.isError, true);
   assert.match(text(denied.result), /needs an API key whose owner is an organization admin .*\(its answer: .*not found/);

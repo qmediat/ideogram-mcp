@@ -67,10 +67,11 @@ async function read<T extends z.ZodType>(ctx: ToolContext, op: Operation, query:
   const answer = await ctx.client.call(req, ctx.budget);
   const parsed = schema.safeParse(answer.body);
   if (parsed.success) return { ok: true, data: parsed.data as z.infer<T>, raw: answer.body };
-  // a listing off its schema is reported as such (never a success) AND shown as received: the data is the point of a listing
+  // a listing off its schema is reported as such (never a success) AND kept as received: the data is the point of a listing
   const mismatch = await outcomeResult(ctx, contractMismatch(answer.status, answer.body, parsed.error), []);
   const said = mismatch.content[0]?.type === "text" ? mismatch.content[0].text : "";
-  return { ok: false, result: textResult(`${said}\nAs Ideogram sent it (shown although it is off the specification):\n${jsonText(answer.body)}`, true) };
+  const kept = await rawLines(ctx, "As Ideogram sent it (off the specification)", `${op.id}-mismatch-${ctx.clock.now()}`, answer.body);
+  return { ok: false, result: textResult([said, ...kept].join("\n"), true) };
 }
 
 /** The three listings answer 404 to a key another member owns: said as such, with the API's own words. */
@@ -134,19 +135,23 @@ function summaryLines(usage: Usage, width: Width): string[] {
   return lines;
 }
 
-/** The buckets exactly as received: written to a file in the output directory (named by the whole query, so two
- * reports never overwrite each other; readable by the owner only — the line items carry emails and key prefixes),
- * inline too when small. */
-async function bucketsLines(ctx: ToolContext, raw: unknown, query: Readonly<Record<string, QueryValue>>): Promise<string[]> {
-  const body = raw as { buckets?: unknown };
-  const text = JSON.stringify(body.buckets ?? [], null, 2);
+/** An answer exactly as received: written to a file in the output directory (named by what was asked, so two
+ * reports never overwrite each other; readable by the owner only — the account's answers carry emails and key
+ * prefixes), inline too when small. The one mechanism of every account listing, the mismatch path included. */
+async function rawLines(ctx: ToolContext, what: string, name: string, value: unknown): Promise<string[]> {
+  const text = JSON.stringify(value, null, 2) ?? "null";
   const bytes = Buffer.byteLength(text, "utf8");
-  const tag = ["start_time", "end_time", "bucket_width", "sources"].map((k) => String(query[k] ?? "")).join("-").replace(/[^0-9A-Za-z,-]/g, "");
   await mkdir(ctx.outputDir, { recursive: true });
-  const path = join(ctx.outputDir, `ideogram-usage-${tag}.json`);
+  const path = join(ctx.outputDir, `ideogram-${name}.json`);
   await writeFile(path, text, { mode: 0o600 });
-  const head = `Buckets as Ideogram sent them (the shape ai-cost reads): ${path} (${bytes} bytes, owner-readable)`;
+  const head = `${what}: ${path} (${bytes} bytes, owner-readable)`;
   return bytes <= INLINE_JSON_BYTES ? [head, text] : [`${head}; not printed here, over ${INLINE_JSON_BYTES} bytes`];
+}
+
+/** The file name of a usage report: the resolved query, every part present (the defaults spelled out). */
+function usageName(query: Readonly<Record<string, QueryValue>>, width: Width, sources: readonly string[]): string {
+  const part = (v: QueryValue): string => String(v).replace(/[^0-9A-Za-z,]/g, "");
+  return `usage-${part(query.start_time)}-${part(query.end_time)}-${width}-${sources.join(",")}`;
 }
 
 const UsageInput = z.object({
@@ -192,7 +197,9 @@ async function runUsage(ctx: ToolContext, args: ToolArguments): Promise<CallTool
     const answer = await read(ctx, USAGE, query, zGetAccountUsageResponse);
     if (!answer.ok) return answer.result;
     const width = input.data.bucket_width ?? "1d";
-    return textResult([...summaryLines(answer.data, width), ...(await bucketsLines(ctx, answer.raw, query))].join("\n"));
+    const sources = input.data.sources ?? ["api", "app"];
+    const buckets = (answer.raw as { buckets?: unknown }).buckets ?? [];
+    return textResult([...summaryLines(answer.data, width), ...(await rawLines(ctx, "Buckets as Ideogram sent them (the shape ai-cost reads)", usageName(query, width, sources), buckets))].join("\n"));
   } catch (error) {
     return adminOnly(error, "Reading the usage") ?? Promise.reject(error);
   }
@@ -204,7 +211,7 @@ async function runInvoices(ctx: ToolContext): Promise<CallToolResult> {
     if (!answer.ok) return answer.result;
     const rows = answer.data.invoices.map((inv) => `${inv.start_time} → ${inv.end_time}: ${inv.total} ${inv.currency_code}, ${inv.status}${inv.paid_time ? `, paid ${inv.paid_time}` : ""} (${inv.line_items.length} line item(s))`);
     const raw = (answer.raw as { invoices?: unknown }).invoices ?? [];
-    return textResult([`${rows.length} invoice(s).`, ...rows, "Invoices as Ideogram sent them:", jsonText(raw)].join("\n"));
+    return textResult([`${rows.length} invoice(s).`, ...rows, ...(await rawLines(ctx, "Invoices as Ideogram sent them", `invoices-${ctx.clock.now()}`, raw))].join("\n"));
   } catch (error) {
     return adminOnly(error, "Listing invoices") ?? Promise.reject(error);
   }
@@ -216,7 +223,7 @@ async function runApiKeys(ctx: ToolContext): Promise<CallToolResult> {
     if (!answer.ok) return answer.result;
     const rows = answer.data.api_keys.map((k) => `${k.redacted_api_key} (${k.api_key_id}) ${k.status}${k.label ? ` "${k.label}"` : ""}, created ${k.creation_time}${k.creator_display_label ? ` by ${k.creator_display_label}` : ""}`);
     const raw = (answer.raw as { api_keys?: unknown }).api_keys ?? [];
-    return textResult([`${rows.length} API key(s), newest first (key material redacted by Ideogram).`, ...rows, "API keys as Ideogram sent them:", jsonText(raw)].join("\n"));
+    return textResult([`${rows.length} API key(s), newest first (key material redacted by Ideogram).`, ...rows, ...(await rawLines(ctx, "API keys as Ideogram sent them", `api-keys-${ctx.clock.now()}`, raw))].join("\n"));
   } catch (error) {
     return adminOnly(error, "Listing API keys") ?? Promise.reject(error);
   }

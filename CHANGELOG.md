@@ -30,8 +30,9 @@ Step 2: the account — usage and spend, invoices, API keys — and the webhook 
   cannot read is counted and listed, not summed — an unreadable quantity leaves the cost in), the buckets written
   exactly as received to a JSON file in the output directory (named by the whole query, owner-readable: the line items
   carry emails and key prefixes) and printed too when under 64 KB: the shape ai-cost reads; the end of the range is
-  always sent, so the span the tool checked is the span the API sees; a listing off its specification is reported as
-  such and still shown as received. `ideogram_invoices` and
+  always sent, so the span the tool checked is the span the API sees; every account answer — the invoices, the API
+  keys, one off its specification (reported as such, never as a success) — is written to an owner-readable file the
+  same way and shown inline under 64 KB. `ideogram_invoices` and
   `ideogram_api_keys` list what their endpoints return as received. All three need an organization-admin key: a 404
   is said as that, with Ideogram's words. Reads only, never billed.
 - `verifyWebhook` (`dist/webhooks.js`): the canonical message Ideogram signs
