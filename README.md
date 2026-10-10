@@ -121,8 +121,9 @@ sees the result. Both are off unless asked.
 `ideogram_usage` asks `GET /v2/account/usage` for a range (RFC 3339 times; `1d` buckets over at most 92 days, `1h`
 over at most 168 hours — the tool refuses a longer one before asking; the `api` and `app` sources) and answers with
 the sums per product, unit and currency — decimal strings, never floats; an amount it cannot read is counted, not
-summed — and writes the buckets exactly as Ideogram sent them to a JSON file in the output directory (printed too
-when under 64 KB): the shape a cost tool reads. All three account tools need an API key owned by an organization
+summed — and writes the buckets exactly as Ideogram sent them to a JSON file in the output directory (named by the
+query, readable by the owner only — the line items carry member emails and key prefixes; printed too when under
+64 KB): the shape a cost tool reads. A listing off its specification is reported as such and still shown as received. All three account tools need an API key owned by an organization
 admin (Ideogram answers 404 to any other key, and the tool says so with Ideogram's words).
 
 Ideogram signs its webhooks with Ed25519: the canonical message is `request_id\nuser_id\ntimestamp\nsha256_hex(body)`,
@@ -130,8 +131,8 @@ the signature travels in `X-Ideogram-Webhook-Signature` (the key id in `X-Ideogr
 are the JWKS at `GET https://api.ideogram.ai/v1/.well-known/jwks.json` (public; cache up to 24 h). Where `request_id`,
 `user_id` and `timestamp` travel is not stated by the specification (it names the two signature headers only): take
 them from the delivery as Ideogram's webhook documentation says. The receiver — not this server, which has no public
-URL — verifies with the helper this package ships; a replay is refused only when you set `maxAgeS` (the signature
-alone never expires):
+URL — verifies with the helper this package ships; a delivery whose timestamp is more than `maxAgeS` (300 s by
+default; `Infinity` turns it off) from now is refused as a replay — the signature alone never expires:
 
 ```js
 import { verifyWebhook } from "@qmediat.io/ideogram-mcp/dist/webhooks.js";

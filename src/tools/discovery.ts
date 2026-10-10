@@ -4,7 +4,7 @@
  */
 import { z } from "zod/v4";
 import { countersLine } from "../counters.js";
-import { fieldSummaries } from "../spec/fields.js";
+import { fieldSummaries, parameterSummaries } from "../spec/fields.js";
 import { fileLimitsOf, MB, quoteAllowed, rulesOf } from "../spec/overlay.js";
 import { DOCS_INDEX_URL, FAMILIES, isExposable, operationById, OPERATIONS } from "../spec/operations.js";
 import type { Family, Operation } from "../spec/operations.js";
@@ -25,9 +25,8 @@ function fieldLines(op: Operation): string[] {
 }
 
 function parameterLines(op: Operation): string[] {
-  const params = op.facts.parameters.filter((p) => p.location !== "header");
-  if (params.length === 0) return [];
-  return ["Parameters:", ...params.map((p) => `  ${p.name} (${p.location}${p.required ? ", required" : ""}${p.array ? ", repeated" : ""})`)];
+  const params = parameterSummaries(op);
+  return params.length === 0 ? [] : ["Parameters:", ...params.map((p) => `  ${p}`)];
 }
 
 function detail(op: Operation): string {

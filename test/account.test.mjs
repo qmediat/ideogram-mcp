@@ -43,6 +43,7 @@ test("ideogram_usage: the default range is the last 7 days from midnight UTC by 
   assert.equal(url.pathname, "/v2/account/usage");
   assert.equal(url.searchParams.get("start_time"), "1969-12-25T00:00:00Z");
   assert.equal(url.searchParams.has("bucket_width"), false);
+  assert.equal(url.searchParams.get("end_time"), "1970-01-01T00:00:00Z", "the end is always sent: the span the tool checked is the span the API sees");
   const hourly = await call("ideogram_usage", { bucket_width: "1h" }, () => ({ json: usage }));
   assert.equal(new URL(hourly.requests[0].url, "http://x").searchParams.get("start_time"), "1969-12-31T00:00:00Z", "24 hours before the epoch, on the hour");
   const ended = await call("ideogram_usage", { end_time: "2026-10-08T12:30:00Z" }, () => ({ json: usage }));
@@ -53,18 +54,23 @@ test("ideogram_usage: the default range is the last 7 days from midnight UTC by 
 });
 
 test("ideogram_usage sums per product, unit and currency as decimals, hands the buckets on exactly as received (unknown fields kept) in a file and inline, counts an amount it cannot read", async () => {
-  const sent = { buckets: usage.buckets.map((b, i) => (i === 0 ? { ...b, line_items: [...b.line_items, { product: "odd", description: "Odd", endpoint: "/x", cost_total: "1e3", currency_code: "USD", source: "api" }], provider_note: "kept" } : b)) };
+  const sent = { buckets: usage.buckets.map((b, i) => (i === 0 ? { ...b, line_items: [...b.line_items, { product: "odd", description: "Odd", endpoint: "/x", cost_total: "1e3", currency_code: "USD", source: "api" }, { product: "half", description: "Half", endpoint: "/y", cost_total: "0.5", currency_code: "USD", source: "api", billed_units: { unit: "image", quantity: "+2", unit_price: "0.25" } }], provider_note: "kept" } : b)) };
   const { result, ctx } = await call("ideogram_usage", { start_time: "2026-10-03T00:00:00Z", end_time: "2026-10-06T00:00:00Z" }, () => ({ json: sent }));
   const out = text(result);
-  assert.match(out, /Usage from 2026-10-03T00:00:00Z to 2026-10-06T00:00:00Z: 3 bucket\(s\) of 1d, 4 line item\(s\)\./);
+  assert.match(out, /Usage from 2026-10-03T00:00:00Z to 2026-10-06T00:00:00Z: 3 bucket\(s\) of 1d, 5 line item\(s\)\./);
   assert.match(out, /ideogram_v3_generation \(Ideogram 3\.0 generation, \/v2\/image\/generate\/ideogram-3\): 0\.18 USD · 3 image/);
   assert.match(out, /api_remove_background .*: 0\.01 USD · 1 image/);
-  assert.match(out, /Total: 0\.19 USD/);
-  assert.match(out, /1 amount\(s\) not summed \(not a decimal the sums read\): odd: cost_total 1e3/);
-  const [head, json] = out.split(/Buckets as Ideogram sent them \(the shape ai-cost reads\): (\S+) \(\d+ bytes\)\n/).slice(1);
+  assert.match(out, /half \(Half, \/y\): 0\.5 USD\n/, "the cost of a line with an unreadable quantity is summed, its units are not");
+  assert.match(out, /Total: 0\.69 USD/);
+  assert.match(out, /2 amount\(s\) not summed \(not a decimal the sums read\): odd: cost_total 1e3 \(the line's cost left out\); half: quantity \+2 \(its cost is summed, its units are not\)/);
+  const [head, json] = out.split(/Buckets as Ideogram sent them \(the shape ai-cost reads\): (\S+) \(\d+ bytes, owner-readable\)\n/).slice(1);
   assert.deepEqual(JSON.parse(json), sent.buckets, "the buckets as received, the unknown field kept");
   const files = await readdir(ctx.outputDir);
-  assert.deepEqual(files, ["ideogram-usage-20261003T000000Z-20261006T000000Z.json"]);
+  assert.deepEqual(files, ["ideogram-usage-2026-10-03T000000Z-2026-10-06T000000Z--.json"], "named by the whole query");
+  const { stat } = await import("node:fs/promises");
+  assert.equal((await stat(join(ctx.outputDir, files[0]))).mode & 0o777, 0o600, "owner-readable");
+  const again = await call("ideogram_usage", { start_time: "2026-10-03T00:00:00Z", end_time: "2026-10-06T00:00:00Z", bucket_width: "1h", sources: ["api"] }, () => ({ json: sent }));
+  assert.deepEqual(await readdir(again.ctx.outputDir), ["ideogram-usage-2026-10-03T000000Z-2026-10-06T000000Z-1h-api.json"], "another width or source is another file");
   assert.deepEqual(JSON.parse(await readFile(join(ctx.outputDir, files[0]), "utf8")), sent.buckets, "the file is the same JSON");
   assert.ok(head.endsWith(files[0]));
   assert.equal(result.isError, undefined);
@@ -99,6 +105,7 @@ test("ideogram_usage: a bad time, a range over the API's span, a start after the
   const off = await call("ideogram_usage", {}, () => ({ json: { buckets: [{ start_time: "x" }] } }));
   assert.equal(off.result.isError, true);
   assert.match(text(off.result), /does not match its own specification/);
+  assert.match(text(off.result), /As Ideogram sent it \(shown although it is off the specification\):\n\{\n  "buckets"/, "a listing off its schema still shows the data");
 });
 
 test("ideogram_invoices and ideogram_api_keys list what the API returns; a 404 says the key must be an organization admin's", async () => {
@@ -120,5 +127,6 @@ test("decimal sums never go through floats: 0.1 + 0.2 is 0.3, nine places kept, 
   assert.equal(unitsText(decimalUnits("1.000000001") + decimalUnits("2")), "3.000000001");
   assert.equal(unitsText(decimalUnits("-0.5") + decimalUnits("0.25")), "-0.25");
   assert.equal(unitsText(decimalUnits("12")), "12");
+  for (const whole of ["10", "20", "100", "1000"]) assert.equal(unitsText(decimalUnits(whole)), whole, "trailing zeros of the integer part stay");
   for (const bad of ["1e3", "+1", "1.0000000001", ""]) assert.equal(decimalUnits(bad), null, bad);
 });

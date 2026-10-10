@@ -67,7 +67,10 @@ async function read<T extends z.ZodType>(ctx: ToolContext, op: Operation, query:
   const answer = await ctx.client.call(req, ctx.budget);
   const parsed = schema.safeParse(answer.body);
   if (parsed.success) return { ok: true, data: parsed.data as z.infer<T>, raw: answer.body };
-  return { ok: false, result: await outcomeResult(ctx, contractMismatch(answer.status, answer.body, parsed.error), []) };
+  // a listing off its schema is reported as such (never a success) AND shown as received: the data is the point of a listing
+  const mismatch = await outcomeResult(ctx, contractMismatch(answer.status, answer.body, parsed.error), []);
+  const said = mismatch.content[0]?.type === "text" ? mismatch.content[0].text : "";
+  return { ok: false, result: textResult(`${said}\nAs Ideogram sent it (shown although it is off the specification):\n${jsonText(answer.body)}`, true) };
 }
 
 /** The three listings answer 404 to a key another member owns: said as such, with the API's own words. */
@@ -89,7 +92,6 @@ interface ProductTotal {
   unit: string | null;
   cost: bigint;
   quantity: bigint | null;
-  items: number;
 }
 
 interface Sums {
@@ -99,17 +101,17 @@ interface Sums {
 
 function addLine(sums: Sums, item: LineItem): void {
   const cost = decimalUnits(item.cost_total);
-  const quantity = item.billed_units === undefined ? undefined : decimalUnits(item.billed_units.quantity);
-  if (cost === null || quantity === null) {
-    sums.unreadable.push(`${item.product}: ${cost === null ? `cost_total ${item.cost_total}` : `quantity ${item.billed_units?.quantity ?? ""}`}`);
+  if (cost === null) {
+    sums.unreadable.push(`${item.product}: cost_total ${item.cost_total} (the line's cost left out)`);
     return;
   }
+  const quantity = item.billed_units === undefined ? undefined : decimalUnits(item.billed_units.quantity);
+  if (quantity === null) sums.unreadable.push(`${item.product}: quantity ${item.billed_units?.quantity ?? ""} (its cost is summed, its units are not)`);
   const unit = item.billed_units?.unit ?? null;
   const key = [item.product, item.currency_code, unit ?? ""].join("\u0000");
-  const row = sums.totals.get(key) ?? { product: item.product, description: item.description, endpoint: item.endpoint, currency: item.currency_code, unit, cost: 0n, quantity: null, items: 0 };
+  const row = sums.totals.get(key) ?? { product: item.product, description: item.description, endpoint: item.endpoint, currency: item.currency_code, unit, cost: 0n, quantity: null };
   row.cost += cost;
-  row.items += 1;
-  if (quantity !== undefined) row.quantity = (row.quantity ?? 0n) + quantity;
+  if (quantity !== undefined && quantity !== null) row.quantity = (row.quantity ?? 0n) + quantity;
   sums.totals.set(key, row);
 }
 
@@ -120,7 +122,8 @@ function summaryLines(usage: Usage, width: Width): string[] {
   const items = usage.buckets.reduce((n, b) => n + b.line_items.length, 0);
   const lines = [`Usage from ${usage.buckets[0].start_time} to ${usage.buckets.at(-1)?.end_time}: ${usage.buckets.length} bucket(s) of ${width}, ${items} line item(s).`];
   const byCurrency = new Map<string, bigint>();
-  for (const t of [...sums.totals.values()].sort((a, b) => (a.cost > b.cost ? -1 : 1))) {
+  const byCostThenName = (a: ProductTotal, b: ProductTotal): number => (a.cost === b.cost ? a.product.localeCompare(b.product) : a.cost > b.cost ? -1 : 1);
+  for (const t of [...sums.totals.values()].sort(byCostThenName)) {
     const units = t.quantity === null ? "" : ` · ${unitsText(t.quantity)} ${t.unit ?? "unit(s)"}`;
     lines.push(`  ${t.product} (${t.description}, ${t.endpoint}): ${unitsText(t.cost)} ${t.currency}${units}`);
     byCurrency.set(t.currency, (byCurrency.get(t.currency) ?? 0n) + t.cost);
@@ -131,16 +134,19 @@ function summaryLines(usage: Usage, width: Width): string[] {
   return lines;
 }
 
-/** The buckets exactly as received: written to a file in the output directory, inline too when small. */
-async function bucketsLines(ctx: ToolContext, raw: unknown, start: string, end: string): Promise<string[]> {
+/** The buckets exactly as received: written to a file in the output directory (named by the whole query, so two
+ * reports never overwrite each other; readable by the owner only — the line items carry emails and key prefixes),
+ * inline too when small. */
+async function bucketsLines(ctx: ToolContext, raw: unknown, query: Readonly<Record<string, QueryValue>>): Promise<string[]> {
   const body = raw as { buckets?: unknown };
-  const text = JSON.stringify(body.buckets ?? [], null, 2) ?? "[]";
-  const name = `ideogram-usage-${start.replace(/[^0-9TZ]/g, "")}-${end.replace(/[^0-9TZ]/g, "")}.json`;
+  const text = JSON.stringify(body.buckets ?? [], null, 2);
+  const bytes = Buffer.byteLength(text, "utf8");
+  const tag = ["start_time", "end_time", "bucket_width", "sources"].map((k) => String(query[k] ?? "")).join("-").replace(/[^0-9A-Za-z,-]/g, "");
   await mkdir(ctx.outputDir, { recursive: true });
-  const path = join(ctx.outputDir, name);
-  await writeFile(path, text);
-  const head = `Buckets as Ideogram sent them (the shape ai-cost reads): ${path} (${text.length} bytes)`;
-  return text.length <= INLINE_JSON_BYTES ? [head, text] : [`${head}; not printed here, over ${INLINE_JSON_BYTES} bytes`];
+  const path = join(ctx.outputDir, `ideogram-usage-${tag}.json`);
+  await writeFile(path, text, { mode: 0o600 });
+  const head = `Buckets as Ideogram sent them (the shape ai-cost reads): ${path} (${bytes} bytes, owner-readable)`;
+  return bytes <= INLINE_JSON_BYTES ? [head, text] : [`${head}; not printed here, over ${INLINE_JSON_BYTES} bytes`];
 }
 
 const UsageInput = z.object({
@@ -152,8 +158,9 @@ const UsageInput = z.object({
 
 const toRfc3339 = (ms: number): string => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
 
-/** The range as the API takes it: both ends RFC 3339, start before end, at most the width's span. */
-function rangeOf(ctx: ToolContext, input: z.infer<typeof UsageInput>): { start: string; end: string | undefined } | string {
+/** The range as the API takes it: both ends RFC 3339 (the end always sent, so the span the tool checked is the span
+ * the API sees), start before end, at most the width's span. */
+function rangeOf(ctx: ToolContext, input: z.infer<typeof UsageInput>): { start: string; end: string } | string {
   const width = WIDTHS[input.bucket_width ?? "1d"];
   const endMs = input.end_time === undefined ? ctx.clock.now() : Date.parse(input.end_time);
   if (!Number.isFinite(endMs)) return `end_time ${input.end_time} is not an RFC 3339 time (e.g. 2026-10-08T00:00:00Z)`;
@@ -168,7 +175,7 @@ function rangeOf(ctx: ToolContext, input: z.infer<typeof UsageInput>): { start: 
   if (!Number.isFinite(startMs)) return `start_time ${start} is not an RFC 3339 time (e.g. 2026-10-01T00:00:00Z)`;
   if (startMs >= endMs) return `start_time ${start} is not before the end ${input.end_time ?? "(now)"}`;
   if (endMs - startMs > width.maxMs) return `the range spans more than ${width.limit}, the most one request may cover at ${input.bucket_width ?? "1d"}; page by moving start_time`;
-  return { start, end: input.end_time };
+  return { start, end: input.end_time ?? toRfc3339(endMs) };
 }
 
 async function runUsage(ctx: ToolContext, args: ToolArguments): Promise<CallToolResult> {
@@ -176,8 +183,7 @@ async function runUsage(ctx: ToolContext, args: ToolArguments): Promise<CallTool
   if (!input.success) return textResult(`ideogram_usage: ${input.error.issues.map((i) => `${i.path.join(".") || "(input)"}: ${i.message}`).join("; ")}`, true);
   const range = rangeOf(ctx, input.data);
   if (typeof range === "string") return textResult(`ideogram_usage: ${range}`, true);
-  const query: Record<string, QueryValue> = { start_time: range.start };
-  if (range.end !== undefined) query.end_time = range.end;
+  const query: Record<string, QueryValue> = { start_time: range.start, end_time: range.end };
   if (input.data.bucket_width !== undefined) query.bucket_width = input.data.bucket_width;
   if (input.data.sources !== undefined) query.sources = input.data.sources;
   const checked = USAGE.schemas.query?.safeParse(query);
@@ -186,8 +192,7 @@ async function runUsage(ctx: ToolContext, args: ToolArguments): Promise<CallTool
     const answer = await read(ctx, USAGE, query, zGetAccountUsageResponse);
     if (!answer.ok) return answer.result;
     const width = input.data.bucket_width ?? "1d";
-    const end = answer.data.buckets.at(-1)?.end_time ?? range.end ?? toRfc3339(ctx.clock.now());
-    return textResult([...summaryLines(answer.data, width), ...(await bucketsLines(ctx, answer.raw, range.start, end))].join("\n"));
+    return textResult([...summaryLines(answer.data, width), ...(await bucketsLines(ctx, answer.raw, query))].join("\n"));
   } catch (error) {
     return adminOnly(error, "Reading the usage") ?? Promise.reject(error);
   }

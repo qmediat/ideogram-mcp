@@ -27,15 +27,18 @@ Step 2: the account — usage and spend, invoices, API keys — and the webhook 
   buckets of line items — product, endpoint, cost, billed units, the redacted API key, the source), the last 7 days
   by day (24 hours by hour) unless told otherwise, a range over the API's span (92 days at `1d`, 168 hours at `1h`)
   refused before asking, summed per product, unit and currency as decimal strings (never floats; an amount the sums
-  cannot read is counted and listed, not summed), the buckets written exactly as received to a JSON file in the
-  output directory and printed too when under 64 KB: the shape ai-cost reads. `ideogram_invoices` and
+  cannot read is counted and listed, not summed — an unreadable quantity leaves the cost in), the buckets written
+  exactly as received to a JSON file in the output directory (named by the whole query, owner-readable: the line items
+  carry emails and key prefixes) and printed too when under 64 KB: the shape ai-cost reads; the end of the range is
+  always sent, so the span the tool checked is the span the API sees; a listing off its specification is reported as
+  such and still shown as received. `ideogram_invoices` and
   `ideogram_api_keys` list what their endpoints return as received. All three need an organization-admin key: a 404
   is said as that, with Ideogram's words. Reads only, never billed.
 - `verifyWebhook` (`dist/webhooks.js`): the canonical message Ideogram signs
   (`request_id\nuser_id\ntimestamp\nsha256_hex(body)`) checked against the JWKS of `GET /v1/.well-known/jwks.json`
   with Ed25519, the header's key first, a rotated key still accepted, the signature as base64, base64url or hex; a
-  replay refused when the receiver sets `maxAgeS` (the signature alone never expires); a missing header is null,
-  never a throw. A helper for the receiver: this server receives no webhook itself (a stdio process has no public
+  replay refused by the timestamp (300 s by default, `Infinity` turns it off; the signature alone never expires); a
+  missing header is null, never a throw. A helper for the receiver: this server receives no webhook itself (a stdio process has no public
   URL); where `request_id`, `user_id` and `timestamp` travel is not stated by the specification.
 - `ideogram_operations` and the API reference list an operation's path and query parameters.
 - `get_asset_reference_usage` (spec-only) is served by `ideogram_api` behind `allow_undocumented`: a spec-only

@@ -46,7 +46,7 @@ function operationDetail(m, op) {
   const table = fieldRows.length === 0 ? ["No body."] : ["| field | kind | required |", "|---|---|---|", ...fieldRows];
   const limits = m.fileLimitsOf(op).map((l) => `\`${l.field}\` ${mb(l.maxBytes)}${l.stated ? "" : " (not stated; this server's cap)"}${l.maxItems === null ? "" : ` × ${l.maxItems}`}`);
   const rules = m.rulesOf(op).map((text) => `- ${text}`);
-  const params = op.facts.parameters.filter((p) => p.location !== "header").map((p) => `\`${p.name}\` (${p.location}${p.required ? ", required" : ""}${p.array ? ", repeated" : ""})`);
+  const params = m.parameterSummaries(op).map((p) => `\`${p}\``);
   if (params.length) head.push(`Parameters: ${params.join(", ")}.`, "");
   return [...head, ...table, "", ...(limits.length ? [`File limits: ${limits.join("; ")}.`, ""] : []), ...(rules.length ? ["Rules:", ...rules, ""] : [])];
 }

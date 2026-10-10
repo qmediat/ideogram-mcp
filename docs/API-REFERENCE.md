@@ -1417,7 +1417,7 @@ Rules:
 
 Poll a generation
 
-Parameters: `generation_id` (path, required).
+Parameters: `generation_id (path, required)`.
 
 No body.
 
@@ -1447,7 +1447,7 @@ No body.
 
 Get usage and spend
 
-Parameters: `start_time` (query, required), `end_time` (query), `bucket_width` (query), `sources` (query, repeated).
+Parameters: `start_time (query, required)`, `end_time (query)`, `bucket_width (query)`, `sources (query, repeated)`.
 
 No body.
 
@@ -1455,7 +1455,7 @@ No body.
 
 Rank edit reference assets used by organization requests
 
-Parameters: `limit` (query), `collection_ids` (query, repeated), `include_collections` (query), `start_date` (query, required), `end_date` (query, required), `cursor` (query).
+Parameters: `limit (query)`, `collection_ids (query, repeated)`, `include_collections (query)`, `start_date (query, required)`, `end_date (query, required)`, `cursor (query)`.
 
 No body.
 

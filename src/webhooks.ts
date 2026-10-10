@@ -6,9 +6,11 @@
  * receiver — this server receives no webhook itself (a stdio process has no public URL). The JWKS is given, never
  * fetched here; the signature is accepted as base64, base64url or hex. Where `request_id`, `user_id` and `timestamp`
  * travel is not stated by the specification (it names the two signature headers only): the receiver takes them from
- * the delivery as Ideogram's webhook documentation says and passes them in. A replay is refused only when the
- * receiver sets `maxAgeS` (the signature alone is valid forever): then a timestamp (RFC 3339 or epoch seconds)
- * farther than that from `now` is refused.
+ * the delivery as Ideogram's webhook documentation says and passes them in. A replay is refused by the timestamp:
+ * one (RFC 3339, or epoch seconds — 13 digits read as milliseconds) farther than `maxAgeS` (300 s by default;
+ * Infinity turns the check off) from `now` is refused; the signature alone would be valid forever. The key id in
+ * the header is a hint for the order: every key of the JWKS is Ideogram's, so a signature any of them verifies is
+ * Ideogram's (the rotation case the specification describes).
  */
 import { createHash, createPublicKey, verify } from "node:crypto";
 
@@ -24,8 +26,10 @@ export interface WebhookJwks {
   readonly keys: readonly WebhookJwk[];
 }
 
+export const DEFAULT_MAX_AGE_S = 300;
+
 export interface VerifyOptions {
-  /** The most a delivery's timestamp may be from `now`, in seconds; unset, the timestamp is not judged. */
+  /** The most a delivery's timestamp may be from `now`, in seconds: 300 by default; Infinity turns the check off. */
   readonly maxAgeS?: number;
   /** Milliseconds since the epoch; Date.now() by default. */
   readonly now?: number;
@@ -78,9 +82,10 @@ function timestampMs(text: string): number {
  * or malformed signature, a key set without an Ed25519 key, or a timestamp past `maxAgeS` is null, never a throw. */
 export function verifyWebhook(delivery: WebhookDelivery, jwks: WebhookJwks, options: VerifyOptions = {}): string | null {
   if (typeof delivery.signature !== "string" || typeof delivery.requestId !== "string" || typeof delivery.userId !== "string" || typeof delivery.timestamp !== "string") return null;
-  if (options.maxAgeS !== undefined) {
+  const maxAgeS = options.maxAgeS ?? DEFAULT_MAX_AGE_S;
+  if (Number.isFinite(maxAgeS)) {
     const at = timestampMs(delivery.timestamp);
-    if (!Number.isFinite(at) || Math.abs((options.now ?? Date.now()) - at) > options.maxAgeS * 1000) return null;
+    if (!Number.isFinite(at) || Math.abs((options.now ?? Date.now()) - at) > maxAgeS * 1000) return null;
   }
   const message = canonicalMessage(delivery);
   const signatures = signatureBytes(delivery.signature);
