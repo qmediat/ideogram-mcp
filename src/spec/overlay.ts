@@ -31,6 +31,10 @@ export interface RequestLimit {
   readonly stated: boolean;
 }
 
+/** The file fields that take font files, not images: every file field whose description states the font formats
+ * (".ttf, .otf, .woff, .woff2"); test/overlay.test.mjs derives the same set from the specification. */
+export const FONT_FILE_FIELDS: ReadonlySet<string> = new Set(["font_candidate_files", "font_file_body", "font_file_h1", "font_file_h2", "font_file_small"]);
+
 export function quoteAllowed(op: Operation): boolean {
   return isExposable(op) && op.dryRun;
 }
@@ -89,6 +93,8 @@ export function requestBytesRefusal(op: Operation, bodyBytes: number): string | 
 
 export interface Constraint {
   readonly id: string;
+  /** The rule names the missing source itself (inpaint, remove object): the shared source rule is not repeated beside it. */
+  readonly coversSource?: boolean;
   /** The operation ids the rule applies to. */
   readonly operations: ReadonlySet<string>;
   /** The request field whose description states the rule, and the phrase that states it. */
@@ -106,6 +112,22 @@ function given(fields: BodyFields, name: string): boolean {
 
 function anyGiven(fields: BodyFields, names: readonly string[]): boolean {
   return names.some((name) => given(fields, name));
+}
+
+const REGION_MIN_SIDE = 256;
+const REGION_MAX_PIXELS = 4_194_304;
+const REGION_MAX_RATIO = 6;
+
+/** The explicit form of `context_window`, as the specification bounds it (the image's own size is not known here). */
+function regionAllowed(text: string): boolean {
+  const parts = text.split(",").map((p) => p.trim());
+  if (parts.length !== 4 || !parts.every((p) => /^\d+$/.test(p))) return false;
+  const [yMin, xMin, yMax, xMax] = parts.map(Number);
+  const height = yMax - yMin;
+  const width = xMax - xMin;
+  if (height < REGION_MIN_SIDE || width < REGION_MIN_SIDE) return false;
+  if (width > height * REGION_MAX_RATIO || height > width * REGION_MAX_RATIO) return false;
+  return width * height <= REGION_MAX_PIXELS;
 }
 
 const STYLE_REFERENCES: readonly string[] = [
@@ -178,6 +200,7 @@ export const CONSTRAINTS: readonly Constraint[] = [
   },
   {
     id: "inpaint-source-and-mask",
+    coversSource: true,
     operations: new Set([
       "post_inpaint_image_v2_ideogram_v3",
       "post_inpaint_image_v2_ideogram_v3_character",
@@ -213,6 +236,63 @@ export const CONSTRAINTS: readonly Constraint[] = [
     violated: (f) => !anyGiven(f, ["character_reference_images", "character_reference_asset_identifiers", "character_reference_collection_id"]),
   },
   {
+    id: "references-by-reference-need-the-image-by-reference",
+    operations: new Set(["post_precise_edit_image_v2_ideogram45"]),
+    anchor: { field: "reference_image_asset_identifiers", phrase: /Requires the image being edited to be supplied by reference too, and cannot be combined with `?mask`?/ },
+    text: "reference_image_asset_identifiers needs the edited image by reference too (image_asset_identifier) and cannot be combined with mask",
+    violated: (f) => given(f, "reference_image_asset_identifiers") && (!given(f, "image_asset_identifier") || given(f, "mask")),
+  },
+  {
+    id: "mask-leaves-three-references",
+    operations: new Set(["post_precise_edit_image_v2_ideogram45"]),
+    anchor: { field: "reference_images", phrase: /A request with a `?mask`? can include at most three/ },
+    text: "with a mask, reference_images takes at most three files",
+    violated: (f) => given(f, "mask") && Array.isArray(f.reference_images) && f.reference_images.length > 3,
+  },
+  {
+    id: "context-window-needs-image",
+    operations: new Set(["post_precise_edit_image_v2_ideogram45"]),
+    anchor: { field: "image", phrase: /Required when supplying a `?mask`? or a `?context_window`?/ },
+    text: "context_window needs the image as a file in the same request (image)",
+    violated: (f) => given(f, "context_window") && !given(f, "image"),
+  },
+  {
+    id: "context-window-auto-needs-mask",
+    operations: new Set(["post_precise_edit_image_v2_ideogram45"]),
+    anchor: { field: "context_window", phrase: /`?auto`? requires a `?mask`?/ },
+    text: 'context_window "auto" needs a mask',
+    violated: (f) => f.context_window === "auto" && !given(f, "mask"),
+  },
+  {
+    id: "references-as-files-or-by-reference",
+    operations: new Set(["post_precise_edit_image_v2_ideogram45"]),
+    anchor: { field: "reference_images", phrase: /ignored if `?reference_image_asset_identifiers`? is also supplied/ },
+    text: "reference_images and reference_image_asset_identifiers are alternatives (the files would be ignored); give one",
+    violated: (f) => given(f, "reference_images") && given(f, "reference_image_asset_identifiers"),
+  },
+  {
+    id: "context-window-region",
+    operations: new Set(["post_precise_edit_image_v2_ideogram45"]),
+    anchor: { field: "context_window", phrase: /measure at least 256px on each side, have an aspect ratio between 1:6 and 6:1, and cover no more than 4194304 pixels/ },
+    text: "context_window names a region as y_min,x_min,y_max,x_max: whole numbers, max above min, each side at least 256 px, aspect ratio between 1:6 and 6:1, at most 4194304 pixels",
+    violated: (f) => typeof f.context_window === "string" && !["none", "auto"].includes(f.context_window) && !regionAllowed(f.context_window),
+  },
+  {
+    id: "five-font-files",
+    operations: new Set(["post_layerize_design_ideogram_v3"]),
+    anchor: { field: "font_candidate_files", phrase: /maximum 5 files/ },
+    text: "font_candidate_files takes at most 5 files",
+    violated: (f) => Array.isArray(f.font_candidate_files) && f.font_candidate_files.length > 5,
+  },
+  {
+    id: "remove-object-source-and-mask",
+    coversSource: true,
+    operations: new Set(["post_remove_object_from_v2_assets"]),
+    anchor: { field: "mask", phrase: /marks the region to remove/ },
+    text: "remove object needs the source (image or image_asset_identifier) and the mask (mask or mask_asset_identifier)",
+    violated: (f) => !anyGiven(f, ["image", "image_asset_identifier"]) || !anyGiven(f, ["mask", "mask_asset_identifier"]),
+  },
+  {
     id: "source-size-needs-images",
     operations: new Set(["post_generate_image_v2_ideogram45"]),
     anchor: { field: "size", phrase: /"source" is rejected/ },
@@ -220,6 +300,30 @@ export const CONSTRAINTS: readonly Constraint[] = [
     violated: (f) => f.size === "source" && !anyGiven(f, ["images", "image_asset_identifiers"]),
   },
 ];
+
+/** The fields that carry an operation's source image: a local file (or a URL) or an Ideogram asset. */
+export const SOURCE_FIELDS: readonly string[] = ["image", "images", "image_asset_identifier", "image_asset_identifiers"];
+
+export const SOURCE_RULE_TEXT = "needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)";
+
+/** Every operation that works on a source image — one of a family other than generate with an `image` / `images`
+ * file field — needs one: the schemas leave the file optional because the asset is the alternative. The rule is
+ * listed with the constraints (discovery, the API reference) and enforced for the curated tools and `ideogram_api` alike. */
+export function needsSource(op: Operation): boolean {
+  if (op.family === null || op.family === "generate") return false;
+  return op.facts.fileFields.some((f) => f.name === "image" || f.name === "images");
+}
+
+export function sourceRefusal(op: Operation, fields: BodyFields): string | null {
+  if (!needsSource(op) || anyGiven(fields, SOURCE_FIELDS)) return null;
+  if (CONSTRAINTS.some((c) => c.coversSource === true && c.operations.has(op.id) && c.violated(fields))) return null; // said by that rule
+  return `${op.id} ${SOURCE_RULE_TEXT}`;
+}
+
+/** Every rule the server enforces for the operation beyond its schema, as sentences: the source rule, then the constraints. */
+export function rulesOf(op: Operation): string[] {
+  return [...(needsSource(op) ? [SOURCE_RULE_TEXT] : []), ...CONSTRAINTS.filter((c) => c.operations.has(op.id)).map((c) => c.text)];
+}
 
 /** The sentences of every constraint the fields break for the operation; empty when none. */
 export function constraintViolations(op: Operation, fields: BodyFields): string[] {

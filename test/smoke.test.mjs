@@ -14,12 +14,16 @@ const PACKAGE_VERSION = JSON.parse(readFileSync(new URL("../package.json", impor
 const REQUEST_TIMEOUT_MS = 10_000;
 const EXPECTED_TOOLS = [
   "ideogram_generate",
+  "ideogram_precise_edit",
   "ideogram_inpaint",
   "ideogram_remix",
   "ideogram_reframe",
   "ideogram_replace_background",
+  "ideogram_remove_background",
+  "ideogram_remove_object",
   "ideogram_upscale",
   "ideogram_describe",
+  "ideogram_layerize",
   "ideogram_edit",
   "ideogram_quote",
   "ideogram_generation",

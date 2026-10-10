@@ -9,7 +9,7 @@
 
 # @qmediat.io/ideogram-mcp
 
-MCP server for the [Ideogram](https://developer.ideogram.ai) platform through its v2 API: every image model Ideogram sells through one API key — Ideogram 4.5, 4.0, 3.0, 2a and 2.0, GPT Image, Nano Banana, P-Image, Z-Image, the Topaz upscalers — for generate, inpaint, remix, reframe, replace background, upscale and describe, from Claude Code, Claude Desktop or any MCP client over stdio. Every call can be priced first (the API's own dry run), long jobs are returned by id and collected later, and any other operation the release serves is one validated raw call away. Built from Ideogram's OpenAPI specification ([ADR-0001](https://github.com/qmediat/ideogram-mcp/blob/main/docs/adr/0001-openapi-snapshot-as-the-source-of-truth.md)).
+MCP server for the [Ideogram](https://developer.ideogram.ai) platform through its v2 API: every image model Ideogram sells through one API key — Ideogram 4.5, 4.0, 3.0, 2a and 2.0, GPT Image, Nano Banana, P-Image, Z-Image, the Topaz upscalers — for generate, precise edit, inpaint, remix, reframe, replace background, remove background, remove object, upscale, describe and layerize, from Claude Code, Claude Desktop or any MCP client over stdio. Every call can be priced first (the API's own dry run), long jobs are returned by id and collected later, and any other operation the release serves is one validated raw call away. Built from Ideogram's OpenAPI specification ([ADR-0001](https://github.com/qmediat/ideogram-mcp/blob/main/docs/adr/0001-openapi-snapshot-as-the-source-of-truth.md)).
 
 [![npm version](https://img.shields.io/npm/v/@qmediat.io/ideogram-mcp)](https://www.npmjs.com/package/@qmediat.io/ideogram-mcp)
 [![license](https://img.shields.io/npm/l/@qmediat.io/ideogram-mcp)](https://github.com/qmediat/ideogram-mcp/blob/main/LICENSE)
@@ -20,6 +20,7 @@ MCP server for the [Ideogram](https://developer.ideogram.ai) platform through it
 
 - **The platform, not one model** — `model` on every tool, with each model's own fields (a field the model does not take is refused, naming the models that do). The model lists and fields come from Ideogram's specification, so a new model is a reviewed snapshot update, not a rewrite
 - **Price before you pay** — `ideogram_quote` asks the API what exactly this call would cost (USD and credits; nothing generated or billed)
+- **Private by default** — every curated tool whose model takes `private` sends it as `true` unless you set it (on remove background, replace background and the `auto` models the API's own default is your plan's setting); a model without the field (reframe with Ideogram 3.0, remove object) follows the API's own behaviour, and `ideogram_api` sends what you give it
 - **Never billed twice** — a job is returned the moment Ideogram accepts it; the tool waits up to `wait_s` and otherwise hands back the `generation_id` for `ideogram_generation`. A request is resent only when it never left the machine or got a 429
 - **Everything else, validated** — `ideogram_operations` lists what the API offers; `ideogram_api` calls any served operation by id, checked against its own schema first
 - **Guarded I/O** — per-operation upload limits checked before any file is read, streamed downloads with a 50 MB cap from allow-listed HTTPS hosts, typed 402/429 errors that say what to do ([details](https://github.com/qmediat/ideogram-mcp/blob/main/SECURITY.md))
@@ -85,17 +86,21 @@ Add to `claude_desktop_config.json`:
 | Tool | What it does | Models |
 |------|--------------|--------|
 | `ideogram_generate` | Images from a text prompt | `ideogram-3` (default), `ideogram-4-5`, `ideogram-4`, `ideogram-3-character`, `ideogram-3-custom-model`, `ideogram-4-custom-model`, `ideogram-3-transparent`, `ideogram-4-transparent`, `ideogram-2a`, `ideogram-2`, `gpt-image-2`, `gpt-image-2-5-flare`, `gpt-image-2-5-sunburst`, `nano-banana-2`, `nano-banana-pro`, `p-image-ideogram`, `z-image`, `auto` |
+| `ideogram_precise_edit` | Edit an image at its exact size: a prompt, an optional mask (black = edit), up to 4 reference images, `context_window` to confine the edit | `ideogram-4-5` |
 | `ideogram_inpaint` | Repaint the masked part of an image (black = repaint) | `ideogram-3` (default), `ideogram-3-character`, `ideogram-3-custom-model` |
 | `ideogram_edit` | The 1.x name of `ideogram_inpaint` (kept through 2.x) | as inpaint |
 | `ideogram_remix` | New images from a source image and a prompt | `ideogram-3` (default), `ideogram-3-character`, `ideogram-3-custom-model`, `ideogram-4`, `auto` |
 | `ideogram_reframe` | Extend an image to a new size (outpainting) | `ideogram-3` (default), `nano-banana-2` |
 | `ideogram_replace_background` | A new background, the subject kept | `ideogram-3` (default), `gpt-image-2` |
+| `ideogram_remove_background` | The foreground as a transparent PNG | `ideogram-1` |
+| `ideogram_remove_object` | Remove what the mask marks (white = remove) and fill the gap | `ideogram-1` |
 | `ideogram_upscale` | Enlarge an image | `auto` (default), `topaz-bloom-2`, `topaz-redefine`, `topaz-standard-2`, `topaz-text-refine`, `topaz-wonder-3-5`, `nano-banana-pro` |
 | `ideogram_describe` | Describe an image: words (`ideogram-3`, default) or a structured JSON prompt (`ideogram-4`) | `ideogram-3`, `ideogram-4` |
+| `ideogram_layerize` | A flat image as an editable design: the text-free base image (saved) and the detected text blocks (JSON: text, position, font, size, colour); optional `font_candidate_files` (.ttf, .otf, .woff, .woff2) to match against | `ideogram-3` |
 | `ideogram_quote` | The price of a call: `{"tool": "ideogram_generate", "arguments": {…}}` | every model that offers a dry run (all but describe) |
 | `ideogram_generation` | Collect a generation by `generation_id` (`video: true` for a video: the polls slow to 60 s apart, as the generating tool's wait did) | — |
 | `ideogram_operations` | What the API offers: families, operations, fields, limits | — |
-| `ideogram_api` | Any served operation by id (precise edit, remove background, remove object, …) | — |
+| `ideogram_api` | Any served operation by id, including the ones the documentation index does not list (the reframe models `auto`, `bria-expand`, `gpt-image-2-5-flare`, `nano-banana-pro`) | — |
 
 Each model's fields are listed in the tool's schema (one variant per model) and in [docs/API-REFERENCE.md](https://github.com/qmediat/ideogram-mcp/blob/main/docs/API-REFERENCE.md), generated from the specification. Image inputs are local file paths (or Ideogram asset identifiers where a model takes them); each operation's own upload limits apply, checked each file against its field's limit before any is read, the whole encoded request against the request cap before it is sent.
 
@@ -134,7 +139,7 @@ A 1.x field that the chosen v2 model does not take is refused with the models th
 
 ### The raw call
 
-`ideogram_api` runs any operation this release serves — the curated ones and every other `/v2/image` operation (precise edit, remove background, remove object) — by its id, with its parameters kept in their places: `{"operation": "…", "params": {"path": {}, "query": {}, "body": {}}, "files": [{"field": "image", "path": "…"}], "dry_run": false}`. The parameters are checked against the operation's own schema and rules before anything is sent. Operations Ideogram's documentation does not list need `allow_undocumented: true`; web-app (Bearer) and internal operations are refused; video, the commercial tools and account usage come in later releases ([plan](https://github.com/qmediat/ideogram-mcp/blob/main/docs/DESIGN-ideogram-v2.md#8-steps-one-release-per-finished-family--invariant-15)).
+`ideogram_api` runs any operation this release serves — the curated ones and every other `/v2/image` operation (the reframe models the documentation index does not list) — by its id, with its parameters kept in their places: `{"operation": "…", "params": {"path": {}, "query": {}, "body": {}}, "files": [{"field": "image", "path": "…"}], "dry_run": false}`. The parameters are checked against the operation's own schema and rules before anything is sent. Operations Ideogram's documentation does not list need `allow_undocumented: true`; web-app (Bearer) and internal operations are refused; video, the commercial tools and account usage come in later releases ([plan](https://github.com/qmediat/ideogram-mcp/blob/main/docs/DESIGN-ideogram-v2.md#8-steps-one-release-per-finished-family--invariant-15)).
 
 ## Security
 

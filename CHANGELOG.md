@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Step 1 of `docs/DESIGN-ideogram-v2.md`: every image family of Ideogram's documentation index has its own tool.
+
+### Added
+
+- `ideogram_precise_edit` (Ideogram 4.5: the image, an optional mask, up to four `reference_images` or
+  `reference_image_asset_identifiers`, `context_window`), `ideogram_remove_background` and `ideogram_remove_object`
+  (ideogram-1), `ideogram_layerize` (Ideogram 3.0: the text-free base image is saved, the detected text blocks are
+  returned as JSON; `font_candidate_files` are sent as fonts — .ttf, .otf, .woff, .woff2 — and refused as images, and
+  an image is refused as a font). Each is priced by `ideogram_quote` and collected by `ideogram_generation` like any
+  other; the four were reachable through `ideogram_api` only in 2.0.0.
+- The rules the specification states in prose for these operations, refused before any request (`src/spec/overlay.ts`,
+  each anchored to its phrase): references by reference need the edited image by reference and no mask; a mask leaves
+  room for three reference images; `context_window` needs the image as a file and `"auto"` needs a mask; remove object
+  needs its source and its mask.
+- A `layered` payload in the lifecycle: a `layerized_image` / `layerized_design.generation` entry of a generation is
+  shown as its base image (saved, or withheld by the safety check), the design's own link and editable page when the
+  API gives them, and its text blocks — never as a raw record.
+- `private` is a field of every curated tool whose model takes it, and is sent as `true` unless the caller sets it:
+  on remove background, replace background and the `auto` models an omitted `private` follows the plan's setting,
+  public when the plan has none (the other operations default to private) — a server on an API key never publishes to
+  Ideogram's public feed unless asked. `ideogram_api` sends what the caller gave, as before. (Opus cross-review X1.)
+- A curated tool refuses a call without a source image (image, images or an asset identifier; every family but
+  generate) before the schema and before any request, and checks the body against the schema of the format it is
+  sent in — a call without a file goes as JSON, whose schema may require what the multipart one leaves optional (X3, X4).
+- Three more rules from the prose: `reference_images` and `reference_image_asset_identifiers` are alternatives (the
+  files would be ignored); `context_window`'s explicit region is four whole numbers, max above min, each side at least
+  256 px, aspect ratio within 1:6 and 6:1, at most 4 194 304 pixels; `font_candidate_files` takes at most 5 (X5, X6, X9).
+
+### Changed
+
+- tools/list carries 16 tools; a definition shorter than its `$ref` is inlined (lossless, 1.3 KB; an inlined
+  definition is walked again and a definition is dropped only when nothing refers to it any more), and the advertised
+  schema budget is 80 KB measured (73 582 bytes over a real session on 2026-10-10, `private` included; the 64 KB of
+  2.0.0 was the estimate before step 1 — `test/budget.test.mjs`, design note section 5).
+- Verified on the live API on 2026-10-10 (0.07 USD): a precise edit (4.5, `very_low`) and a remove background run
+  through acceptance, poll and download; the remove-background result is listed as an image without prompt or seed
+  and saved like any image (`test/tools.test.mjs` pins the shape).
+- `ideogram_api`'s refusal of a planned operation names "this release", not a version.
+- The plan's order after step 2 (design note section 8, operator decision 2026-10-10): custom-model training (v1)
+  before video, the commercial tools last; step 1's second change (not this one) brings inline image content and URL
+  input, opt-in, for clients without file access.
+- `docs/COMPETITION-2026-10-01.md`: the official MCP page names 12 tools (`generate_image` and
+  `get_images_by_collection_id` were missing from the list).
+
 - `scripts/spec-gen/`: js-yaml 4.3.2 through an exact `overrides` entry — the nested 4.2.0 openapi-ts' ref-parser pinned
   carried GHSA-52cp-r559-cp3m, GHSA-5p4m-2wfm-xmqj and GHSA-2883-xcg3-v3hh (three high Dependabot alerts at the 2.0.0
   release); the lockfile regenerated under the override (`npm ls js-yaml`: one 4.3.2); CI audits that lockfile (#38).

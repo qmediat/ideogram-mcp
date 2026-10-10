@@ -13,7 +13,7 @@ import { quote } from "../cost.js";
 import { quoteText } from "./quote.js";
 import { execute, WAIT_DEFAULT_S, WAIT_MAX_S } from "../lifecycle.js";
 import type { OperationClass } from "../spec/classify.js";
-import { constraintViolations } from "../spec/overlay.js";
+import { constraintViolations, sourceRefusal } from "../spec/overlay.js";
 import { bodySchemaFor, operationById } from "../spec/operations.js";
 import type { Operation } from "../spec/operations.js";
 import { servedByRawCall, supportOf } from "../spec/support.js";
@@ -50,7 +50,7 @@ type RawArgs = z.infer<typeof RawInput>;
 export function rawRefusal(op: Operation, allowUndocumented: boolean): string | null {
   const byClass = CLASS_REFUSAL[op.class];
   if (byClass !== undefined) return `${op.id} ${byClass}`;
-  if (!servedByRawCall(op)) return `${op.id} is ${supportOf(op)} for a later release of this server, not served by 2.0.0`;
+  if (!servedByRawCall(op)) return `${op.id} is ${supportOf(op)} for a later release of this server, not served by this release`;
   if (op.class === "spec_only" && !allowUndocumented) {
     return `${op.id} is in Ideogram's specification but not in its documentation; set allow_undocumented: true to call it anyway`;
   }
@@ -102,7 +102,8 @@ async function buildRawRequest(op: Operation, args: RawArgs): Promise<ApiRequest
   if (op.body === "none") {
     if (Object.keys(withFiles).length > 0) throw new Error(`body: ${op.id} takes no body; given ${Object.keys(withFiles).join(", ")}`);
   } else check("body", bodySchemaFor(op, media), withFiles);
-  const violations = constraintViolations(op, withFiles);
+  const noSource = sourceRefusal(op, withFiles); // null when a family rule names the missing source itself
+  const violations = [...constraintViolations(op, withFiles), ...(noSource === null ? [] : [noSource])];
   if (violations.length > 0) throw new Error(violations.join("\n"));
   if (body.async === false && args.dry_run !== true) {
     // a quote prices the request as given; a run with async: false would carry its result only in the POST answer
@@ -142,7 +143,7 @@ export const RAW_TOOL: ToolDefinition = {
   name: "ideogram_api",
   title: "Call any served Ideogram operation",
   description:
-    "Advanced: call an Ideogram operation by id (from ideogram_operations) when no curated tool covers it — e.g. precise edit, remove background, remove object. params holds path, query, headers and body apart; files maps local files to file fields. Checked against the operation's own schema before anything is sent; dry_run prices it instead.",
+    "Advanced: call an Ideogram operation by id (from ideogram_operations) when no curated tool covers it — a model the documentation index does not list (allow_undocumented), or a call with webhook_url / target_collection_id. params holds path, query, headers and body apart; files maps local files to file fields. Checked against the operation's own schema before anything is sent; dry_run prices it instead.",
   inputSchema: z.object({
     operation: z.string().min(1).describe("The operation id, e.g. post_precise_edit_image_v2_ideogram45"),
     params: z.record(z.string(), z.unknown()).optional().describe("{path?, query?, headers?, body?}: each an object of that location's parameters"),

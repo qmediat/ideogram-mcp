@@ -52,6 +52,7 @@ test("multipart generate with a file: text parts, a repeated list, a JSON part, 
         textPart("style_codes", "ABCD1234") +
         textPart("style_codes", "00ff00ff") +
         jsonPart("color_palette", '{"name":"ember"}') +
+        textPart("private", "true") +
         textPart("async", "true") +
         fileHead("style_reference_images", "style_reference_images.png"),
     ),
@@ -62,7 +63,7 @@ test("multipart generate with a file: text parts, a repeated list, a JSON part, 
   assert.equal(req.headers["content-length"], String(expected.length));
 });
 
-test("a JSON remix by asset reference: the fields in the caller's order, async last", async () => {
+test("a JSON remix by asset reference: the fields in the caller's order, then private, async last", async () => {
   const [req] = await sent("ideogram_remix", {
     prompt: "night",
     image_asset_identifier: { asset_type: "UPLOAD", asset_id: "abc" },
@@ -71,7 +72,7 @@ test("a JSON remix by asset reference: the fields in the caller's order, async l
   });
   assert.equal(req.url, "/v2/image/remix/ideogram-3");
   assert.equal(req.headers["content-type"], "application/json");
-  assert.equal(req.body.toString(), '{"prompt":"night","image_asset_identifier":{"asset_type":"UPLOAD","asset_id":"abc"},"image_weight":40,"async":true}');
+  assert.equal(req.body.toString(), '{"prompt":"night","image_asset_identifier":{"asset_type":"UPLOAD","asset_id":"abc"},"image_weight":40,"private":true,"async":true}');
 });
 
 test("a query array is sent as repeated name=value pairs (account usage), dry_run as one more pair", async () => {

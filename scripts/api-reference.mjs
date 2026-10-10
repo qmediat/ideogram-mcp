@@ -45,7 +45,7 @@ function operationDetail(m, op) {
   const fieldRows = m.fieldSummaries(op).map((f) => `| \`${f.name}\` | ${f.kind.replaceAll("|", "\\|")} | ${f.required ? "yes" : ""} |`);
   const table = fieldRows.length === 0 ? ["No body."] : ["| field | kind | required |", "|---|---|---|", ...fieldRows];
   const limits = m.fileLimitsOf(op).map((l) => `\`${l.field}\` ${mb(l.maxBytes)}${l.stated ? "" : " (not stated; this server's cap)"}${l.maxItems === null ? "" : ` × ${l.maxItems}`}`);
-  const rules = m.CONSTRAINTS.filter((c) => c.operations.has(op.id)).map((c) => `- ${c.text}`);
+  const rules = m.rulesOf(op).map((text) => `- ${text}`);
   return [...head, ...table, "", ...(limits.length ? [`File limits: ${limits.join("; ")}.`, ""] : []), ...(rules.length ? ["Rules:", ...rules, ""] : [])];
 }
 

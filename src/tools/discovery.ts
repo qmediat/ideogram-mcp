@@ -5,7 +5,7 @@
 import { z } from "zod/v4";
 import { countersLine } from "../counters.js";
 import { fieldSummaries } from "../spec/fields.js";
-import { CONSTRAINTS, fileLimitsOf, MB, quoteAllowed } from "../spec/overlay.js";
+import { fileLimitsOf, MB, quoteAllowed, rulesOf } from "../spec/overlay.js";
 import { DOCS_INDEX_URL, FAMILIES, isExposable, operationById, OPERATIONS } from "../spec/operations.js";
 import type { Family, Operation } from "../spec/operations.js";
 import { supportOf } from "../spec/support.js";
@@ -26,7 +26,7 @@ function fieldLines(op: Operation): string[] {
 
 function detail(op: Operation): string {
   const limits = fileLimitsOf(op).map((l) => `  ${l.field}: ${(l.maxBytes / MB).toFixed(0)} MB${l.stated ? "" : " (not stated by Ideogram; this server's cap)"}${l.maxItems === null ? "" : `, at most ${l.maxItems} files`}`);
-  const rules = CONSTRAINTS.filter((c) => c.operations.has(op.id)).map((c) => `  ${c.text}`);
+  const rules = rulesOf(op).map((text) => `  ${text}`);
   return [
     opLine(op),
     op.summary,

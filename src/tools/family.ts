@@ -11,13 +11,13 @@ import type { ZodType } from "zod/v4";
 import type { ApiRequest } from "../client.js";
 import { WAIT_DEFAULT_S, WAIT_MAX_S } from "../lifecycle.js";
 import { documentedModelsOf } from "../registry.js";
-import { constraintViolations } from "../spec/overlay.js";
-import { modelOperation } from "../spec/operations.js";
+import { constraintViolations, sourceRefusal } from "../spec/overlay.js";
+import { bodySchemaFor, modelOperation } from "../spec/operations.js";
 import type { Family, Operation } from "../spec/operations.js";
 import { loadUploads } from "../uploads.js";
 import type { FileRef } from "../uploads.js";
 import { adaptFields, resolveModel } from "./compat.js";
-import { CONTROL_FIELDS, FIELD_TEXT, RESERVED_FIELDS, WAIT_TEXT } from "./fields.js";
+import { CONTROL_FIELDS, FIELD_TEXT, PRIVATE_FIELD, RESERVED_FIELDS, WAIT_TEXT } from "./fields.js";
 
 /** A tool's arguments as the MCP client sent them; `prepare` validates them against the chosen model. */
 export type ToolArguments = Readonly<Record<string, unknown>>;
@@ -96,6 +96,34 @@ function hoistShared(variants: JsonObject[], definitions: JsonObject): void {
   }
 }
 
+/** A definition this short costs more as a `$ref` (34 bytes) than inline: zod hoists every reused schema, a bare
+ * `{"type":"string"}` included. Such definitions are put back in place (lossless). */
+const INLINE_DEFINITION_BYTES = 34;
+
+export function inlineSmallDefinitions(json: JsonObject): void {
+  const definitions = json.definitions as JsonObject;
+  const small = new Map<string, string>();
+  for (const [name, def] of Object.entries(definitions)) {
+    const text = JSON.stringify(def);
+    if (text.length <= INLINE_DEFINITION_BYTES) small.set(`#/definitions/${name}`, text);
+  }
+  const walk = (node: unknown, expanding: ReadonlySet<string>): unknown => {
+    if (Array.isArray(node)) return node.map((item) => walk(item, expanding));
+    if (node === null || typeof node !== "object") return node;
+    const o = node as JsonObject;
+    const ref = typeof o.$ref === "string" && Object.keys(o).length === 1 ? o.$ref : undefined;
+    if (ref !== undefined && small.has(ref) && !expanding.has(ref)) {
+      return walk(JSON.parse(small.get(ref) as string), new Set([...expanding, ref])); // an inlined definition may hold a $ref of its own; a cycle keeps the $ref
+    }
+    return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, walk(v, expanding)]));
+  };
+  json.oneOf = walk(json.oneOf, new Set());
+  for (const [name, def] of Object.entries(definitions)) definitions[name] = walk(def, new Set());
+  // a definition is dropped only when nothing refers to it any more (a $ref beside other keys is left as it is)
+  const remaining = new Set((JSON.stringify(json).match(/"#\/definitions\/[^"]+"/g) ?? []).map((ref) => JSON.parse(ref) as string));
+  for (const ref of small.keys()) if (!remaining.has(ref)) delete definitions[ref.replace("#/definitions/", "")];
+}
+
 function variantJsonSchemas(spec: FamilyToolSpec): { oneOf: unknown[]; definitions: unknown } {
   const variants = variantsOf(spec).map((v) => {
     const model = v.model === spec.defaultModel ? z.literal(v.model).optional() : z.literal(v.model);
@@ -112,7 +140,9 @@ function variantJsonSchemas(spec: FamilyToolSpec): { oneOf: unknown[]; definitio
     for (const key of Object.keys(props)) props[key] = unwrapRef(props[key]);
   }
   hoistShared(json.anyOf, definitions);
-  return { oneOf: json.anyOf, definitions };
+  const shaped: JsonObject = { oneOf: json.anyOf, definitions };
+  inlineSmallDefinitions(shaped);
+  return { oneOf: shaped.oneOf as unknown[], definitions: shaped.definitions };
 }
 
 /** The schema tools/list advertises: `model`, `wait_s`, each described field once, and one exact variant per model. */
@@ -167,17 +197,43 @@ export function splitFiles(op: Operation, fields: Readonly<Record<string, unknow
   return { body, files };
 }
 
+/** The fields are checked against the schema of the format they are sent in (as `ideogram_api` checks them, the file
+ * fields present as their paths): a call without a file goes as JSON, whose schema may require what the multipart one
+ * leaves optional (remove background by JSON needs the asset). */
+function checkMediaSchema(op: Operation, media: "json" | "multipart", fields: Readonly<Record<string, unknown>>): void {
+  const schema = bodySchemaFor(op, media);
+  if (schema === null) return;
+  const parsed = schema.safeParse(fields);
+  if (parsed.success) return;
+  const issues = parsed.error.issues.map((i) => `${i.path.join(".") || "(input)"}: ${i.message}`);
+  throw new Error(`${op.id} sent as ${media} refuses the input:\n${issues.join("\n")}`);
+}
+
 /** The request one operation call becomes: multipart when files go with it, else JSON when the operation takes it. */
 export async function buildRequest(op: Operation, fields: Readonly<Record<string, unknown>>): Promise<ApiRequest> {
   const { body, files } = splitFiles(op, fields);
   const takesJson = op.facts.bodies.includes("json");
   if (files.length > 0 && !op.facts.bodies.includes("multipart")) throw new Error(`${op.id} takes no files`);
-  const uploads = await loadUploads(op, files);
   const media = files.length === 0 && takesJson ? "json" : "multipart";
+  checkMediaSchema(op, media, fields);
+  const uploads = await loadUploads(op, files);
   return { op, path: {}, query: {}, headers: {}, body: { media, fields: body, files: uploads, jsonParts: op.facts.jsonParts }, dryRun: false };
 }
 
 const WaitInput = z.number().int().min(0).max(WAIT_MAX_S).optional();
+
+/** The shared source rule (src/spec/overlay.ts), said with the tool's name: before the schema and before any request. */
+function checkSource(spec: FamilyToolSpec, variant: ModelVariant, fields: Readonly<Record<string, unknown>>): void {
+  const refusal = sourceRefusal(variant.op, fields);
+  if (refusal !== null) throw new Error(refusal.replace(variant.op.id, spec.name));
+}
+
+/** `private: true` unless the caller set it, on a model that takes the field; a null is "not set" (the schemas accept
+ * it, multipart would drop it and JSON would send it — either way the API's own default would apply). */
+function withPrivateDefault(variant: ModelVariant, fields: Record<string, unknown>): Record<string, unknown> {
+  if (!variant.fields.has(PRIVATE_FIELD) || (fields[PRIVATE_FIELD] !== undefined && fields[PRIVATE_FIELD] !== null)) return fields;
+  return { ...fields, [PRIVATE_FIELD]: true };
+}
 
 /** Turns a curated tool's arguments into one checked request of the chosen model. */
 export async function prepare(spec: FamilyToolSpec, args: ToolArguments): Promise<PreparedCall> {
@@ -191,7 +247,9 @@ export async function prepare(spec: FamilyToolSpec, args: ToolArguments): Promis
   const legacy = new Set(Object.keys(spec.legacyInputs ?? {})); // a legacy input of ANOTHER tool is a foreign field, refused by name
   const requestFields = Object.fromEntries(Object.entries(args).filter(([name]) => !CONTROL_FIELDS.has(name) && !legacy.has(name)));
   const adapted = adaptFields(requestFields, variant.fields);
-  checkFields(spec, variant, adapted.fields);
-  const req = await buildRequest(variant.op, adapted.fields);
+  checkSource(spec, variant, adapted.fields);
+  const fields = withPrivateDefault(variant, adapted.fields);
+  checkFields(spec, variant, fields);
+  const req = await buildRequest(variant.op, fields);
   return { req, notes: [...resolved.notes, ...adapted.notes], waitS: wait.data ?? WAIT_DEFAULT_S, variant };
 }

@@ -7,7 +7,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { COUNTERS } from "../counters.js";
 import { IdeogramApiError } from "../errors.js";
 import { microsToUsd } from "../cost.js";
-import type { ImageItem, Outcome, Payload } from "../lifecycle.js";
+import type { ImageItem, LayeredItem, Outcome, Payload } from "../lifecycle.js";
 import type { ToolContext } from "./context.js";
 
 /** JSON text of a value that may hold bigints (the generated schemas parse int64 as bigint). */
@@ -22,8 +22,10 @@ function imageLine(path: string, item: ImageItem): string {
   return lines.join("\n");
 }
 
+/** Downloads the images Ideogram's safety check passed and that have a URL (the specification says a withheld image
+ * has none; one that carries both is still withheld, never fetched). */
 async function saveImages(ctx: ToolContext, items: readonly ImageItem[]): Promise<{ lines: string[]; saved: number }> {
-  const safe = items.filter((item) => item.url !== null);
+  const safe = items.filter((item) => item.url !== null && item.isImageSafe);
   const results = await Promise.allSettled(safe.map((item) => ctx.client.download(item.url as string, ctx.outputDir, ctx.budget)));
   const lines: string[] = [];
   let saved = 0;
@@ -39,8 +41,31 @@ async function saveImages(ctx: ToolContext, items: readonly ImageItem[]): Promis
     lines.push(`Not saved: ${safe[i].url} — ${reason}${later}`);
   });
   const unsafe = items.length - safe.length;
-  if (unsafe > 0) lines.push(`${unsafe} image(s) withheld by Ideogram's safety check (no URL, nothing downloaded)`);
+  if (unsafe > 0) lines.push(`${unsafe} image(s) withheld by Ideogram's safety check (nothing downloaded)`);
   return { lines, saved };
+}
+
+/** A withheld design is said and nothing of it is shown; a safe one lists what Ideogram gave. */
+function designLines(item: LayeredItem, i: number): string[] {
+  if (!item.isImageSafe) return [`Design ${i + 1} withheld by Ideogram's safety check (nothing shown, nothing downloaded)`];
+  return [
+    ...(item.baseImageUrl === null ? [`Design ${i + 1}: no base image listed by Ideogram`] : []),
+    ...(item.url === null ? [] : [`Design ${i + 1}: ${item.url} (Ideogram's links expire; download it to keep it)`]),
+    ...(item.htmlUrl === null ? [] : [`Editable page of design ${i + 1}: ${item.htmlUrl} (expires as well)`]),
+    `Text blocks of design ${i + 1} (${item.textBlocks.length}):\n${jsonText(item.textBlocks)}`,
+  ];
+}
+
+/** A layerized design: its base image (when listed) is saved as any image is; its link, its editable page and its
+ * text blocks follow. A design is usable by its base image, its link, its page or its text blocks; only one Ideogram
+ * withheld, or one that lists none of them, is an error. */
+async function layeredResult(ctx: ToolContext, items: readonly LayeredItem[]): Promise<{ lines: string[]; isError: boolean }> {
+  const withBase = items.filter((item) => item.isImageSafe && item.baseImageUrl !== null);
+  const base: ImageItem[] = withBase.map((item) => ({ url: item.baseImageUrl, resolution: item.resolution, seed: item.seed, prompt: null, isImageSafe: true }));
+  const images = await saveImages(ctx, base);
+  const usable = items.some((item) => item.isImageSafe && (item.url !== null || item.htmlUrl !== null || item.textBlocks.length > 0)) || images.saved > 0;
+  const head = `${images.saved} of ${withBase.length} base image(s) saved (${items.length} design(s)).`;
+  return { lines: [head, ...images.lines, ...items.flatMap(designLines)], isError: !usable };
 }
 
 function descriptionLines(payload: Extract<Payload, { kind: "description" }>): string[] {
@@ -55,6 +80,10 @@ async function completedResult(ctx: ToolContext, outcome: Extract<Outcome, { kin
   const payload = outcome.payload;
   if (payload.kind === "description") return { lines: [...head, ...descriptionLines(payload)], isError: false };
   if (payload.kind === "record") return { lines: [...head, jsonText(payload.body)], isError: false };
+  if (payload.kind === "layered") {
+    const layered = await layeredResult(ctx, payload.items);
+    return { lines: [...head, ...layered.lines], isError: layered.isError };
+  }
   if (payload.items.length === 0) return { lines: [...head, "Ideogram listed no image for this generation (nothing to save)."], isError: true };
   const images = await saveImages(ctx, payload.items);
   const summary = `${images.saved} of ${payload.items.length} image(s) saved.`;

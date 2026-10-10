@@ -22,17 +22,21 @@ Fields of the operations this release serves (curated or raw) are listed below t
 | tool | what it does |
 |---|---|
 | `ideogram_generate` | Create images from a text prompt with any image model Ideogram's API sells: Ideogram 4.5, 4.0 and 3.0 (with transparent, character and custom-model variants), 2a and 2.0, GPT Image, Nano Banana, P-Image, Z-Image, or auto. Each model takes its own fields (one variant per model in this schema). Default model: ideogram-3. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
+| `ideogram_precise_edit` | Edit an image with Ideogram 4.5 at its exact size: pixels the edit does not change stay as they are. Takes the image, an optional mask (black = edit), up to 4 reference images that guide the edit, and context_window to confine it. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
 | `ideogram_inpaint` | Repaint the masked part of an image (black in the mask = repaint) with Ideogram 3.0 or its character / custom-model variants. Needs the source and the mask, each a local file or an Ideogram asset. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
 | `ideogram_remix` | Make new images from a source image and a prompt (Ideogram 3.0 and its variants, Ideogram 4.0, or auto); image_weight sets how closely the result follows the source. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
 | `ideogram_reframe` | Extend an image to a new size by outpainting (Ideogram 3.0 or Nano Banana 2). Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
 | `ideogram_replace_background` | Replace the background of an image and keep its subject (Ideogram 3.0 or GPT Image 2); the prompt describes the new background. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
+| `ideogram_remove_background` | Remove the background of an image: the foreground comes back as a transparent PNG. Takes a local file or an Ideogram asset. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
+| `ideogram_remove_object` | Remove a masked object from an image (white in the mask = remove) and fill the gap. Needs the source and a mask of the same size, each a local file or an Ideogram asset. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
 | `ideogram_upscale` | Enlarge an image (auto, Topaz Bloom, Redefine, Standard, Text Refine and Wonder, or Nano Banana Pro); each model takes its own controls. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
 | `ideogram_describe` | Describe an image in words (Ideogram 3.0) or as a structured JSON prompt (Ideogram 4.0). Takes a local file or an Ideogram asset. Describe has no price quote (the API offers no dry run for it). |
+| `ideogram_layerize` | Turn a flat image into an editable design (Ideogram 3.0): the detected text comes back as positioned text blocks with matched fonts, sizes and colours, beside a text-free base image that is saved. Optional font files to match against; ideogram_quote prices a call first. |
 | `ideogram_edit` | Deprecated alias of ideogram_inpaint, kept through 2.x for 1.x callers: the same arguments and models (see ideogram_inpaint's schema). |
 | `ideogram_quote` | Ask Ideogram what a call would cost before making it: give the curated tool's name and the arguments you would pass it. Answers USD and credits from the API's own dry run (exact, or an estimate with its upper bound). Nothing is generated or billed. |
 | `ideogram_generation` | Collect the result of a generation by its generation_id (from a tool that answered 'still running', or from an earlier session): waits up to wait_s for it, then saves its images. Reading a generation is free and never runs it again. |
 | `ideogram_operations` | Discover what Ideogram's API offers and what this server serves: no input = every family; family = its operations (model, class, support, quotable); operation = its fields, file limits and rules, ready for ideogram_api. |
-| `ideogram_api` | Advanced: call an Ideogram operation by id (from ideogram_operations) when no curated tool covers it — e.g. precise edit, remove background, remove object. params holds path, query, headers and body apart; files maps local files to file fields. Checked against the operation's own schema before anything is sent; dry_run prices it instead. |
+| `ideogram_api` | Advanced: call an Ideogram operation by id (from ideogram_operations) when no curated tool covers it — a model the documentation index does not list (allow_undocumented), or a call with webhook_url / target_collection_id. params holds path, query, headers and body apart; files maps local files to file fields. Checked against the operation's own schema before anything is sent; dry_run prices it instead. |
 
 ## Families
 
@@ -515,7 +519,7 @@ Generate with Z-Image
 |---|---|---|---|---|---|---|---|
 | — | `post_v1_edit_image` | `POST /v1/edit` | v1_only | planned | no | none | multipart |
 | — | `post_v1_edit_lite_image` | `POST /v1/edit-lite` | v1_only | planned | no | none | multipart |
-| ideogram-4-5 | `post_precise_edit_image_v2_ideogram45` | `POST /v2/image/precise-edit/ideogram-4-5` | documented | raw | yes | optional | multipart + json |
+| ideogram-4-5 | `post_precise_edit_image_v2_ideogram45` | `POST /v2/image/precise-edit/ideogram-4-5` | documented | curated | yes | optional | multipart + json |
 
 #### ideogram-4-5 — `POST /v2/image/precise-edit/ideogram-4-5`
 
@@ -542,8 +546,15 @@ Precise edit with Ideogram 4.5
 File limits: `image` 50 MB; `mask` 50 MB; `reference_images` 50 MB × 4.
 
 Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
 - image and image_asset_identifier are alternatives; give one
 - mask needs the source image as a file in the same request (image / images)
+- reference_image_asset_identifiers needs the edited image by reference too (image_asset_identifier) and cannot be combined with mask
+- with a mask, reference_images takes at most three files
+- context_window needs the image as a file in the same request (image)
+- context_window "auto" needs a mask
+- reference_images and reference_image_asset_identifiers are alternatives (the files would be ignored); give one
+- context_window names a region as y_min,x_min,y_max,x_max: whole numbers, max above min, each side at least 256 px, aspect ratio between 1:6 and 6:1, at most 4194304 pixels
 
 ### inpaint
 
@@ -584,6 +595,7 @@ Inpaint with Ideogram 3.0
 File limits: `image` 25 MB; `mask` 50 MB (not stated; this server's cap); `style_reference_images` 25 MB × 10.
 
 Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
 - style_preset cannot be combined with style codes or style references
 - inpaint needs the source (image or image_asset_identifier) and the mask (mask or mask_asset_identifier)
 
@@ -622,6 +634,7 @@ Inpaint a consistent character with Ideogram 3.0
 File limits: `character_reference_images` 25 MB × 1; `character_reference_mask` 50 MB (not stated; this server's cap); `image` 25 MB; `mask` 50 MB (not stated; this server's cap); `style_reference_images` 25 MB × 10.
 
 Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
 - inpaint needs the source (image or image_asset_identifier) and the mask (mask or mask_asset_identifier)
 - character_reference_mask needs character_reference_images
 - a character model needs a character reference: character_reference_images, character_reference_asset_identifiers or character_reference_collection_id
@@ -656,6 +669,7 @@ Inpaint with a custom Ideogram 3.0 model
 File limits: `image` 25 MB; `mask` 50 MB (not stated; this server's cap); `style_reference_images` 25 MB × 10.
 
 Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
 - style_preset cannot be combined with style codes or style references
 - inpaint needs the source (image or image_asset_identifier) and the mask (mask or mask_asset_identifier)
 
@@ -704,6 +718,7 @@ Remix with automatic model selection
 File limits: `image` 50 MB.
 
 Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
 - image and image_asset_identifier are alternatives; give one
 
 #### ideogram-3 — `POST /v2/image/remix/ideogram-3`
@@ -740,6 +755,7 @@ Remix with Ideogram 3.0
 File limits: `image` 50 MB; `style_reference_images` 25 MB × 10.
 
 Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
 - resolution and aspect_ratio cannot be combined; give one
 - image and image_asset_identifier are alternatives; give one
 - style_preset cannot be combined with style codes or style references
@@ -780,6 +796,7 @@ Remix a consistent character with Ideogram 3.0
 File limits: `character_reference_images` 25 MB × 1; `character_reference_mask` 50 MB (not stated; this server's cap); `image` 50 MB; `style_reference_images` 25 MB × 10.
 
 Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
 - resolution and aspect_ratio cannot be combined; give one
 - image and image_asset_identifier are alternatives; give one
 - character_reference_mask needs character_reference_images
@@ -817,6 +834,7 @@ Remix with a custom Ideogram 3.0 model
 File limits: `image` 50 MB; `style_reference_images` 25 MB × 10.
 
 Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
 - resolution and aspect_ratio cannot be combined; give one
 - image and image_asset_identifier are alternatives; give one
 - style_preset cannot be combined with style codes or style references
@@ -843,6 +861,7 @@ Remix with Ideogram 4.0
 File limits: `image` 50 MB.
 
 Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
 - image and image_asset_identifier are alternatives; give one
 
 ### reframe
@@ -871,6 +890,9 @@ Reframe an image, letting Ideogram pick the model
 
 File limits: `image` 50 MB.
 
+Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
+
 #### bria-expand — `POST /v2/image/reframe/bria-expand`
 
 Reframe an image with Bria Expand
@@ -884,6 +906,9 @@ Reframe an image with Bria Expand
 | `seed` | integer |  |
 
 File limits: `image` 50 MB.
+
+Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
 
 #### gpt-image-2-5-flare — `POST /v2/image/reframe/gpt-image-2-5-flare`
 
@@ -900,6 +925,9 @@ Reframe an image with GPT Image 2.5 Flare
 | `seed` | integer |  |
 
 File limits: `image` 50 MB.
+
+Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
 
 #### ideogram-3 — `POST /v2/image/reframe/ideogram-3`
 
@@ -922,6 +950,9 @@ Reframe with Ideogram 3.0
 
 File limits: `image` 25 MB; `style_reference_images` 25 MB × 10.
 
+Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
+
 #### nano-banana-2 — `POST /v2/image/reframe/nano-banana-2`
 
 Reframe with Nano Banana 2
@@ -936,6 +967,9 @@ Reframe with Nano Banana 2
 | `seed` | integer |  |
 
 File limits: `image` 50 MB.
+
+Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
 
 #### nano-banana-pro — `POST /v2/image/reframe/nano-banana-pro`
 
@@ -952,6 +986,9 @@ Reframe an image with Nano Banana Pro
 | `seed` | integer |  |
 
 File limits: `image` 50 MB.
+
+Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
 
 ### upscale
 
@@ -983,6 +1020,9 @@ Upscale with automatic model selection
 
 File limits: `image` 50 MB.
 
+Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
+
 #### nano-banana-pro — `POST /v2/image/upscale/nano-banana-pro`
 
 Upscale with Nano Banana Pro
@@ -1000,6 +1040,9 @@ Upscale with Nano Banana Pro
 | `webhook_url` | string |  |
 
 File limits: `image` 50 MB.
+
+Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
 
 #### topaz-bloom-2 — `POST /v2/image/upscale/topaz-bloom-2`
 
@@ -1020,6 +1063,9 @@ Upscale with Topaz Bloom 2
 | `webhook_url` | string |  |
 
 File limits: `image` 50 MB.
+
+Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
 
 #### topaz-redefine — `POST /v2/image/upscale/topaz-redefine`
 
@@ -1050,6 +1096,9 @@ Upscale with Topaz Redefine
 
 File limits: `image` 50 MB.
 
+Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
+
 #### topaz-standard-2 — `POST /v2/image/upscale/topaz-standard-2`
 
 Upscale with Topaz Standard V2
@@ -1073,6 +1122,9 @@ Upscale with Topaz Standard V2
 | `webhook_url` | string |  |
 
 File limits: `image` 50 MB.
+
+Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
 
 #### topaz-text-refine — `POST /v2/image/upscale/topaz-text-refine`
 
@@ -1099,6 +1151,9 @@ Upscale with Topaz Text Refine
 
 File limits: `image` 50 MB.
 
+Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
+
 #### topaz-wonder-3-5 — `POST /v2/image/upscale/topaz-wonder-3-5`
 
 Upscale with Topaz Wonder 3.5
@@ -1116,6 +1171,9 @@ Upscale with Topaz Wonder 3.5
 | `webhook_url` | string |  |
 
 File limits: `image` 50 MB.
+
+Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
 
 ### replace_background
 
@@ -1140,6 +1198,9 @@ Replace background with GPT Image 2
 
 File limits: `image` 50 MB.
 
+Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
+
 #### ideogram-3 — `POST /v2/image/replace-background/ideogram-3`
 
 Replace background with Ideogram 3.0
@@ -1156,11 +1217,14 @@ Replace background with Ideogram 3.0
 
 File limits: `image` 50 MB.
 
+Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
+
 ### remove_background
 
 | model | operation | path | class | support | quotable | async | body |
 |---|---|---|---|---|---|---|---|
-| ideogram-1 | `post_remove_background_v2` | `POST /v2/image/remove-background/ideogram-1` | documented | raw | yes | optional | multipart + json |
+| ideogram-1 | `post_remove_background_v2` | `POST /v2/image/remove-background/ideogram-1` | documented | curated | yes | optional | multipart + json |
 
 #### ideogram-1 — `POST /v2/image/remove-background/ideogram-1`
 
@@ -1176,11 +1240,14 @@ Remove background
 
 File limits: `image` 25 MB.
 
+Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
+
 ### remove_object
 
 | model | operation | path | class | support | quotable | async | body |
 |---|---|---|---|---|---|---|---|
-| ideogram-1 | `post_remove_object_from_v2_assets` | `POST /v2/image/remove-object/ideogram-1` | documented | raw | yes | only | multipart + json |
+| ideogram-1 | `post_remove_object_from_v2_assets` | `POST /v2/image/remove-object/ideogram-1` | documented | curated | yes | only | multipart + json |
 
 #### ideogram-1 — `POST /v2/image/remove-object/ideogram-1`
 
@@ -1197,6 +1264,10 @@ Remove an object
 | `target_collection_id` | string |  |
 
 File limits: `image` 50 MB; `mask` 50 MB.
+
+Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
+- remove object needs the source (image or image_asset_identifier) and the mask (mask or mask_asset_identifier)
 
 ### describe
 
@@ -1216,6 +1287,9 @@ Describe with Ideogram 3.0
 
 File limits: `image` 10 MB.
 
+Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
+
 #### ideogram-4 — `POST /v2/image/describe/ideogram-4`
 
 Describe with Ideogram 4.0
@@ -1230,12 +1304,37 @@ Describe with Ideogram 4.0
 
 File limits: `image` 10 MB.
 
+Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
+
 ### layerize
 
 | model | operation | path | class | support | quotable | async | body |
 |---|---|---|---|---|---|---|---|
 | — | `post_layerize_logos` | `POST /v1/layerize-logos` | v1_only | planned | no | none | multipart |
-| ideogram-3 | `post_layerize_design_ideogram_v3` | `POST /v2/design/layerize/ideogram-3` | documented | planned | yes | optional | multipart + json |
+| ideogram-3 | `post_layerize_design_ideogram_v3` | `POST /v2/design/layerize/ideogram-3` | documented | curated | yes | optional | multipart + json |
+
+#### ideogram-3 — `POST /v2/design/layerize/ideogram-3`
+
+Layerize text with Ideogram 3.0
+
+| field | kind | required |
+|---|---|---|
+| `async` | boolean |  |
+| `font_candidate_files` | local file paths |  |
+| `image` | local file path |  |
+| `image_asset_identifier` | object |  |
+| `private` | boolean \| null |  |
+| `prompt` | one of several shapes |  |
+| `seed` | integer |  |
+| `target_collection_id` | string |  |
+| `webhook_url` | string |  |
+
+File limits: `font_candidate_files` 5 MB; `image` 50 MB.
+
+Rules:
+- needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)
+- font_candidate_files takes at most 5 files
 
 ### video_text
 
