@@ -190,15 +190,15 @@ function refuse(response: IncomingMessage, message: string): never {
   throw new Error(message);
 }
 
-/** One GET of the URL, the socket connected to `address` when one was judged (the host name stays the SNI and the
- * Host header), aborted by the budget's signal; the response head, its body not yet read. */
-function requestHead(url: URL, address: string | null, budget: CallBudget): Promise<IncomingMessage> {
+/** One GET of the URL, the socket connected to one of the judged `addresses` (every one was judged; Node's happy
+ * eyeballs picks among them when it asks for all, else the first) — the host name stays the SNI and the Host
+ * header —, aborted by the budget's signal; the response head, its body not yet read. */
+function requestHead(url: URL, addresses: readonly string[] | null, budget: CallBudget): Promise<IncomingMessage> {
   const request = url.protocol === "https:" ? httpsRequest : httpRequest;
-  // net.connect asks its lookup with `all: true` (happy eyeballs) or without: both answers name the one judged address
-  const family = address === null ? 0 : isIP(address);
-  const lookupPinned = address === null ? undefined : (_host: string, options: { all?: boolean }, callback: (err: Error | null, result: unknown, family?: number) => void): void => {
-    if (options.all === true) callback(null, [{ address, family }]);
-    else callback(null, address, family);
+  const judged = addresses === null ? null : addresses.map((address) => ({ address, family: isIP(address) }));
+  const lookupPinned = judged === null ? undefined : (_host: string, options: { all?: boolean }, callback: (err: Error | null, result: unknown, family?: number) => void): void => {
+    if (options.all === true) callback(null, judged);
+    else callback(null, judged[0].address, judged[0].family);
   };
   return new Promise((done, fail) => {
     // agent: false — a fresh socket per fetch, never a pooled one that another lookup's judgement opened
@@ -208,8 +208,10 @@ function requestHead(url: URL, address: string | null, budget: CallBudget): Prom
   });
 }
 
-/** The promise, or the budget's end if it comes first (the work behind it goes on unobserved — a lookup cannot be cancelled). */
+/** The promise, or the budget's end if it comes first. The work behind it goes on unobserved (a lookup cannot be
+ * cancelled) and its later rejection is swallowed here: an orphaned rejection would end the process. */
 function withinBudget<T>(work: Promise<T>, budget: CallBudget): Promise<T> {
+  work.catch(() => undefined);
   if (budget.signal.aborted) return Promise.reject(new BudgetEndedHere());
   return new Promise<T>((done, fail) => {
     const onAbort = (): void => fail(new BudgetEndedHere());
@@ -224,9 +226,9 @@ class BudgetEndedHere extends Error {
   }
 }
 
-/** The host's addresses, judged (unless `judge` is off: the loopback test of the pinning itself); the first one is
- * the address the connection is pinned to. */
-async function checkHost(url: string, options: RemoteFetchOptions, judge: boolean): Promise<string> {
+/** The host's addresses, judged (unless `judge` is off: the loopback test of the pinning itself): the addresses the
+ * connection is pinned to. */
+async function checkHost(url: string, options: RemoteFetchOptions, judge: boolean): Promise<readonly string[]> {
   const host = hostOf(new URL(url));
   let addresses: readonly string[];
   try {
@@ -237,7 +239,7 @@ async function checkHost(url: string, options: RemoteFetchOptions, judge: boolea
   }
   const byAddress = judge ? addressRefusal(host, addresses) : addresses.length === 0 ? `${host} resolves to no address` : null;
   if (byAddress !== null) throw new Error(`${url}: ${byAddress}`);
-  return addresses[0];
+  return addresses;
 }
 
 /** Fetches one input from a public HTTPS URL under the rules above; every refusal is a sentence naming the URL. In

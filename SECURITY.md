@@ -64,7 +64,7 @@ We will acknowledge your report within 48 hours and aim to release a fix within 
 - Does not execute arbitrary code
 - Does not access the filesystem outside of validated image paths
 - Does not store or cache API keys on disk
-- Does not make network requests to any host other than `api.ideogram.ai` and its CDN
+- Does not make network requests to any host other than `api.ideogram.ai` and its CDN, except the public https host a caller names as a URL input — judged and pinned as the network table says
 - Does not collect, transmit, or log any user data
 
 ## Code Review History

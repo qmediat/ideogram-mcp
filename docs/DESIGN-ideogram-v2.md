@@ -270,9 +270,10 @@ reads a result only from the tool's answer. Two opt-in surfaces serve it; both a
 
 No residual on the fetch itself remains named; the lookup cannot be cancelled (it ends the call, its answer is
 dropped) and a public host is reachable by anyone on the internet anyway. A test server on the loopback is reachable only with the client built for it
-(`allowHttpDownloads`, the same switch the download client's tests use: it relaxes the scheme, the IP-literal and the
+(`loopbackRemoteInputs`, a client option of its own, off by default: it relaxes the scheme, the IP-literal and the
 address checks and nothing else — a URL with credentials stays refused); the server never sets it, and a test proves
-the default context refuses an http loopback URL, an IP literal and a local name.
+the default context refuses an http loopback URL, an IP literal and a local name. Every judged address is handed to
+the socket (Node's happy eyeballs picks a reachable one among them), never one that was not judged.
 
 **Images returned inline** (`inline_images: true` on every tool that saves images: the family tools,
 `ideogram_generation`, `ideogram_api`). Each saved image under 3.75 MB (`INLINE_MAX_BYTES`: the model APIs behind the

@@ -142,3 +142,28 @@ test("the connection is pinned to the address the lookup answered: the name is n
     await api.close();
   }
 });
+
+test("every judged address is handed to the socket: an unreachable first address falls through to a reachable one; a lookup that rejects after the budget ended is swallowed, never an unhandled rejection", async () => {
+  const api = await startFakeApi(() => ({ status: 200, headers: { "content-type": "image/png" }, body: PNG }));
+  const unhandled = [];
+  const onUnhandled = (reason) => unhandled.push(reason);
+  process.on("unhandledRejection", onUnhandled);
+  try {
+    const port = new URL(api.base).port;
+    const options = { maxBytes: 1000, accepted: ["image/png"], budget: openBudget(), loopback: true, resolve: async () => ["192.0.2.1", "127.0.0.1"] };
+    const got = await fetchRemoteInput(`http://pinned.example:${port}/a.png`, options);
+    assert.deepEqual(Buffer.from(got.bytes), PNG, "served by the second judged address");
+    const cancel = new AbortController();
+    cancel.abort(new Error("gone"));
+    const { toolCallBudget, SYSTEM_CLOCK } = await import("../dist/budget.js");
+    let rejectLookup;
+    const late = { maxBytes: 1000, accepted: ["image/png"], budget: toolCallBudget(SYSTEM_CLOCK, cancel.signal), resolve: () => new Promise((_, fail) => { rejectLookup = fail; }) };
+    await assert.rejects(() => fetchRemoteInput("https://cdn.example.com/a.png", late), /not fetched/);
+    rejectLookup(new Error("ENOTFOUND, late"));
+    await new Promise((r) => setTimeout(r, 20));
+    assert.deepEqual(unhandled, [], "the late rejection is swallowed");
+  } finally {
+    process.off("unhandledRejection", onUnhandled);
+    await api.close();
+  }
+});
