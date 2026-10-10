@@ -46,6 +46,10 @@ export interface RequestLimit {
  * (".ttf, .otf, .woff, .woff2"); test/overlay.test.mjs derives the same set from the specification. */
 export const FONT_FILE_FIELDS: ReadonlySet<string> = new Set(["font_candidate_files", "font_file_body", "font_file_h1", "font_file_h2", "font_file_small"]);
 
+/** The operations whose file field takes training assets — images, .txt caption sidecars and .zip archives — as the
+ * field's description states ("Image files (JPEG, PNG, WebP), .txt caption sidecar files, and/or ZIP archives"). */
+export const DATASET_UPLOAD_OPERATIONS: ReadonlySet<string> = new Set(["upload_dataset_assets"]);
+
 export function quoteAllowed(op: Operation): boolean {
   return isExposable(op) && op.dryRun;
 }
@@ -302,6 +306,55 @@ export const CONSTRAINTS: readonly Constraint[] = [
     anchor: { field: "mask", phrase: /marks the region to remove/ },
     text: "remove object needs the source (image or image_asset_identifier) and the mask (mask or mask_asset_identifier)",
     violated: (f) => !anyGiven(f, ["image", "image_asset_identifier"]) || !anyGiven(f, ["mask", "mask_asset_identifier"]),
+  },
+  {
+    id: "training-steps",
+    operations: new Set(["train_model_v3_advanced", "train_model_v4_advanced"]),
+    anchor: { field: "training_steps", phrase: /between 100 and 10000 and a multiple of 100/ },
+    text: "training_steps must be between 100 and 10000 and a multiple of 100",
+    violated: (f) => f.training_steps !== undefined && !(Number.isInteger(f.training_steps) && (f.training_steps as number) >= 100 && (f.training_steps as number) <= 10000 && (f.training_steps as number) % 100 === 0),
+  },
+  {
+    id: "lora-rank",
+    operations: new Set(["train_model_v3_advanced", "train_model_v4_advanced"]),
+    anchor: { field: "lora_rank", phrase: /Must be one of 64 or 128/ },
+    text: "lora_rank must be 64 or 128",
+    violated: (f) => f.lora_rank !== undefined && ![64, 128].includes(f.lora_rank as number),
+  },
+  {
+    id: "ema-open-interval",
+    operations: new Set(["train_model_v3_advanced", "train_model_v4_advanced"]),
+    anchor: { field: "ema", phrase: /between 0 and 1 \(exclusive\)/ },
+    text: "ema must be between 0 and 1, both excluded",
+    violated: (f) => f.ema !== undefined && !(typeof f.ema === "number" && f.ema > 0 && f.ema < 1),
+  },
+  {
+    id: "learning-rate-positive",
+    operations: new Set(["train_model_v3_advanced", "train_model_v4_advanced"]),
+    anchor: { field: "learning_rate", phrase: /Must be greater than 0/ },
+    text: "learning_rate must be above 0",
+    violated: (f) => f.learning_rate !== undefined && !(typeof f.learning_rate === "number" && f.learning_rate > 0),
+  },
+  {
+    id: "batch-size",
+    operations: new Set(["train_model_v4_advanced"]),
+    anchor: { field: "batch_size", phrase: /Must be one of 1, 2, 4, 8, 16, or 32/ },
+    text: "batch_size must be 1, 2, 4, 8, 16 or 32",
+    violated: (f) => f.batch_size !== undefined && ![1, 2, 4, 8, 16, 32].includes(f.batch_size as number),
+  },
+  {
+    id: "base-variant",
+    operations: new Set(["train_model_v4_advanced"]),
+    anchor: { field: "base_variant", phrase: /Must be one of `?distilled_gd`? .* or `?oldbase_farzad_fused`?/ },
+    text: "base_variant must be distilled_gd or oldbase_farzad_fused",
+    violated: (f) => f.base_variant !== undefined && !["distilled_gd", "oldbase_farzad_fused"].includes(f.base_variant as string),
+  },
+  {
+    id: "model-name",
+    operations: new Set(["train_model_v3", "train_model_v3_advanced", "train_model_v4", "train_model_v4_advanced"]),
+    anchor: { field: "model_name", phrase: /5-30 characters, alphanumeric with spaces and hyphens allowed/ },
+    text: "model_name must be 5-30 characters of letters, digits, spaces and hyphens",
+    violated: (f) => typeof f.model_name === "string" && !/^[A-Za-z0-9 -]{5,30}$/.test(f.model_name.trim()),
   },
   {
     id: "source-size-needs-images",

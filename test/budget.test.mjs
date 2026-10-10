@@ -1,5 +1,6 @@
 // The schema budget of the shipped release (docs/DESIGN-ideogram-v2.md section 5): tools/list as a client receives it,
-// over a real MCP session, is at most 80 KB (16 tools: the eleven image families, measured 2026-10-10), and the
+// over a real MCP session, is at most 88 KB (23 tools after step 3: the eleven image families, the account, the
+// training — 80 KB held through step 2; step 3 measured 83 338 bytes before its field prose was trimmed), and the
 // per-model exactness that costs those bytes is really there.
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -10,7 +11,7 @@ const { createServer } = await import("../dist/server.js");
 const { documentedModelsOf } = await import("../dist/registry.js");
 const { IdeogramClient, defaultClientOptions } = await import("../dist/client.js");
 
-const BUDGET_BYTES = 80 * 1024;
+const BUDGET_BYTES = 88 * 1024;
 
 async function listTools() {
   const ctx = { client: new IdeogramClient(defaultClientOptions("unused")), outputDir: "/tmp/unused", clock: { now: () => 0, sleep: async () => {} } };
@@ -25,7 +26,7 @@ async function listTools() {
   }
 }
 
-test("the serialized tools/list is within the 80 KB budget", async () => {
+test("the serialized tools/list is within the 88 KB budget", async () => {
   const listed = await listTools();
   const bytes = Buffer.byteLength(JSON.stringify(listed));
   assert.ok(bytes <= BUDGET_BYTES, `tools/list is ${bytes} bytes, over ${BUDGET_BYTES}`);

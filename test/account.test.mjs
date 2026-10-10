@@ -85,7 +85,7 @@ test("ideogram_usage: a large buckets JSON is written to the file and not printe
   assert.match(text(empty.result), /Ideogram listed no bucket for this range\./);
   const denied = await call("ideogram_usage", {}, () => ({ status: 404, json: { error: "not found" } }));
   assert.equal(denied.result.isError, true);
-  assert.match(text(denied.result), /Reading the usage needs an API key whose owner is an organization admin/);
+  assert.match(text(denied.result), /Reading the usage: needs an API key whose owner is an organization admin/);
 });
 
 test("ideogram_usage: a bad time, a range over the API's span, a start after the end and an empty sources are refused before any request; a body off the schema is a contract mismatch, not a success", async () => {
@@ -123,7 +123,7 @@ test("ideogram_invoices and ideogram_api_keys list what the API returns; a 404 s
   assert.match(text(big.result), /not printed here, over 65536 bytes/, "a long listing stays in its file");
   const denied = await call("ideogram_invoices", {}, () => ({ status: 404, json: { error: "not found" } }));
   assert.equal(denied.result.isError, true);
-  assert.match(text(denied.result), /needs an API key whose owner is an organization admin .*\(its answer: .*not found/);
+  assert.match(text(denied.result), /Listing invoices: needs an API key whose owner is an organization admin .*\(Ideogram's answer: .*not found/);
 });
 
 test("decimal sums never go through floats: 0.1 + 0.2 is 0.3, nine places kept, a non-decimal is null", async () => {

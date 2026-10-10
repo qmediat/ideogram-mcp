@@ -38,6 +38,10 @@ Fields of the operations this release serves (curated or raw) are listed below t
 | `ideogram_usage` | Your organization's billed API usage as Ideogram reports it: dense time buckets of line items (product, endpoint, cost, units, the redacted API key), summed per product, unit and currency here, the buckets written unchanged to a file in the output directory (the shape ai-cost reads; printed too when small). Default: the last 7 days by day. Needs an API key whose owner is an organization admin. Reads only. |
 | `ideogram_invoices` | Your organization's invoices with their line items — the billing record the usage reconciles against. Needs an API key whose owner is an organization admin. Reads only. |
 | `ideogram_api_keys` | The API keys in your organization, newest first, key material redacted (the id and the redacted prefix match the usage report's line items). Needs an API key whose owner is an organization admin. Reads only. |
+| `ideogram_datasets` | Your training datasets: the list (optionally searched by name), or one dataset by id with its files, captions and the models trained from it. Reads only. |
+| `ideogram_dataset_upload` | Upload images (JPEG, PNG, WebP), caption sidecars (.txt/.json named like their image) and .zip archives into a dataset — an existing one by dataset_id, or a new one created from name — from local paths or public https URLs. Answers what was accepted and what failed and why. |
+| `ideogram_train` | Start training a custom Ideogram 4.0 (default) or 3.0 model from a dataset of 15-100 images; a hyperparameter routes to the advanced operation. Returns the model id to follow with ideogram_models; a completed model's custom_model_uri generates through ideogram_generate. |
+| `ideogram_models` | Your custom models and those shared with your organization: the list (by scope and status), or one by id with its training runs. Reads only. |
 | `ideogram_operations` | Discover what Ideogram's API offers and what this server serves: no input = every family; family = its operations (model, class, support, quotable); operation = its fields, file limits and rules, ready for ideogram_api. |
 | `ideogram_api` | Advanced: call an Ideogram operation by id (from ideogram_operations) when no curated tool covers it — a model the documentation index does not list (allow_undocumented), or a call with webhook_url / target_collection_id. params holds path, query, headers and body apart; files maps local files or public https URLs to file fields. Checked against the operation's own schema before anything is sent; dry_run prices it instead. |
 
@@ -1463,14 +1467,145 @@ No body.
 
 | model | operation | path | class | support | quotable | async | body |
 |---|---|---|---|---|---|---|---|
-| — | `list_datasets` | `GET /datasets` | v1_only | planned | no | none | none |
-| — | `create_dataset` | `POST /datasets` | v1_only | planned | no | none | json |
-| — | `get_dataset` | `GET /datasets/{dataset_id}` | v1_only | planned | no | none | none |
-| — | `train_dataset_model` | `POST /datasets/{dataset_id}/train_model` | v1_only | planned | no | none | json |
-| — | `upload_dataset_assets` | `POST /datasets/{dataset_id}/upload_assets` | v1_only | planned | no | none | multipart |
-| — | `list_custom_models` | `GET /models` | v1_only | planned | no | none | none |
-| — | `get_custom_model` | `GET /models/{model_id}` | v1_only | planned | no | none | none |
-| — | `train_model_v3` | `POST /v1/ideogram-v3/train-model` | v1_only | planned | no | none | json |
-| — | `train_model_v3_advanced` | `POST /v1/ideogram-v3/train-model-advanced` | v1_only | planned | no | none | json |
-| — | `train_model_v4` | `POST /v1/ideogram-v4/train-model` | v1_only | planned | no | none | json |
-| — | `train_model_v4_advanced` | `POST /v1/ideogram-v4/train-model-advanced` | v1_only | planned | no | none | json |
+| — | `list_datasets` | `GET /datasets` | v1_only | curated | no | none | none |
+| — | `create_dataset` | `POST /datasets` | v1_only | curated | no | none | json |
+| — | `get_dataset` | `GET /datasets/{dataset_id}` | v1_only | curated | no | none | none |
+| — | `train_dataset_model` | `POST /datasets/{dataset_id}/train_model` | v1_only | raw | no | none | json |
+| — | `upload_dataset_assets` | `POST /datasets/{dataset_id}/upload_assets` | v1_only | curated | no | none | multipart |
+| — | `list_custom_models` | `GET /models` | v1_only | curated | no | none | none |
+| — | `get_custom_model` | `GET /models/{model_id}` | v1_only | curated | no | none | none |
+| — | `train_model_v3` | `POST /v1/ideogram-v3/train-model` | v1_only | curated | no | none | json |
+| — | `train_model_v3_advanced` | `POST /v1/ideogram-v3/train-model-advanced` | v1_only | curated | no | none | json |
+| — | `train_model_v4` | `POST /v1/ideogram-v4/train-model` | v1_only | curated | no | none | json |
+| — | `train_model_v4_advanced` | `POST /v1/ideogram-v4/train-model-advanced` | v1_only | curated | no | none | json |
+
+#### list_datasets — `GET /datasets`
+
+List datasets
+
+Parameters: `search (query)`.
+
+No body.
+
+#### create_dataset — `POST /datasets`
+
+Create a new dataset
+
+| field | kind | required |
+|---|---|---|
+| `name` | string | yes |
+
+#### get_dataset — `GET /datasets/{dataset_id}`
+
+Get a dataset
+
+Parameters: `dataset_id (path, required)`.
+
+No body.
+
+#### train_dataset_model — `POST /datasets/{dataset_id}/train_model`
+
+Train a model from a dataset
+
+Parameters: `dataset_id (path, required)`.
+
+| field | kind | required |
+|---|---|---|
+| `model_name` | string | yes |
+
+#### upload_dataset_assets — `POST /datasets/{dataset_id}/upload_assets`
+
+Upload assets to a dataset
+
+Parameters: `dataset_id (path, required)`.
+
+| field | kind | required |
+|---|---|---|
+| `files` | local file paths or public https URLs | yes |
+
+File limits: `files` 50 MB (not stated; this server's cap).
+
+#### list_custom_models — `GET /models`
+
+List models
+
+Parameters: `scope (query)`, `status (query, repeated)`.
+
+No body.
+
+#### get_custom_model — `GET /models/{model_id}`
+
+Get model details
+
+Parameters: `model_id (path, required)`.
+
+No body.
+
+#### train_model_v3 — `POST /v1/ideogram-v3/train-model`
+
+Train a custom Ideogram v3 model
+
+| field | kind | required |
+|---|---|---|
+| `dataset_id` | string | yes |
+| `model_name` | string | yes |
+
+Rules:
+- model_name must be 5-30 characters of letters, digits, spaces and hyphens
+
+#### train_model_v3_advanced — `POST /v1/ideogram-v3/train-model-advanced`
+
+Train a custom Ideogram v3 model with advanced hyperparameters
+
+| field | kind | required |
+|---|---|---|
+| `dataset_id` | string | yes |
+| `ema` | number |  |
+| `learning_rate` | number |  |
+| `lora_rank` | integer |  |
+| `model_name` | string | yes |
+| `training_steps` | integer |  |
+
+Rules:
+- training_steps must be between 100 and 10000 and a multiple of 100
+- lora_rank must be 64 or 128
+- ema must be between 0 and 1, both excluded
+- learning_rate must be above 0
+- model_name must be 5-30 characters of letters, digits, spaces and hyphens
+
+#### train_model_v4 — `POST /v1/ideogram-v4/train-model`
+
+Train a custom Ideogram v4 model
+
+| field | kind | required |
+|---|---|---|
+| `dataset_id` | string | yes |
+| `model_name` | string | yes |
+
+Rules:
+- model_name must be 5-30 characters of letters, digits, spaces and hyphens
+
+#### train_model_v4_advanced — `POST /v1/ideogram-v4/train-model-advanced`
+
+Train a custom Ideogram v4 model with advanced hyperparameters
+
+| field | kind | required |
+|---|---|---|
+| `base_variant` | string |  |
+| `batch_size` | integer |  |
+| `dataset_id` | string | yes |
+| `ema` | number |  |
+| `learning_rate` | number |  |
+| `lora_rank` | integer |  |
+| `model_name` | string | yes |
+| `training_steps` | integer |  |
+| `wandb_project` | string |  |
+
+Rules:
+- training_steps must be between 100 and 10000 and a multiple of 100
+- lora_rank must be 64 or 128
+- ema must be between 0 and 1, both excluded
+- learning_rate must be above 0
+- batch_size must be 1, 2, 4, 8, 16 or 32
+- base_variant must be distilled_gd or oldbase_farzad_fused
+- model_name must be 5-30 characters of letters, digits, spaces and hyphens

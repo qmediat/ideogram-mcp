@@ -102,6 +102,10 @@ Add to `claude_desktop_config.json`:
 | `ideogram_usage` | Billed usage as Ideogram reports it: buckets of line items summed per product and currency, the buckets handed on (the shape ai-cost reads); default the last 7 days by day | — |
 | `ideogram_invoices` | The organization's invoices with their line items (organization-admin key) | — |
 | `ideogram_api_keys` | The organization's API keys, redacted (organization-admin key) | — |
+| `ideogram_datasets` | Your training datasets: the list (searched by name) or one with its files and models | — |
+| `ideogram_dataset_upload` | Images, .txt captions and .zip archives into a dataset (an existing one, or a new one from a name); local paths or public https URLs | — |
+| `ideogram_train` | Train a custom model from a dataset of 15–100 images; hyperparameters route to the advanced operation | `ideogram-4` (default), `ideogram-3` |
+| `ideogram_models` | Your custom models and the shared ones, or one with its training runs; a completed model's `custom_model_uri` generates through `ideogram_generate` | — |
 | `ideogram_operations` | What the API offers: families, operations, fields, limits | — |
 | `ideogram_api` | Any served operation by id, including the ones the documentation index does not list (the reframe models `auto`, `bria-expand`, `gpt-image-2-5-flare`, `nano-banana-pro`) | — |
 
@@ -144,6 +148,16 @@ const kid = verifyWebhook(
 );
 if (kid === null) reject(); // the key id that verified, else null
 ```
+
+### Training a custom model
+
+Drop a folder of references: `ideogram_dataset_upload {"name": "brand refs", "files": ["…/1.png", "…/1.txt", "…/more.zip"]}`
+creates the dataset and uploads the assets (a caption sidecar `x.txt` goes with `x.png`; an archive may hold both),
+`ideogram_train {"dataset_id": "…", "model_name": "Brand Refs"}` starts an Ideogram 4.0 training (`"model": "ideogram-3"`
+for 3.0; `training_steps`, `lora_rank`, `ema`, `learning_rate` — and for 4.0 `batch_size`, `base_variant`,
+`wandb_project` — route to the advanced operation), `ideogram_models {"model_id": "…"}` follows it, and a COMPLETED
+model's `custom_model_uri` generates through `ideogram_generate` with `model: "ideogram-4-custom-model"`. Training is
+billed by Ideogram per its plan; the tools say what was started, never start it twice.
 
 ### Waiting, and collecting later
 

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Step 1 of `docs/DESIGN-ideogram-v2.md`: every image family of Ideogram's documentation index has its own tool.
 Step 2: the account — usage and spend, invoices, API keys — and the webhook signature helper.
+Step 3: custom-model training — datasets, their assets, the training of an Ideogram 4.0 or 3.0 model, the models.
 
 ### Added
 
@@ -42,6 +43,14 @@ Step 2: the account — usage and spend, invoices, API keys — and the webhook 
   missing header is null, never a throw. A helper for the receiver: this server receives no webhook itself (a stdio process has no public
   URL); where `request_id`, `user_id` and `timestamp` travel is not stated by the specification.
 - `ideogram_operations` and the API reference list an operation's path and query parameters.
+- `ideogram_datasets` (the list, searched by name, or one dataset with its files, captions and the models trained
+  from it), `ideogram_dataset_upload` (images, .txt caption sidecars and .zip archives — local paths or public https
+  URLs — into an existing dataset or a new one created from a name; what was accepted and what failed, with the
+  reason), `ideogram_train` (an Ideogram 4.0 or 3.0 model from a dataset of 15 to 100 images; any hyperparameter
+  routes to the advanced operation, each checked by its own schema; a field the model's training does not take is
+  refused by name) and `ideogram_models` (the list by scope and status, or one model with its training runs): the
+  v1 endpoints the index keeps for training, curated. `train_dataset_model` is served raw. Support: curated 57 · raw
+  6 · planned 64; tools/list: 23 tools.
 - `get_asset_reference_usage` (spec-only) is served by `ideogram_api` behind `allow_undocumented`: a spec-only
   operation of a curated family is raw, as the undocumented reframe models are. Support: curated 47 · raw 5 ·
   planned 75. tools/list: 19 tools.
