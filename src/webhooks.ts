@@ -35,22 +35,32 @@ export interface VerifyOptions {
   readonly now?: number;
 }
 
+/** A header as Node hands it over: one value, several (repeated), or none. */
+export type HeaderValue = string | readonly string[] | undefined;
+
 export interface WebhookDelivery {
   /** The raw request body, exactly as received. */
   readonly body: string | Uint8Array;
-  readonly requestId: string;
-  readonly userId: string;
-  readonly timestamp: string;
-  /** The `X-Ideogram-Webhook-Signature` header. */
-  readonly signature: string;
+  readonly requestId: HeaderValue;
+  readonly userId: HeaderValue;
+  readonly timestamp: HeaderValue;
+  /** The `X-Ideogram-Webhook-Signature` header; missing or repeated, the delivery is refused. */
+  readonly signature: HeaderValue;
   /** The `X-Ideogram-Webhook-Key-Id` header, when sent: that key is tried first. */
-  readonly keyId?: string;
+  readonly keyId?: HeaderValue;
 }
 
-/** The message Ideogram signs. */
-export function canonicalMessage(delivery: Pick<WebhookDelivery, "body" | "requestId" | "userId" | "timestamp">): Buffer {
+/** The one value of a header, or null when it is missing or repeated. */
+function single(value: HeaderValue): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+/** The message Ideogram signs; null when one of its parts is missing or repeated. */
+export function canonicalMessage(delivery: Pick<WebhookDelivery, "body" | "requestId" | "userId" | "timestamp">): Buffer | null {
+  const [requestId, userId, timestamp] = [single(delivery.requestId), single(delivery.userId), single(delivery.timestamp)];
+  if (requestId === null || userId === null || timestamp === null) return null;
   const digest = createHash("sha256").update(delivery.body).digest("hex");
-  return Buffer.from(`${delivery.requestId}\n${delivery.userId}\n${delivery.timestamp}\n${digest}`, "utf8");
+  return Buffer.from(`${requestId}\n${userId}\n${timestamp}\n${digest}`, "utf8");
 }
 
 function signatureBytes(text: string): Buffer[] {
@@ -81,16 +91,19 @@ function timestampMs(text: string): number {
 /** The id of the key the signature verifies against (the header's key first, then every other), or null: a missing
  * or malformed signature, a key set without an Ed25519 key, or a timestamp past `maxAgeS` is null, never a throw. */
 export function verifyWebhook(delivery: WebhookDelivery, jwks: WebhookJwks, options: VerifyOptions = {}): string | null {
-  if (typeof delivery.signature !== "string" || typeof delivery.requestId !== "string" || typeof delivery.userId !== "string" || typeof delivery.timestamp !== "string") return null;
+  const signature = single(delivery.signature);
+  const timestamp = single(delivery.timestamp);
+  const message = canonicalMessage(delivery);
+  if (signature === null || timestamp === null || message === null) return null;
   const maxAgeS = options.maxAgeS ?? DEFAULT_MAX_AGE_S;
   if (Number.isFinite(maxAgeS)) {
-    const at = timestampMs(delivery.timestamp);
+    const at = timestampMs(timestamp);
     if (!Number.isFinite(at) || Math.abs((options.now ?? Date.now()) - at) > maxAgeS * 1000) return null;
   }
-  const message = canonicalMessage(delivery);
-  const signatures = signatureBytes(delivery.signature);
+  const signatures = signatureBytes(signature);
   if (signatures.length === 0) return null;
-  const ordered = [...jwks.keys].sort((a, b) => Number(b.kid === delivery.keyId) - Number(a.kid === delivery.keyId));
+  const keyId = single(delivery.keyId);
+  const ordered = [...jwks.keys].sort((a, b) => Number(b.kid === keyId) - Number(a.kid === keyId));
   for (const jwk of ordered) {
     const key = ed25519Key(jwk);
     if (key === null) continue;

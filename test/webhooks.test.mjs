@@ -45,6 +45,9 @@ test("a replay is refused only when the receiver sets maxAgeS; a header the rece
   assert.equal(verifyWebhook({ ...delivery, signature: good }, jwks, { maxAgeS: Infinity }), "v1", "Infinity turns the window off");
   assert.equal(verifyWebhook({ ...delivery, signature: undefined }, jwks, fresh), null);
   assert.equal(verifyWebhook({ ...delivery, signature: ["a", "b"] }, jwks, fresh), null, "a repeated header");
+  assert.equal(verifyWebhook({ ...delivery, requestId: undefined, signature: good }, jwks, fresh), null, "a missing part of the message");
+  assert.equal(verifyWebhook({ ...delivery, signature: good, keyId: ["v1", "v1"] }, jwks, fresh), "v1", "a repeated key id is ignored as a hint");
+  assert.equal(canonicalMessage({ ...delivery, userId: ["a", "b"] }), null);
   assert.equal(verifyWebhook({ ...delivery, signature: good, keyId: "unknown" }, jwks, fresh), "v1");
 });
 

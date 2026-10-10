@@ -116,6 +116,7 @@ test("ideogram_invoices and ideogram_api_keys list what the API returns; a 404 s
   const keys = { api_keys: [{ api_key_id: "a2V5", creation_time: "2026-09-01T00:00:00Z", redacted_api_key: "ideo••••", status: "active", label: "ci", creator_display_label: "qmt" }] };
   const k = await call("ideogram_api_keys", {}, () => ({ json: keys }));
   assert.match(text(k.result), /1 API key\(s\).*\nideo•••• \(a2V5\) active "ci", created 2026-09-01T00:00:00Z by qmt/);
+  assert.match(text(k.result), /API keys as Ideogram sent them:\n\[\n  \{\n    "api_key_id": "a2V5"/, "the listing as received follows");
   const denied = await call("ideogram_invoices", {}, () => ({ status: 404, json: { error: "not found" } }));
   assert.equal(denied.result.isError, true);
   assert.match(text(denied.result), /needs an API key whose owner is an organization admin .*\(its answer: .*not found/);

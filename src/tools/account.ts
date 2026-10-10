@@ -215,7 +215,8 @@ async function runApiKeys(ctx: ToolContext): Promise<CallToolResult> {
     const answer = await read(ctx, API_KEYS, {}, zListAccountApiKeysResponse);
     if (!answer.ok) return answer.result;
     const rows = answer.data.api_keys.map((k) => `${k.redacted_api_key} (${k.api_key_id}) ${k.status}${k.label ? ` "${k.label}"` : ""}, created ${k.creation_time}${k.creator_display_label ? ` by ${k.creator_display_label}` : ""}`);
-    return textResult([`${rows.length} API key(s), newest first (key material redacted by Ideogram).`, ...rows].join("\n"));
+    const raw = (answer.raw as { api_keys?: unknown }).api_keys ?? [];
+    return textResult([`${rows.length} API key(s), newest first (key material redacted by Ideogram).`, ...rows, "API keys as Ideogram sent them:", jsonText(raw)].join("\n"));
   } catch (error) {
     return adminOnly(error, "Listing API keys") ?? Promise.reject(error);
   }
