@@ -296,6 +296,9 @@ test("ideogram_operations lists a family and details one operation with its fiel
   assert.match(text(one.result), /image: local file path/);
   assert.match(text(one.result), /image: 10 MB/);
   assert.doesNotMatch(text(one.result), /quotable/);
+  assert.match(text(one.result), /Rules:\n  needs a source image: image \(a local file\) or image_asset_identifier/);
+  const gen = await call("ideogram_operations", { operation: "post_generate_image_v2_ideogram_v3" });
+  assert.doesNotMatch(text(gen.result), /needs a source image/, "generate has no source rule");
 });
 
 test("a download the call's budget cuts is 'Not saved' with the way to collect it in a new call; nothing past the deadline is fetched", async () => {
@@ -454,7 +457,7 @@ test("a completed remove-background generation (an image without prompt or seed,
 test("a layerized design generation shows the design's own link and its editable page beside the base image", async () => {
   const done = { generation_id: "L3", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "layerized_design.generation", base_image_url: null, url: "https://ideogram.ai/d/L3.psd", html_url: "https://ideogram.ai/d/L3.html", is_image_safe: true, resolution: "1024x1024", seed: 2, text_blocks: [] }] };
   const { result } = await call("ideogram_generation", { generation_id: "L3", wait_s: 0 }, () => ({ json: done }));
-  assert.match(text(result), /Design 1: https:\/\/ideogram\.ai\/d\/L3\.psd/);
+  assert.match(text(result), /Design 1: https:\/\/ideogram\.ai\/d\/L3\.psd \(Ideogram's links expire; download it to keep it\)/);
   assert.match(text(result), /Editable page of design 1: https:\/\/ideogram\.ai\/d\/L3\.html/);
   assert.equal(result.isError, undefined, "a safe design with a link is a success even without a base image");
   assert.match(text(result), /Design 1: no base image listed by Ideogram/);

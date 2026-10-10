@@ -300,14 +300,24 @@ export const CONSTRAINTS: readonly Constraint[] = [
 /** The fields that carry an operation's source image: a local file (or a URL) or an Ideogram asset. */
 export const SOURCE_FIELDS: readonly string[] = ["image", "images", "image_asset_identifier", "image_asset_identifiers"];
 
+export const SOURCE_RULE_TEXT = "needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)";
+
 /** Every operation that works on a source image — one of a family other than generate with an `image` / `images`
- * file field — needs one: the schemas leave the file optional because the asset is the alternative, so the rule
- * lives here, for the curated tools and `ideogram_api` alike. */
+ * file field — needs one: the schemas leave the file optional because the asset is the alternative. The rule is
+ * listed with the constraints (discovery, the API reference) and enforced for the curated tools and `ideogram_api` alike. */
+export function needsSource(op: Operation): boolean {
+  if (op.family === null || op.family === "generate") return false;
+  return op.facts.fileFields.some((f) => f.name === "image" || f.name === "images");
+}
+
 export function sourceRefusal(op: Operation, fields: BodyFields): string | null {
-  if (op.family === null || op.family === "generate") return null;
-  if (!op.facts.fileFields.some((f) => f.name === "image" || f.name === "images")) return null;
-  if (anyGiven(fields, SOURCE_FIELDS)) return null;
-  return `${op.id} needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)`;
+  if (!needsSource(op) || anyGiven(fields, SOURCE_FIELDS)) return null;
+  return `${op.id} ${SOURCE_RULE_TEXT}`;
+}
+
+/** Every rule the server enforces for the operation beyond its schema, as sentences: the source rule, then the constraints. */
+export function rulesOf(op: Operation): string[] {
+  return [...(needsSource(op) ? [SOURCE_RULE_TEXT] : []), ...CONSTRAINTS.filter((c) => c.operations.has(op.id)).map((c) => c.text)];
 }
 
 /** The sentences of every constraint the fields break for the operation; empty when none. */

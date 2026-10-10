@@ -49,8 +49,8 @@ function designLines(item: LayeredItem, i: number): string[] {
   return [
     ...(item.isImageSafe ? [] : [`Design ${i + 1} withheld by Ideogram's safety check`]),
     ...(item.isImageSafe && item.baseImageUrl === null ? [`Design ${i + 1}: no base image listed by Ideogram`] : []),
-    ...(item.url === null ? [] : [`Design ${i + 1}: ${item.url}`]),
-    ...(item.htmlUrl === null ? [] : [`Editable page of design ${i + 1}: ${item.htmlUrl}`]),
+    ...(item.url === null ? [] : [`Design ${i + 1}: ${item.url} (Ideogram's links expire; download it to keep it)`]),
+    ...(item.htmlUrl === null ? [] : [`Editable page of design ${i + 1}: ${item.htmlUrl} (expires as well)`]),
     `Text blocks of design ${i + 1} (${item.textBlocks.length}):\n${jsonText(item.textBlocks)}`,
   ];
 }
