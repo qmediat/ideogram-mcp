@@ -102,7 +102,16 @@ Add to `claude_desktop_config.json`:
 | `ideogram_operations` | What the API offers: families, operations, fields, limits | — |
 | `ideogram_api` | Any served operation by id, including the ones the documentation index does not list (the reframe models `auto`, `bria-expand`, `gpt-image-2-5-flare`, `nano-banana-pro`) | — |
 
-Each model's fields are listed in the tool's schema (one variant per model) and in [docs/API-REFERENCE.md](https://github.com/qmediat/ideogram-mcp/blob/main/docs/API-REFERENCE.md), generated from the specification. Image inputs are local file paths (or Ideogram asset identifiers where a model takes them); each operation's own upload limits apply, checked each file against its field's limit before any is read, the whole encoded request against the request cap before it is sent.
+Each model's fields are listed in the tool's schema (one variant per model) and in [docs/API-REFERENCE.md](https://github.com/qmediat/ideogram-mcp/blob/main/docs/API-REFERENCE.md), generated from the specification. Image inputs are local file paths or public https URLs (or Ideogram asset identifiers where a model takes them); each operation's own upload limits apply, checked each file against its field's limit before any is read, the whole encoded request against the request cap before it is sent.
+
+### A client without files: URL inputs and inline images
+
+Any file field (`image`, `images`, `mask`, the reference and style images, the font files) takes a public `https://`
+URL beside a local path: the file is fetched under the field's own limit and types, from a public host only (no IP
+address, no local name, no private address, no redirect), inside the call's budget, one input after another.
+`inline_images: true` on any tool that saves images returns each saved image under 3.75 MB, up to 10 MB per result,
+as image content beside the text (the others stay by path), so a client that cannot read this machine's files still
+sees the result. Both are off unless asked.
 
 ### Waiting, and collecting later
 
@@ -145,7 +154,7 @@ A 1.x field that the chosen v2 model does not take is refused with the models th
 
 A defensive, minimal-dependency design:
 
-- **SSRF protection** — downloads over HTTPS only, from allow-listed hosts, redirects blocked
+- **SSRF protection** — downloads over HTTPS only, from allow-listed hosts, redirects blocked; a URL given as an input is fetched from a public host only (no IP literal, no local name, no private or special-purpose address after resolution, no redirect), under the call's budget, over a connection pinned to the address that was judged (a DNS rebinding reaches nothing)
 - **Symlink rejection** — `lstat()` rejects a symlinked input file before reading (a symlinked parent directory is resolved)
 - **Upload limits per operation** — each file checked with `stat()` against its field's limit before any is read; the local file name is never sent (a file goes as `<field>.<ext>`)
 - **Streamed, capped downloads** — written to disk with a byte counter, stopped at 50 MB, the partial file removed; `image/*` or `video/mp4` required

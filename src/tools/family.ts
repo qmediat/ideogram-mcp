@@ -16,8 +16,9 @@ import { bodySchemaFor, modelOperation } from "../spec/operations.js";
 import type { Family, Operation } from "../spec/operations.js";
 import { loadUploads } from "../uploads.js";
 import type { FileRef } from "../uploads.js";
+import type { RemoteFetcher } from "../remote-input.js";
 import { adaptFields, resolveModel } from "./compat.js";
-import { CONTROL_FIELDS, FIELD_TEXT, PRIVATE_FIELD, RESERVED_FIELDS, WAIT_TEXT } from "./fields.js";
+import { CONTROL_FIELDS, FIELD_TEXT, INLINE_TEXT, PRIVATE_FIELD, RESERVED_FIELDS, WAIT_TEXT } from "./fields.js";
 
 /** A tool's arguments as the MCP client sent them; `prepare` validates them against the chosen model. */
 export type ToolArguments = Readonly<Record<string, unknown>>;
@@ -157,6 +158,7 @@ export function advertisedSchema(spec: FamilyToolSpec): z.ZodObject {
         .optional()
         .meta({ enum: models, description: `The model (default ${spec.defaultModel}); each takes the fields of its variant below` }),
       wait_s: z.number().int().min(0).max(WAIT_MAX_S).optional().describe(WAIT_TEXT),
+      inline_images: z.boolean().optional().describe(INLINE_TEXT),
       ...Object.fromEntries(described.map(([name, text]) => [name, z.unknown().optional().describe(text)])),
       ...spec.legacyInputs,
     })
@@ -210,13 +212,13 @@ function checkMediaSchema(op: Operation, media: "json" | "multipart", fields: Re
 }
 
 /** The request one operation call becomes: multipart when files go with it, else JSON when the operation takes it. */
-export async function buildRequest(op: Operation, fields: Readonly<Record<string, unknown>>): Promise<ApiRequest> {
+export async function buildRequest(op: Operation, fields: Readonly<Record<string, unknown>>, remote: RemoteFetcher | undefined): Promise<ApiRequest> {
   const { body, files } = splitFiles(op, fields);
   const takesJson = op.facts.bodies.includes("json");
   if (files.length > 0 && !op.facts.bodies.includes("multipart")) throw new Error(`${op.id} takes no files`);
   const media = files.length === 0 && takesJson ? "json" : "multipart";
   checkMediaSchema(op, media, fields);
-  const uploads = await loadUploads(op, files);
+  const uploads = await loadUploads(op, files, remote);
   return { op, path: {}, query: {}, headers: {}, body: { media, fields: body, files: uploads, jsonParts: op.facts.jsonParts }, dryRun: false };
 }
 
@@ -236,7 +238,8 @@ function withPrivateDefault(variant: ModelVariant, fields: Record<string, unknow
 }
 
 /** Turns a curated tool's arguments into one checked request of the chosen model. */
-export async function prepare(spec: FamilyToolSpec, args: ToolArguments): Promise<PreparedCall> {
+/** `remote` is the call's URL fetcher; a caller without a call passes `undefined` on purpose (a URL input is then refused). */
+export async function prepare(spec: FamilyToolSpec, args: ToolArguments, remote: RemoteFetcher | undefined): Promise<PreparedCall> {
   const resolved = resolveModel(spec.family, args, spec.defaultModel);
   const variant = variantsOf(spec).find((v) => v.model === resolved.model);
   if (variant === undefined) {
@@ -250,6 +253,7 @@ export async function prepare(spec: FamilyToolSpec, args: ToolArguments): Promis
   checkSource(spec, variant, adapted.fields);
   const fields = withPrivateDefault(variant, adapted.fields);
   checkFields(spec, variant, fields);
-  const req = await buildRequest(variant.op, fields);
+  if (args.inline_images !== undefined && typeof args.inline_images !== "boolean") throw new Error("inline_images must be true or false");
+  const req = await buildRequest(variant.op, fields, remote);
   return { req, notes: [...resolved.notes, ...adapted.notes], waitS: wait.data ?? WAIT_DEFAULT_S, variant };
 }

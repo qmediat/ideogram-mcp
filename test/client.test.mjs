@@ -324,9 +324,9 @@ test("upload limits are the operation's: describe refuses an 11 MB image before 
   await writeFile(big, PNG);
   await truncate(big, 11 * 1024 * 1024);
   const describe = operationById("post_describe_image_ideogram_v3");
-  await assert.rejects(() => loadUploads(describe, [{ field: "image", path: big }]), /over 10\.0 MB \(the limit Ideogram states/);
+  await assert.rejects(() => loadUploads(describe, [{ field: "image", path: big }], undefined), /over 10\.0 MB \(the limit Ideogram states/);
   const remix = operationById("post_remix_image_v2_ideogram_v3");
-  const [part] = await loadUploads(remix, [{ field: "image", path: big }]);
+  const [part] = await loadUploads(remix, [{ field: "image", path: big }], undefined);
   assert.deepEqual([part.field, part.filename, part.contentType, part.bytes.byteLength], ["image", "image.png", "image/png", 11 * 1024 * 1024]);
 });
 
@@ -334,10 +334,10 @@ test("an upload to a field the operation lacks, or too many files, is refused na
   const image = join(dir, "i.png");
   await writeFile(image, PNG);
   const generate45 = operationById("post_generate_image_v2_ideogram45");
-  await assert.rejects(() => loadUploads(generate45, [{ field: "image", path: image }]), /not a file field .* images, mask/);
+  await assert.rejects(() => loadUploads(generate45, [{ field: "image", path: image }], undefined), /not a file field .* images, mask/);
   const six = Array.from({ length: 6 }, () => ({ field: "images", path: image }));
-  await assert.rejects(() => loadUploads(generate45, six), /at most 5 files/);
-  await assert.rejects(() => loadUploads(generate45, [{ field: "mask", path: image }, { field: "mask", path: image }]), /takes one file/);
+  await assert.rejects(() => loadUploads(generate45, six, undefined), /at most 5 files/);
+  await assert.rejects(() => loadUploads(generate45, [{ field: "mask", path: image }, { field: "mask", path: image }], undefined), /takes one file/);
 });
 
 test("the caller's cancellation aborts the attempt and nothing is resent: CANCELLED, one request", async () => {

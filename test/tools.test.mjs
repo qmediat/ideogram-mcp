@@ -15,12 +15,13 @@ await writeFile(png, PNG);
 const accepted = (id) => ({ json: { generation_id: id, seed: 1 } });
 const pending = (id) => ({ json: { generation_id: id, status: "pending", created: "2026-10-07T00:00:00Z" } });
 
-/** Runs one tool call against a fake API; the handler answers each request. */
+/** Runs one tool call against a fake API; the handler answers each request. `__BASE__` in an argument is the fake server. */
 async function call(name, args, handler = (req) => (req.method === "POST" ? accepted("g") : pending("g"))) {
   const api = await startFakeApi((req, n) => handler(req, n, api));
   try {
     const ctx = await testContext(api.base, join(dir, `out-${Math.random().toString(16).slice(2)}`));
-    const result = await (await tool(name)).handler(ctx, args);
+    const withBase = JSON.parse(JSON.stringify(args).replaceAll("__BASE__", api.base));
+    const result = await (await tool(name)).handler(ctx, withBase);
     return { result, requests: api.requests, ctx, api };
   } finally {
     await api.close();
@@ -296,7 +297,7 @@ test("ideogram_operations lists a family and details one operation with its fiel
   assert.match(text(one.result), /image: local file path/);
   assert.match(text(one.result), /image: 10 MB/);
   assert.doesNotMatch(text(one.result), /quotable/);
-  assert.match(text(one.result), /Rules:\n  needs a source image: image \(a local file\) or image_asset_identifier/);
+  assert.match(text(one.result), /Rules:\n  needs a source image: image \(a local file or a public https URL\) or image_asset_identifier/);
   const gen = await call("ideogram_operations", { operation: "post_generate_image_v2_ideogram_v3" });
   assert.doesNotMatch(text(gen.result), /needs a source image/, "generate has no source rule");
 });
@@ -433,12 +434,12 @@ test("private is sent as true unless the caller says otherwise, on every model t
 test("a tool that works on an image refuses a call without a source, before any request; a JSON call is checked against the JSON schema", async () => {
   for (const [name, args] of [["ideogram_remove_background", {}], ["ideogram_precise_edit", { prompt: "x" }], ["ideogram_layerize", {}], ["ideogram_remix", { prompt: "x" }], ["ideogram_upscale", {}], ["ideogram_describe", {}]]) {
     const { result, requests } = await call(name, args).catch((e) => ({ result: { isError: true, content: [{ text: e.message }] }, requests: [] }));
-    assert.match(text(result), /needs a source image: image \(a local file\) or image_asset_identifier/, name);
+    assert.match(text(result), /needs a source image: image \(a local file or a public https URL\) or image_asset_identifier/, name);
     assert.equal(requests.length, 0, name);
   }
   const { buildRequest } = await import("../dist/tools/family.js");
   const { operationById } = await import("../dist/spec/operations.js");
-  await assert.rejects(() => buildRequest(operationById("post_remove_background_v2"), {}), /post_remove_background_v2 sent as json refuses the input:\nimage_asset_identifier/);
+  await assert.rejects(() => buildRequest(operationById("post_remove_background_v2"), {}, undefined), /post_remove_background_v2 sent as json refuses the input:\nimage_asset_identifier/);
 });
 
 test("a completed remove-background generation (an image without prompt or seed, as the API lists it) is saved like any image", async () => {
@@ -522,4 +523,93 @@ test("ideogram_api says the missing source once: the inpaint rule names it, the 
   const lines = text(result).split("\n");
   assert.equal(lines.filter((l) => /source/.test(l)).length, 1, text(result));
   assert.match(text(result), /inpaint needs the source/);
+});
+
+test("a file field takes a URL: fetched under the field's limit and sent as the upload the local file would be; a local file that fails stops everything first", async () => {
+  const handler = (req) => (req.url === "/remote/a.png" ? { status: 200, headers: { "content-type": "image/png" }, body: PNG } : req.method === "POST" ? accepted("u1") : pending("u1"));
+  const { requests } = await call("ideogram_remix", { prompt: "x", image: "__BASE__/remote/a.png", wait_s: 0 }, handler);
+  assert.equal(requests[0].url, "/remote/a.png", "the image is fetched first");
+  assert.equal(requests[1].url, "/v2/image/remix/ideogram-3");
+  assert.match(requests[1].body.toString("latin1"), /name="image"; filename="image.png"\r\nContent-Type: image\/png/);
+  const seen = [];
+  const typo = await call("ideogram_remix", { prompt: "x", image: "__BASE__/remote/a.png", style_reference_images: [join(dir, "missing.png")] }, (req) => { seen.push(req.url); return handler(req); }).catch((e) => e);
+  assert.match(typo.message, /ENOENT|no such file/);
+  assert.deepEqual(seen, [], "a failing local file stops the call before any fetch");
+  const original = join(dir, "original.png");
+  await writeFile(original, PNG);
+  const swapped = await call("ideogram_api", { operation: "post_generate_image_v2_gpt_image2", params: { body: { prompt: "x" } }, files: [{ field: "images", path: original }, { field: "images", path: "__BASE__/remote/a.png" }], wait_s: 0 }, async (req) => {
+    if (req.url === "/remote/a.png") { await writeFile(original, Buffer.alloc(64, 1)); return { status: 200, headers: { "content-type": "image/png" }, body: PNG }; } // the local file changes while the remote one downloads
+    return handler(req);
+  });
+  const sent = swapped.requests.find((r) => r.url.startsWith("/v2/")).body.toString("latin1");
+  assert.equal(sent.split(PNG.toString("latin1")).length - 1, 2, "both parts carry the ORIGINAL bytes: the local file was read before any fetch");
+  const roomy = await call("ideogram_api", { operation: "post_generate_image_v2_gpt_image2", params: { body: { prompt: "x" } }, files: [{ field: "images", path: "__BASE__/remote/a.png" }, { field: "images", path: "__BASE__/remote/a.png" }], wait_s: 0 }, handler);
+  assert.equal(roomy.requests.filter((r) => r.url === "/remote/a.png").length, 2, "remote inputs are fetched one after another");
+  assert.ok(roomy.requests.findIndex((r) => r.url === "/remote/a.png") < roomy.requests.findIndex((r) => r.url.startsWith("/v2/")));
+  const html = await call("ideogram_remix", { prompt: "x", image: "__BASE__/remote/page" }, (req) => (req.url === "/remote/page" ? { status: 200, headers: { "content-type": "text/html" }, body: "<p>" } : accepted("u2"))).catch((e) => e);
+  assert.match(html.message, /image: .*is text\/html, not one of image\/png/);
+});
+
+test("inline_images: each saved image comes back as image content beside the text; a large one is listed by path only; nothing inline by default", async () => {
+  const handler = (req, _n, api) => {
+    if (req.url === "/img/small.png") return { status: 200, headers: { "content-type": "image/png" }, body: PNG };
+    if (req.url === "/img/big.png") return { status: 200, headers: { "content-type": "image/png" }, body: Buffer.alloc(3_750_001, 7) };
+    if (req.method === "POST") return accepted("i1");
+    return { json: { generation_id: "i1", status: "completed", created: "2026-10-07T00:00:00Z", data: [
+      { object_type: "image.generation", url: `${api.base}/img/small.png`, prompt: "p", resolution: "1024x1024", is_image_safe: true, seed: 1 },
+      { object_type: "image.generation", url: `${api.base}/img/big.png`, prompt: "p", resolution: "4096x4096", is_image_safe: true, seed: 2 },
+    ] } };
+  };
+  const { result } = await call("ideogram_generate", { prompt: "x", inline_images: true }, handler);
+  assert.equal(result.content[0].type, "text");
+  assert.match(result.content[0].text, /2 of 2 image\(s\) saved\./);
+  assert.match(result.content[0].text, /Not returned inline: .*\.png is 3750001 bytes, over 3\.75 MB \(3750000 bytes\)/);
+  assert.equal(result.content.length, 2, "one image item: the small one");
+  assert.deepEqual(result.content[1], { type: "image", data: PNG.toString("base64"), mimeType: "image/png" });
+  const plain = await call("ideogram_generate", { prompt: "x" }, handler);
+  assert.equal(plain.result.content.length, 1, "text only by default");
+  const collected = await call("ideogram_generation", { generation_id: "i1", wait_s: 0, inline_images: true }, handler);
+  assert.equal(collected.result.content.length, 2);
+  const raw = await call("ideogram_api", { operation: "post_generate_image_v2_ideogram_v3", params: { body: { prompt: "x" } }, inline_images: true }, handler);
+  assert.equal(raw.result.content.length, 2, "ideogram_api inlines the same way");
+  const bad = await call("ideogram_generate", { prompt: "x", inline_images: "yes" }).catch((e) => e);
+  assert.match(bad.message, /inline_images must be true or false/);
+  const many = (req, _n, api) => {
+    if (req.url.startsWith("/img/")) return { status: 200, headers: { "content-type": "image/jpg; charset=binary" }, body: Buffer.alloc(3_000_000, 9) };
+    if (req.method === "POST") return accepted("i2");
+    return { json: { generation_id: "i2", status: "completed", created: "2026-10-07T00:00:00Z", data: [1, 2, 3, 4].map((n) => ({ object_type: "image.generation", url: `${api.base}/img/${n}.jpg`, prompt: "p", resolution: "1024x1024", is_image_safe: true, seed: n })) } };
+  };
+  const capped = await call("ideogram_generate", { prompt: "x", inline_images: true }, many);
+  assert.equal(capped.result.content.length, 4, "three of four 3 MB images fit under the 10 MB total");
+  assert.equal(capped.result.content[1].mimeType, "image/jpeg", "the media type is normalized");
+  const svg = (req, _n, api) => {
+    if (req.url.startsWith("/img/")) return { status: 200, headers: { "content-type": "image/svg+xml" }, body: "<svg xmlns='http://www.w3.org/2000/svg'/>" };
+    if (req.method === "POST") return accepted("i4");
+    return { json: { generation_id: "i4", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "image.generation", url: `${api.base}/img/v.svg`, prompt: "p", resolution: "1024x1024", is_image_safe: true, seed: 1 }] } };
+  };
+  const vector = await call("ideogram_generate", { prompt: "x", inline_images: true }, svg);
+  assert.equal(vector.result.content.length, 1, "an SVG is saved, never inlined as image content");
+  assert.match(vector.result.content[0].text, /Not returned inline: .* is image\/svg\+xml, not a raster image/);
+  assert.match(capped.result.content[0].text, /would take this result past 10\.00 MB of images/);
+});
+
+test("an inline read failure is an omission with its reason, never the loss of the result (the id and the saved paths stay)", async () => {
+  const handler = (req, _n, api) => {
+    if (req.url.startsWith("/img/")) return { status: 200, headers: { "content-type": "image/png" }, body: PNG };
+    if (req.method === "POST") return accepted("i3");
+    return { json: { generation_id: "i3", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "image.generation", url: `${api.base}/img/a.png`, prompt: "p", resolution: "1024x1024", is_image_safe: true, seed: 1 }] } };
+  };
+  const api = await startFakeApi((req, n) => handler(req, n, api));
+  try {
+    const ctx = await testContext(api.base, join(dir, "gone"));
+    const client = Object.create(ctx.client);
+    client.download = async () => ({ path: join(dir, "gone", "vanished.png"), bytes: 10, contentType: "image/png" }); // saved, then gone before the read-back
+    const result = await (await tool("ideogram_generate")).handler({ ...ctx, client }, { prompt: "x", inline_images: true });
+    assert.equal(result.isError, undefined);
+    assert.match(text(result), /Generation i3 completed\./);
+    assert.match(text(result), /Not returned inline: .*vanished\.png could not be read back \(ENOENT/);
+    assert.equal(result.content.length, 1, "no image item, the text stays");
+  } finally {
+    await api.close();
+  }
 });

@@ -164,7 +164,7 @@ major version with a deprecation note, `ideogram_remix`, `ideogram_reframe`, `id
 | case | behaviour |
 |---|---|
 | a tool input the chosen model does not take | refused before the call: "`<field>` is not a parameter of `<model>`; the models that take it: …" |
-| a call without a source image on a family that works on one | refused before the schema and before any request: "`<tool>` needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)" (step 1, cross-review X4) |
+| a call without a source image on a family that works on one | refused before the schema and before any request: "`<tool>` needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)" (step 1, cross-review X4) |
 | a body checked against one format, sent in another | the body is checked against the schema of the format it is sent in (JSON without a file, multipart with one) — remove background by JSON needs the asset (step 1, X3) |
 | `private` omitted by the caller | sent as `true` on every curated call whose model takes it (the API's default is the plan's setting on some operations, public when the plan has none); `ideogram_api` sends what it is given (step 1, X1) |
 | `dry_run` quote `qualifier: estimate` | the quote carries `upper_bound_usd` and says "estimate" — never printed as exact |
@@ -248,6 +248,41 @@ commercial tools last because part of them are one customer's endpoints). The fa
 
 Bearer-only and internal operations (the web app's); remote HTTP transport and OAuth (Ideogram's own MCP owns that
 niche); a local price table (the quote is the price); exposing `legacy` paths.
+
+## 9b. Remote inputs and inline results — threat model (step 1, 2026-10-10)
+
+A client without access to this machine's files (ChatGPT's connectors, Claude Desktop) holds its images as URLs and
+reads a result only from the tool's answer. Two opt-in surfaces serve it; both are bounded as what they are.
+
+**An image given as an https URL** (`image`, `images`, `mask`, every image file field; `src/remote-input.ts`,
+`src/uploads.ts`). The URL comes from the model, so the server makes a request on the model's say-so.
+
+| asset | threat | control |
+|---|---|---|
+| this machine's network | the model is talked into fetching an internal address (a metadata service, a database admin page, a printer) — SSRF | https only; no credentials in the URL; no IP literal; no local or single-label host name (`localhost`, `*.local`, `*.internal`, `*.home.arpa`, …, a trailing dot stripped first); every address the host resolves to must be public (loopback, RFC 1918, link-local, carrier-grade NAT, reserved, multicast, and in IPv6 unique-local, link-local, site-local, multicast and the embedded IPv4 forms — mapped `::ffff:`, NAT64 `64:ff9b::`, 6to4 `2002:`, compatible `::a.b.c.d` — refused); a lookup that fails is named with its cause; the lookup is a separate step before the fetch |
+| the same, through a hop | a public host answers with a redirect to a private one | a 3xx is refused, never followed (as the download client does) |
+| this process's memory and the call's time | a huge or slow body, or many of them | the inputs are fetched one after another; each body is read with a byte counter under the FIELD's own limit and the room the REQUEST cap still leaves (a body over it is cut as it arrives, never held whole), the declared length checked first, an empty body refused; the fetch runs under the call's budget and its cancellation signal, and its end is said as the budget's |
+| the request to Ideogram | a non-image body sent as an image | the Content-Type must be one the field takes (the three image types, or the font types for a font field); the part is named `<field>.<ext>` from that type, never from the URL |
+| the local files | a URL input weakening the local checks | local files are checked first and a failing one stops the call before any fetch; the request cap is checked on the parts as sent |
+
+| the lookup's answer | a host that answers the lookup with a public address and the connection with a private one (DNS rebinding, TTL 0) | the connection is made to the very address the lookup answered and was judged (`node:https` with that address as the socket's lookup, the host name as SNI and `Host`); the name is never resolved a second time — a test pins a name that resolves nowhere to the loopback and reads the Host header |
+| a local file beside a URL | a local file replaced while a remote input downloads | every local file is checked and READ before any fetch; the bytes read are held to the field's limit (a file that grew is refused) |
+
+No residual on the fetch itself remains named; the lookup cannot be cancelled (it ends the call, its answer is
+dropped) and a public host is reachable by anyone on the internet anyway. A test server on the loopback is reachable only with the client built for it
+(`loopbackRemoteInputs`, a client option of its own, off by default: it relaxes the scheme, the IP-literal and the
+address checks and nothing else — a URL with credentials stays refused); the server never sets it, and a test proves
+the default context refuses an http loopback URL, an IP literal and a local name. Every judged address is handed to
+the socket (Node's happy eyeballs picks a reachable one among them), never one that was not judged.
+
+**Images returned inline** (`inline_images: true` on every tool that saves images: the family tools,
+`ideogram_generation`, `ideogram_api`). Each saved image under 3.75 MB (`INLINE_MAX_BYTES`: the model APIs behind the
+clients take 5 MiB of base64 per image, 3 932 160 raw bytes — Anthropic's "image exceeds 5 MB maximum" is measured on
+the base64), up to 10 MB of images per result (`INLINE_MAX_TOTAL_BYTES`), is also returned as MCP image content
+(base64, its media type without parameters, `image/jpg` as `image/jpeg`); the others are named with their size and
+stay by path. Opt-in because base64 bytes land in the client's context on every call, and
+default off so a file-reading client pays nothing. The file is read back from the output directory, never held in
+memory twice.
 
 ## 10. Open questions — answered by the consult (section 12)
 

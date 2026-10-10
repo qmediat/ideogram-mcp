@@ -33,6 +33,7 @@ We will acknowledge your report within 48 hours and aim to release a fix within 
 | Threat | Protection |
 |--------|-----------|
 | **SSRF via download URLs** | HTTPS required + hostname allowlist (`ideogram.ai` and its subdomains, the known CDN) |
+| **SSRF via a URL input** (a file field given a URL: the model names the host, there is no allow-list) | HTTPS only; no credentials in the URL; no IP literal; no local or single-label host name; every address the host resolves to must be globally reachable (private, loopback, link-local, carrier NAT, the special-purpose and documentation blocks, multicast, reserved, and in IPv6 unique-local, link-local, site-local, multicast, documentation, discard and the embedded IPv4 forms — mapped, NAT64, 6to4, compatible — refused); the lookup and the fetch run under the call's budget; the connection is pinned to the very address the lookup answered (the name is never resolved a second time: a rebinding reaches nothing); a redirect refused; the body a type the field takes, under the field's limit and the request cap, never empty; local files are read before any fetch. Design note section 9b |
 | **SSRF via redirects** | `redirect: "manual"` — all redirects blocked and reported |
 | **API key exfiltration** | Key sent only to `api.ideogram.ai` (hardcoded base URL), never logged |
 | **Request timeout** | One budget per tool call: 55 s (the MCP client's 60 s minus a margin), ended earlier by the caller's cancellation; every attempt (bounded by the budget's remainder; the 120 s attempt cap applies only to a caller whose budget leaves more than that — never inside a tool call), retry sleep, poll and download of the call is judged against what remains. A POST is sent again only when it never left the machine (DNS, a refused connect) or got a 429; a timeout, a reset or a 5xx after sending is reported, never repeated (one call never creates two billed jobs). A GET (a poll, a download) is retried on network failures, 429 and 5xx |
@@ -63,7 +64,7 @@ We will acknowledge your report within 48 hours and aim to release a fix within 
 - Does not execute arbitrary code
 - Does not access the filesystem outside of validated image paths
 - Does not store or cache API keys on disk
-- Does not make network requests to any host other than `api.ideogram.ai` and its CDN
+- Does not make network requests to any host other than `api.ideogram.ai` and its CDN, except the public https host a caller names as a URL input — judged and pinned as the network table says
 - Does not collect, transmit, or log any user data
 
 ## Code Review History

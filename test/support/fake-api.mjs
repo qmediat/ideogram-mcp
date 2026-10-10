@@ -40,6 +40,7 @@ export function testClientOptions(base, overrides = {}) {
       baseUrl: base,
       downloadHosts: ["127.0.0.1"],
       allowHttpDownloads: true,
+      loopbackRemoteInputs: true,
       maxRetries: 3,
       requestTimeoutMs: 10_000,
       maxDownloadBytes: 50 * 1024 * 1024,
@@ -61,8 +62,11 @@ export const PNG = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex");
  * on that clock. */
 export async function testContext(base, outputDir) {
   const { IdeogramClient } = await import("../../dist/client.js");
+  const { remoteFetcherFor } = await import("../../dist/tools/context.js");
   const { clock, options } = testClientOptions(base);
-  return { client: new IdeogramClient(options), outputDir, clock, budget: budgetModule.toolCallBudget(clock) };
+  const server = { client: new IdeogramClient(options), outputDir, clock };
+  const budget = budgetModule.toolCallBudget(clock);
+  return { ...server, budget, remote: remoteFetcherFor(server, budget) }; // loopbackRemoteInputs is on: the fake API is a loopback http server, remote inputs may come from it
 }
 
 /** A budget of `ms` real milliseconds on the system clock, for one request; `cancel` is the caller's signal. */

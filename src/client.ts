@@ -35,6 +35,9 @@ export interface ClientOptions {
   readonly downloadHosts: readonly string[];
   /** Plain-http downloads, for a loopback test server only. */
   readonly allowHttpDownloads: boolean;
+  /** Remote inputs (a URL in a file field) from a loopback test server over plain http, for tests only: relaxes the
+   * scheme, the IP-literal and the address checks of the SSRF guard (src/remote-input.ts). Never set by the server. */
+  readonly loopbackRemoteInputs: boolean;
   readonly maxRetries: number;
   /** The longest ONE attempt may take (an upload of tens of MB needs minutes); the call's deadline is its CallBudget. */
   readonly requestTimeoutMs: number;
@@ -53,6 +56,7 @@ export function defaultClientOptions(apiKey: string): ClientOptions {
     baseUrl: DEFAULT_BASE_URL,
     downloadHosts: DEFAULT_DOWNLOAD_HOSTS,
     allowHttpDownloads: false,
+    loopbackRemoteInputs: false,
     maxRetries: 3,
     requestTimeoutMs: 120_000,
     maxDownloadBytes: MAX_DOWNLOAD_BYTES,

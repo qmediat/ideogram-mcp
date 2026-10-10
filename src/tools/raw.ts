@@ -17,10 +17,12 @@ import { constraintViolations, sourceRefusal } from "../spec/overlay.js";
 import { bodySchemaFor, operationById } from "../spec/operations.js";
 import type { Operation } from "../spec/operations.js";
 import { servedByRawCall, supportOf } from "../spec/support.js";
+import type { RemoteFetcher } from "../remote-input.js";
 import { loadUploads } from "../uploads.js";
 import type { QueryValue, Scalar } from "../wire.js";
 import type { ToolContext, ToolDefinition } from "./context.js";
 import type { ToolArguments } from "./family.js";
+import { INLINE_TEXT } from "./fields.js";
 import { outcomeResult, textResult } from "./results.js";
 
 const CLASS_REFUSAL: Readonly<Partial<Record<OperationClass, string>>> = {
@@ -43,6 +45,7 @@ const RawInput = z.object({
   dry_run: z.boolean().optional(),
   wait_s: z.number().int().min(0).max(WAIT_MAX_S).optional(),
   allow_undocumented: z.boolean().optional(),
+  inline_images: z.boolean().optional(),
 });
 type RawArgs = z.infer<typeof RawInput>;
 
@@ -83,7 +86,7 @@ function check(label: string, schema: ZodType | null, value: Readonly<Record<str
 }
 
 /** Checks the four locations against the operation's generated schemas, then builds the request with its uploads. */
-async function buildRawRequest(op: Operation, args: RawArgs): Promise<ApiRequest> {
+async function buildRawRequest(op: Operation, args: RawArgs, remote: RemoteFetcher): Promise<ApiRequest> {
   const params = args.params ?? {};
   const files = args.files ?? [];
   const body = params.body ?? {};
@@ -109,7 +112,7 @@ async function buildRawRequest(op: Operation, args: RawArgs): Promise<ApiRequest
     // a quote prices the request as given; a run with async: false would carry its result only in the POST answer
     throw new Error("async: false is not served: a synchronous generation returns its result only in the POST answer, which this server cannot wait for inside one call; omit async (the job is accepted, then polled) or set wait_s");
   }
-  const uploads = await loadUploads(op, files);
+  const uploads = await loadUploads(op, files, remote);
   return {
     op,
     path: (params.path ?? {}) as Record<string, Scalar>,
@@ -128,7 +131,7 @@ async function runRaw(ctx: ToolContext, input: ToolArguments): Promise<CallToolR
   if (op === null) return textResult(`No operation ${args.operation}; ideogram_operations lists them`, true);
   const refusal = rawRefusal(op, args.allow_undocumented === true);
   if (refusal !== null) return textResult(refusal, true);
-  const req = await buildRawRequest(op, args);
+  const req = await buildRawRequest(op, args, ctx.remote);
   const notes = op.class === "spec_only" ? [`${op.id} is undocumented (spec_only): its behaviour may change without notice`] : [];
   if (args.dry_run === true) {
     const priced = await quote(ctx.client, req, ctx.budget);
@@ -136,21 +139,22 @@ async function runRaw(ctx: ToolContext, input: ToolArguments): Promise<CallToolR
     return textResult([quoteText(priced.quote), ...notes].join("\n"));
   }
   const outcome = await execute(ctx.client, req, { waitS: args.wait_s ?? WAIT_DEFAULT_S, clock: ctx.clock, budget: ctx.budget });
-  return outcomeResult(ctx, outcome, notes);
+  return outcomeResult(ctx, outcome, notes, { inlineImages: args.inline_images === true });
 }
 
 export const RAW_TOOL: ToolDefinition = {
   name: "ideogram_api",
   title: "Call any served Ideogram operation",
   description:
-    "Advanced: call an Ideogram operation by id (from ideogram_operations) when no curated tool covers it — a model the documentation index does not list (allow_undocumented), or a call with webhook_url / target_collection_id. params holds path, query, headers and body apart; files maps local files to file fields. Checked against the operation's own schema before anything is sent; dry_run prices it instead.",
+    "Advanced: call an Ideogram operation by id (from ideogram_operations) when no curated tool covers it — a model the documentation index does not list (allow_undocumented), or a call with webhook_url / target_collection_id. params holds path, query, headers and body apart; files maps local files or public https URLs to file fields. Checked against the operation's own schema before anything is sent; dry_run prices it instead.",
   inputSchema: z.object({
     operation: z.string().min(1).describe("The operation id, e.g. post_precise_edit_image_v2_ideogram45"),
     params: z.record(z.string(), z.unknown()).optional().describe("{path?, query?, headers?, body?}: each an object of that location's parameters"),
-    files: z.array(z.object({ field: z.string(), path: z.string() })).optional().describe("Local files, each for one file field"),
+    files: z.array(z.object({ field: z.string(), path: z.string() })).optional().describe("Files for the file fields: each a local path or a public https URL"),
     dry_run: z.boolean().optional().describe("Price the call instead of running it (only operations that offer it)"),
     wait_s: z.number().int().min(0).max(WAIT_MAX_S).optional().describe("Seconds to wait for the result (0-50, default 45)"),
     allow_undocumented: z.boolean().optional().describe("Allow an operation Ideogram's documentation does not list"),
+    inline_images: z.boolean().optional().describe(INLINE_TEXT),
   }),
   handler: runRaw,
 };

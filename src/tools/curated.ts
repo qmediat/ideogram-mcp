@@ -32,7 +32,7 @@ export const FAMILY_TOOLS: readonly FamilyToolSpec[] = [
     family: "inpaint",
     defaultModel: "ideogram-3",
     title: "Inpaint an image",
-    description: `Repaint the masked part of an image (black in the mask = repaint) with Ideogram 3.0 or its character / custom-model variants. Needs the source and the mask, each a local file or an Ideogram asset. ${SAVED}`,
+    description: `Repaint the masked part of an image (black in the mask = repaint) with Ideogram 3.0 or its character / custom-model variants. Needs the source and the mask, each a local file, a public https URL or an Ideogram asset. ${SAVED}`,
   },
   {
     name: "ideogram_remix",
@@ -60,14 +60,14 @@ export const FAMILY_TOOLS: readonly FamilyToolSpec[] = [
     family: "remove_background",
     defaultModel: "ideogram-1",
     title: "Remove an image's background",
-    description: `Remove the background of an image: the foreground comes back as a transparent PNG. Takes a local file or an Ideogram asset. ${SAVED}`,
+    description: `Remove the background of an image: the foreground comes back as a transparent PNG. Takes a local file, a public https URL or an Ideogram asset. ${SAVED}`,
   },
   {
     name: "ideogram_remove_object",
     family: "remove_object",
     defaultModel: "ideogram-1",
     title: "Remove an object from an image",
-    description: `Remove a masked object from an image (white in the mask = remove) and fill the gap. Needs the source and a mask of the same size, each a local file or an Ideogram asset. ${SAVED}`,
+    description: `Remove a masked object from an image (white in the mask = remove) and fill the gap. Needs the source and a mask of the same size, each a local file, a public https URL or an Ideogram asset. ${SAVED}`,
   },
   {
     name: "ideogram_upscale",
@@ -82,7 +82,7 @@ export const FAMILY_TOOLS: readonly FamilyToolSpec[] = [
     defaultModel: "ideogram-3",
     title: "Describe an image",
     description:
-      "Describe an image in words (Ideogram 3.0) or as a structured JSON prompt (Ideogram 4.0). Takes a local file or an Ideogram asset. Describe has no price quote (the API offers no dry run for it).",
+      "Describe an image in words (Ideogram 3.0) or as a structured JSON prompt (Ideogram 4.0). Takes a local file, a public https URL or an Ideogram asset. Describe has no price quote (the API offers no dry run for it).",
     legacyInputs: {
       describe_model_version: z.enum(["V_2", "V_3"]).optional().describe("1.x name of the model, deprecated: V_3 = model ideogram-3"),
     },
@@ -97,9 +97,9 @@ export const FAMILY_TOOLS: readonly FamilyToolSpec[] = [
 ];
 
 async function runFamilyTool(spec: FamilyToolSpec, ctx: ToolContext, args: ToolArguments): Promise<CallToolResult> {
-  const call = await prepare(spec, args);
+  const call = await prepare(spec, args, ctx.remote);
   const outcome = await execute(ctx.client, call.req, { waitS: call.waitS, clock: ctx.clock, budget: ctx.budget });
-  return outcomeResult(ctx, outcome, call.notes);
+  return outcomeResult(ctx, outcome, call.notes, { inlineImages: args.inline_images === true });
 }
 
 export function familyToolDefinition(spec: FamilyToolSpec): ToolDefinition {

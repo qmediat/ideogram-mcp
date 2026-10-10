@@ -19,6 +19,17 @@ export type BodyFields = Readonly<Record<string, unknown>>;
 
 /** A megabyte as the specification states limits ("max 10MB"): decimal, the smaller reading. */
 export const MB = 1_000_000;
+
+/** Bytes as megabytes, decimal, for every sentence that names a size. */
+export function mbText(bytes: number, places = 1): string {
+  return `${(bytes / MB).toFixed(places)} MB`;
+}
+
+/** The largest image returned inline (`inline_images`), in raw bytes: the model APIs behind the clients take at most
+ * 5 MiB of base64 per image (5 242 880 B, i.e. 3 932 160 raw bytes); 3.75 MB stays under it. */
+export const INLINE_MAX_BYTES = 3_750_000;
+/** The most image bytes (raw) one result carries inline; the rest stay by path (eight 3.75 MB images would be 30 MB raw, 40 MB of base64). */
+export const INLINE_MAX_TOTAL_BYTES = 10_000_000;
 /** The per-file limit of a file field whose description states none: the largest one the specification states. */
 export const UNSTATED_FILE_BYTES = 50 * MB;
 /** This server's cap on a whole request when the specification states none for the operation (no v2 operation does):
@@ -88,7 +99,7 @@ export function requestBytesRefusal(op: Operation, bodyBytes: number): string | 
   const limit = requestLimitOf(op);
   if (bodyBytes <= limit.maxBytes) return null;
   const source = limit.stated ? "the limit Ideogram states for this request" : "this server's cap for a request Ideogram states no limit for";
-  return `the request body is ${(bodyBytes / MB).toFixed(1)} MB; ${op.id} takes at most ${(limit.maxBytes / MB).toFixed(0)} MB (${source})`;
+  return `the request body is ${mbText(bodyBytes)}; ${op.id} takes at most ${mbText(limit.maxBytes, 0)} (${source})`;
 }
 
 export interface Constraint {
@@ -304,7 +315,7 @@ export const CONSTRAINTS: readonly Constraint[] = [
 /** The fields that carry an operation's source image: a local file (or a URL) or an Ideogram asset. */
 export const SOURCE_FIELDS: readonly string[] = ["image", "images", "image_asset_identifier", "image_asset_identifiers"];
 
-export const SOURCE_RULE_TEXT = "needs a source image: image (a local file) or image_asset_identifier (an Ideogram asset)";
+export const SOURCE_RULE_TEXT = "needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)";
 
 /** Every operation that works on a source image — one of a family other than generate with an `image` / `images`
  * file field — needs one: the schemas leave the file optional because the asset is the alternative. The rule is
