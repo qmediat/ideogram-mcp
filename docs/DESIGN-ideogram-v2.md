@@ -187,7 +187,7 @@ major version with a deprecation note, `ideogram_remix`, `ideogram_reframe`, `id
 
 | bound | value | why |
 |---|---|---|
-| tools/list from step 1 | 16 tools (19 from step 2: 75 410 bytes over a real session on 2026-10-10), advertised schema ≤ 80 KB serialized, measured in `tests/budget.test.mjs` (73 582 bytes over a real session on 2026-10-10: step 1's four families cost 7.3 KB of schema and `private` on every variant 2.8 KB; 64 KB was the estimate before step 1; a definition shorter than its `$ref` is inlined) | the count alone says nothing (consult F15): the bytes and the routing accuracy are what a client pays |
+| tools/list from step 1 | 16 tools (19 from step 2: 79 115 bytes over a real session on 2026-10-10, after step 1b's inline_images text), advertised schema ≤ 80 KB serialized, measured in `tests/budget.test.mjs` (73 582 bytes over a real session on 2026-10-10: step 1's four families cost 7.3 KB of schema and `private` on every variant 2.8 KB; 64 KB was the estimate before step 1; a definition shorter than its `$ref` is inlined) | the count alone says nothing (consult F15): the bytes and the routing accuracy are what a client pays |
 | generated code | ≤ 600 KB committed (`src/generated/`) | 486 schemas × zod; filtered to the exposed operations |
 | one budget per tool call | `CallBudget` (src/budget.ts): deadline = start + 55 s (the caller's 60 s minus a margin) and the caller's cancellation signal (the SDK's `extra.signal`); every HTTP attempt, retry sleep (Retry-After included), poll and download of the call is judged against what remains; a POST is resent only when the time left covers an attempt as long as the one just rejected; a download the budget cuts is "Not saved" beside the id; one attempt is bounded by the budget's remainder — the 120 s attempt cap only where a longer budget leaves more, never inside a tool call | pieces of a call bounded apart (a sleep budget, a per-request timeout) added up past the caller — step back after #36 r2 (Codex: a 429 answered at 40 s was resent at 70 s) |
 | wait inside a tool call | default 45 s, max 50 s, then Pending {generation_id} | the MCP SDK's client timeout is 60 s (consult F3) |
@@ -306,7 +306,7 @@ Measured on the PR's head (branch `qmt/v2-foundation`, 2026-10-07):
 | operations in the snapshot | 200 | — |
 | classes (the one rule, `src/spec/classify.ts`) | documented 66 · spec_only 20 · v1_only 41 · legacy 32 · internal 9 · bearer_only 32 | `test/classify.test.mjs` pins the counts |
 | generated code (`src/generated/`) | 438 932 bytes | 614 400 (`scripts/spec-generate.mjs`) |
-| tools/list over a real MCP session | 12 tools, 62 871 bytes (2.0.0); 16 tools, 73 582 bytes (step 1, 2026-10-10); 19 tools, 75 410 bytes (step 2) | 81 920 since step 1 (`test/budget.test.mjs`) |
+| tools/list over a real MCP session | 12 tools, 62 871 bytes (2.0.0); 16 tools, 73 582 bytes (step 1, 2026-10-10); 19 tools, 79 115 bytes (step 2, after step 1b) | 81 920 since step 1 (`test/budget.test.mjs`) |
 | support | curated 40 · raw 7 · planned 80 · unsupported 73 (2.0.0); curated 44 · raw 4 · planned 79 · unsupported 73 (step 1); curated 47 · raw 5 · planned 75 · unsupported 73 (step 2) | `src/spec/support.ts` |
 | tests | 83, all passing (`npm test`; the live dry-run suite included when a key is set) | — |
 | live dry-run suite (`test/live-dry-run.test.mjs`, funded key) | 33 quotes in `docs/PRICES-2026-10-07.md`, 4 custom-model skips, 0 failures, 0 USD | every curated quotable model |
