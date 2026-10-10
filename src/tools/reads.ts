@@ -1,7 +1,8 @@
 /**
  * One request of an operation outside the generation lifecycle (the account and training listings): the query and
- * path checked by the operation's generated schemas, the answer by its response schema — a mismatch is reported as
- * one, never passed off —, the raw body kept beside the parsed one (printed as received, nothing stripped).
+ * path checked by the operation's generated schemas (a throw: the caller's own input validation should have caught
+ * it), the answer by its response schema — a mismatch is reported as one, never passed off —, the raw body kept
+ * beside the parsed one (printed as received, nothing stripped).
  */
 import type { z } from "zod/v4";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -22,7 +23,19 @@ export interface ReadRequest {
 
 export type Read<T> = { readonly ok: true; readonly data: T; readonly raw: unknown } | { readonly ok: false; readonly result: CallToolResult };
 
+function checkLocation(op: Operation, label: "query" | "path", value: Readonly<Record<string, unknown>>): void {
+  const schema = op.schemas[label];
+  if (schema === null) {
+    if (Object.keys(value).length > 0) throw new Error(`${op.id} takes no ${label} parameters; given ${Object.keys(value).join(", ")}`);
+    return;
+  }
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) throw new Error(`${op.id} ${label}: ${parsed.error.issues.map((i) => `${i.path.join(".") || "(input)"}: ${i.message}`).join("; ")}`);
+}
+
 export async function readOperation<T extends z.ZodType>(ctx: ToolContext, request: ReadRequest, schema: T): Promise<Read<z.infer<T>>> {
+  checkLocation(request.op, "path", request.path ?? {});
+  checkLocation(request.op, "query", request.query ?? {});
   const req: ApiRequest = { op: request.op, path: request.path ?? {}, query: request.query ?? {}, headers: {}, body: request.body ?? null, dryRun: false };
   const answer = await ctx.client.call(req, ctx.budget);
   const parsed = schema.safeParse(answer.body);

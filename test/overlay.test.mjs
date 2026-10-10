@@ -163,6 +163,12 @@ test("the support table: the eleven image families' documented models and the ge
   assert.deepEqual(counts, { curated: 57, raw: 6, planned: 64, unsupported: 73 });
 });
 
+test("a dataset upload is the one operation whose file field names the ZIP archives and caption sidecars", async () => {
+  const { DATASET_UPLOAD_OPERATIONS } = await import("../dist/spec/overlay.js");
+  const stating = OPERATIONS.filter((o) => isExposable(o) && o.facts.fileFields.some((f) => /ZIP archives containing images and captions/.test(fieldDescription(o, f.name) ?? ""))).map((o) => o.id);
+  assert.deepEqual(new Set(stating), DATASET_UPLOAD_OPERATIONS);
+});
+
 test("a font field is the one whose description names the font formats; every other file field takes images", () => {
   const fileFields = OPERATIONS.filter(isExposable).flatMap((o) => o.facts.fileFields.map((f) => ({ op: o, field: f.name })));
   const fonts = fileFields.filter(({ op: o, field }) => /\.ttf, \.otf, \.woff, \.woff2/.test(fieldDescription(o, field) ?? ""));

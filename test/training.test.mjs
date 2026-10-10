@@ -42,9 +42,12 @@ test("ideogram_datasets lists (with a search) and shows one dataset with its fil
 });
 
 test("ideogram_dataset_upload creates the dataset from a name, then uploads images, a caption, an archive and a URL as parts under one field", async () => {
-  const uploaded = { total_count: 4, success_count: 3, failure_count: 1, successful_assets: [{ file_name: "files.png", asset_identifier: { asset_type: "UPLOAD", asset_id: "AAAAAAAAAAAAAAAAAAAAAA" } }, { file_name: "files.txt", asset_identifier: { asset_type: "UPLOAD", asset_id: "AAAAAAAAAAAAAAAAAAAAAA" } }, { file_name: "files.zip", asset_identifier: { asset_type: "UPLOAD", asset_id: "AAAAAAAAAAAAAAAAAAAAAA" } }], failed_assets: [{ file_name: "files.png", failure_reason: "FAILED_SAFETY_CHECK" }] };
+  const asset = { asset_type: "UPLOAD", asset_id: "AAAAAAAAAAAAAAAAAAAAAA" };
+  const uploaded = { total_count: 4, success_count: 3, failure_count: 1, successful_assets: [{ file_name: "a.png", asset_identifier: asset }, { file_name: "a.txt", asset_identifier: asset }, { file_name: "more.zip", asset_identifier: asset }], failed_assets: [{ file_name: "b.png", failure_reason: "FAILED_SAFETY_CHECK" }, { failure_reason: "INVALID_ZIP" }] };
   const handler = (req) => {
     if (req.url === "/remote/b.png") return { status: 200, headers: { "content-type": "image/png" }, body: PNG };
+    if (req.url === "/remote/c.txt") return { status: 200, headers: { "content-type": "text/plain; charset=utf-8" }, body: "a caption by URL" };
+    if (req.url === "/remote/d.zip") return { status: 200, headers: { "content-type": "application/x-zip-compressed" }, body: Buffer.from("504b0506" + "00".repeat(18), "hex") };
     if (req.method === "POST" && req.url === "/datasets") return { json: dataset };
     if (req.method === "POST" && req.url === "/datasets/ds1/upload_assets") return { json: uploaded };
     return { status: 500 };
@@ -53,15 +56,26 @@ test("ideogram_dataset_upload creates the dataset from a name, then uploads imag
   assert.deepEqual(requests.map((r) => `${r.method} ${r.url}`), ["GET /remote/b.png", "POST /datasets", "POST /datasets/ds1/upload_assets"], "the URL fetched after the local files, the dataset created, then the upload");
   assert.equal(JSON.parse(requests[1].body.toString()).name, "brand refs");
   const body = requests[2].body.toString("latin1");
-  assert.match(body, /name="files"; filename="files.png"\r\nContent-Type: image\/png/);
-  assert.match(body, /name="files"; filename="files.txt"\r\nContent-Type: text\/plain/);
-  assert.match(body, /name="files"; filename="files.zip"\r\nContent-Type: application\/zip/);
+  assert.match(body, /name="files"; filename="a.png"\r\nContent-Type: image\/png/, "the asset keeps its name: the API pairs a caption by it");
+  assert.match(body, /name="files"; filename="a.txt"\r\nContent-Type: text\/plain/);
+  assert.match(body, /name="files"; filename="more.zip"\r\nContent-Type: application\/zip/);
+  assert.match(body, /name="files"; filename="b.png"\r\nContent-Type: image\/png/, "a URL input is named by its last segment");
+  assert.doesNotMatch(body, new RegExp(dir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), "never the directory");
   assert.equal(body.split('name="files"').length - 1, 4);
-  assert.match(text(result), /Dataset brand refs created: ds1\.\n3 of 4 asset\(s\) uploaded to dataset ds1, 1 failed:\n  files\.png: FAILED_SAFETY_CHECK/);
+  assert.match(text(result), /Dataset brand refs created: ds1\.\n3 of 4 asset\(s\) uploaded to dataset ds1, 1 failed:\n  b\.png: FAILED_SAFETY_CHECK\n  \(unnamed\): INVALID_ZIP/);
+  const byUrl = await call("ideogram_dataset_upload", { dataset_id: "ds1", files: ["__BASE__/remote/c.txt", "__BASE__/remote/d.zip"] }, handler);
+  const parts = byUrl.requests.find((r) => r.url === "/datasets/ds1/upload_assets").body.toString("latin1");
+  assert.match(parts, /filename="c.txt"\r\nContent-Type: text\/plain/, "a caption by URL");
+  assert.match(parts, /filename="d.zip"\r\nContent-Type: application\/zip/, "a zip by URL under its alias is sent as application/zip");
+  const onImage = await call("ideogram_remix", { prompt: "x", image: caption }, handler).catch((e) => e);
+  assert.match(onImage.message, /image: unsupported file type \.txt; one of \.png, \.jpg, \.jpeg, \.webp$/, "the dataset types do not leak to an image field");
+  const orphan = await call("ideogram_dataset_upload", { name: "brand refs", files: [png] }, (req) => (req.method === "POST" && req.url === "/datasets" ? { json: dataset } : { status: 404, json: { error: "gone" } }));
+  assert.equal(orphan.result.isError, true);
+  assert.match(text(orphan.result), /^Dataset brand refs created: ds1\.\nThe upload failed; upload again with dataset_id "ds1", not with name\./, "a failed upload after the create names the dataset first");
   const both = await call("ideogram_dataset_upload", { name: "x", dataset_id: "ds1", files: [png] }, handler);
   assert.match(text(both.result), /give dataset_id .* or name .*, not both/);
   const font = await call("ideogram_dataset_upload", { dataset_id: "ds1", files: [ttf] }, handler).catch((e) => e);
-  assert.match(font.message, /files: unsupported file type \.ttf; one of \.png, \.jpg, \.jpeg, \.webp, \.txt, \.zip/);
+  assert.match(font.message, /files: unsupported file type \.ttf; one of \.png, \.jpg, \.jpeg, \.webp, \.txt, \.json, \.zip/);
 });
 
 test("ideogram_train routes to the plain operation, or the advanced one when a hyperparameter is given, per model; a field the model's training does not take is refused", async () => {
@@ -77,8 +91,19 @@ test("ideogram_train routes to the plain operation, or the advanced one when a h
   assert.match(text(v3batch.result), /batch_size is not a parameter of ideogram-3's training \(train_model_v3_advanced\)/);
   assert.equal(v3batch.requests.length, 0);
   const short = await call("ideogram_train", { dataset_id: "ds1", model_name: "abc" }, () => ({ json: started }));
-  assert.match(text(short.result), /model_name/);
+  assert.match(text(short.result), /model_name must be 5-30 characters/);
   assert.equal(short.requests.length, 0);
+  const typo = await call("ideogram_train", { dataset_id: "ds1", model_name: "Planet Drip", steps: 3000 }, () => ({ json: started }));
+  assert.match(text(typo.result), /steps/, "an unknown key is refused by name, never dropped");
+  assert.equal(typo.requests.length, 0, "no billed training on a misspelled argument");
+  for (const [args, rule] of [[{ training_steps: 250 }, /multiple of 100/], [{ lora_rank: 32 }, /64 or 128/], [{ ema: 1 }, /between 0 and 1/], [{ learning_rate: 0 }, /above 0/], [{ batch_size: 3 }, /1, 2, 4, 8, 16 or 32/], [{ base_variant: "x" }, /distilled_gd or oldbase_farzad_fused/]]) {
+    const r = await call("ideogram_train", { dataset_id: "ds1", model_name: "Planet Drip", ...args }, () => ({ json: started }));
+    assert.match(text(r.result), rule, JSON.stringify(args));
+    assert.equal(r.requests.length, 0);
+  }
+  const mismatch = await call("ideogram_train", { dataset_id: "ds1", model_name: "Planet Drip" }, () => ({ json: { model_id: 5 } }));
+  assert.equal(mismatch.result.isError, true);
+  assert.match(text(mismatch.result), /a training MAY have started and will be billed — list ideogram_models before starting it again/);
 });
 
 test("ideogram_models lists with scope and repeated status, and shows one model; a 404 says what it means", async () => {
@@ -92,4 +117,8 @@ test("ideogram_models lists with scope and repeated status, and shows one model;
   assert.match(text(one.result), /Training runs: 0/);
   const gone = await call("ideogram_models", { model_id: "nope" }, () => ({ status: 404, json: { error: "no" } }));
   assert.match(text(gone.result), /not yours, not shared with your organization, or does not exist/);
+  const both = await call("ideogram_models", { model_id: "m2", scope: "owned" }, () => ({ json: { model } }));
+  assert.match(text(both.result), /scope and status apply to the list, not to one model by id/);
+  const ds = await call("ideogram_datasets", { dataset_id: "ds1", search: "x" }, () => ({ json: {} }));
+  assert.match(text(ds.result), /search applies to the list, not to one dataset by id/);
 });

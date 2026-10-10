@@ -228,7 +228,7 @@ test("ideogram_api: dry_run inside params.query is refused (the dry_run argument
   const gif = join(dir, "a.gif");
   await writeFile(gif, PNG);
   const g = await call("ideogram_remix", { image: gif, prompt: "x" }).catch((e) => e);
-  assert.match(g.message, /unsupported file type \.gif; one of \.png, \.jpg, \.jpeg, \.webp/);
+  assert.match(g.message, /unsupported file type \.gif; one of \.png, \.jpg, \.jpeg, \.webp$/, "an image field takes images only");
 });
 
 test("a completed generation that lists no image says so instead of '0 of 0 saved'", async () => {
