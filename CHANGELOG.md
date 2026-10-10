@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Step 1 of `docs/DESIGN-ideogram-v2.md`: every image family of Ideogram's documentation index has its own tool.
 Step 2: the account — usage and spend, invoices, API keys — and the webhook signature helper.
 Step 3: custom-model training — datasets, their assets, the training of an Ideogram 4.0 or 3.0 model, the models.
+Step 4: video — from a prompt, from an image, from references.
 
 ### Added
 
@@ -64,6 +65,13 @@ Step 3: custom-model training — datasets, their assets, the training of an Ide
   typed decision reaches every surface that sends a request with a side effect: a family tool or `ideogram_api` whose
   non-GET request fails after it left (a 5xx, a cut connection) says the operation MAY have run and be billed. A
   decoded URL segment is cut at its last slash or backslash before it names a part (`..%2F..%2Fx.png` is `x.png`).
+- `ideogram_video_text`, `ideogram_video_image`, `ideogram_video_reference`: the three video families on the family
+  mechanism (Seedance 2.5 by default, Seedance 2, Kling 3 Standard, MiniMax H3; each model its own fields), async
+  only — a finished video is saved as mp4 with its measured length, never returned inline; a long job comes back as
+  a generation_id for `ideogram_generation` (`video: true` slows the polls as the tool's own wait did). Audio
+  references (`reference_audios`) are sent as MP3 or WAV — the one field-type rule, anchored to the specification;
+  a start and an end image as parts or assets. The spec-only video edit is served raw behind `allow_undocumented`.
+  Support: curated 68 · raw 7 · planned 52; tools/list: 26 tools.
 - `get_asset_reference_usage` (spec-only) is served by `ideogram_api` behind `allow_undocumented`: a spec-only
   operation of a curated family is raw, as the undocumented reframe models are. Support: curated 47 · raw 5 ·
   planned 75. tools/list: 19 tools.

@@ -74,6 +74,7 @@ function minimalArguments(spec, variant) {
   if (source !== undefined && !(source in args) && spec.family !== "generate") args[source] = MINIMAL[source]; // generate is quoted as text-to-image
   if (spec.family === "inpaint" || spec.family === "remove_object") args.mask = mask;
   if (variant.fields.has("character_reference_images")) args.character_reference_images = MINIMAL.character_reference_images; // the API requires one; the schema does not say so
+  if (spec.family === "video_reference") args.reference_images = [image]; // the API requires a reference image or video; the prose says so, the schema does not
   return { args };
 }
 

@@ -88,6 +88,27 @@ export const FAMILY_TOOLS: readonly FamilyToolSpec[] = [
     },
   },
   {
+    name: "ideogram_video_text",
+    family: "video_text",
+    defaultModel: "seedance-2-5-text-to-video",
+    title: "Video from a prompt",
+    description: `A video from a text prompt (Seedance 2.5 by default, Seedance 2, Kling 3 Standard, MiniMax H3); each model takes its own duration, aspect ratio, resolution and audio controls. Saved as mp4 to the output directory; long jobs come back as a generation_id for ideogram_generation (video: true). ideogram_quote prices a call first.`,
+  },
+  {
+    name: "ideogram_video_image",
+    family: "video_image",
+    defaultModel: "seedance-2-5-image-to-video",
+    title: "Video from an image",
+    description: `A video that starts from an image (and optionally ends on another): Seedance 2.5 by default, Seedance 2, Kling 3 Standard, MiniMax H3. Takes local files, public https URLs or Ideogram assets. Saved as mp4; long jobs come back as a generation_id. ideogram_quote prices a call first.`,
+  },
+  {
+    name: "ideogram_video_reference",
+    family: "video_reference",
+    defaultModel: "seedance-2-5-reference-to-video",
+    title: "Video from references",
+    description: `A video guided by reference images, audio clips (MP3/WAV, 2-30 s) and uploaded videos in prompt order: Seedance 2.5 by default, Seedance 2, MiniMax H3. Saved as mp4; long jobs come back as a generation_id. ideogram_quote prices a call first.`,
+  },
+  {
     name: "ideogram_layerize",
     family: "layerize",
     defaultModel: "ideogram-3",

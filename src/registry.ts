@@ -19,6 +19,9 @@ export const NEWEST: Readonly<Partial<Record<Family, string>>> = {
   remove_background: "ideogram-1",
   remove_object: "ideogram-1",
   layerize: "ideogram-3",
+  video_text: "seedance-2-5-text-to-video",
+  video_image: "seedance-2-5-image-to-video",
+  video_reference: "seedance-2-5-reference-to-video",
 };
 
 export interface FamilyModels {

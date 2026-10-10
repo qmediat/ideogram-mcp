@@ -96,6 +96,9 @@ Add to `claude_desktop_config.json`:
 | `ideogram_remove_object` | Remove what the mask marks (white = remove) and fill the gap | `ideogram-1` |
 | `ideogram_upscale` | Enlarge an image | `auto` (default), `topaz-bloom-2`, `topaz-redefine`, `topaz-standard-2`, `topaz-text-refine`, `topaz-wonder-3-5`, `nano-banana-pro` |
 | `ideogram_describe` | Describe an image: words (`ideogram-3`, default) or a structured JSON prompt (`ideogram-4`) | `ideogram-3`, `ideogram-4` |
+| `ideogram_video_text` | A video from a prompt: duration, aspect ratio, resolution, audio per model; saved as mp4 | `seedance-2-5-text-to-video` (default), `seedance-2-text-to-video`, `kling-3-standard-text-to-video`, `minimax-h3-text-to-video` |
+| `ideogram_video_image` | A video from a start image (and an end image): files, URLs or assets | `seedance-2-5-image-to-video` (default), `seedance-2-image-to-video`, `kling-3-standard-image-to-video`, `minimax-h3-image-to-video` |
+| `ideogram_video_reference` | A video guided by reference images, MP3/WAV clips and uploaded videos, in prompt order | `seedance-2-5-reference-to-video` (default), `seedance-2-reference-to-video`, `minimax-h3-reference-to-video` |
 | `ideogram_layerize` | A flat image as an editable design: the text-free base image (saved) and the detected text blocks (JSON: text, position, font, size, colour); optional `font_candidate_files` (.ttf, .otf, .woff, .woff2) to match against | `ideogram-3` |
 | `ideogram_quote` | The price of a call: `{"tool": "ideogram_generate", "arguments": {…}}` | every model that offers a dry run (all but describe) |
 | `ideogram_generation` | Collect a generation by `generation_id` (`video: true` for a video: the polls slow to 60 s apart, as the generating tool's wait did) | — |

@@ -46,6 +46,9 @@ export interface RequestLimit {
  * (".ttf, .otf, .woff, .woff2"); test/overlay.test.mjs derives the same set from the specification. */
 export const FONT_FILE_FIELDS: ReadonlySet<string> = new Set(["font_candidate_files", "font_file_body", "font_file_h1", "font_file_h2", "font_file_small"]);
 
+/** The file fields that take audio references (the specification: "MP3 or WAV audio references"). */
+export const AUDIO_FILE_FIELDS: ReadonlySet<string> = new Set(["reference_audios"]);
+
 /** The operations whose file field takes training assets — images, .txt caption sidecars and .zip archives — as the
  * field's description states ("Image files (JPEG, PNG, WebP), .txt caption sidecar files, and/or ZIP archives"). */
 export const DATASET_UPLOAD_OPERATIONS: ReadonlySet<string> = new Set(["upload_dataset_assets"]);
@@ -355,6 +358,15 @@ export const CONSTRAINTS: readonly Constraint[] = [
     anchor: { field: "model_name", phrase: /5-30 characters, alphanumeric with spaces and hyphens allowed/ },
     text: "model_name must be 5-30 characters of letters, digits, spaces and hyphens",
     violated: (f) => typeof f.model_name === "string" && !/^[A-Za-z0-9 -]{5,30}$/.test(f.model_name), // the value as sent, never a trimmed copy
+  },
+  {
+    // Stated by the API at run time ("Provide at least one reference image or reference video", measured by the live
+    // dry run of 2026-10-10) and by the reference_audios prose: the anchor pins the field's presence on the reference-to-video operations.
+    id: "reference-video-needs-a-reference",
+    operations: new Set(["post_generate_video_seed_dance25_reference_to_video", "post_generate_video_seed_dance2_reference_to_video"]), // MiniMax states no such phrase; the live test gives it a reference anyway
+    anchor: { field: "reference_audios", phrase: /Requires at least one reference image/ },
+    text: "a reference-to-video model needs at least one reference image or video: reference_images, reference_image_asset_identifiers or reference_video_asset_identifiers",
+    violated: (f) => !anyGiven(f, ["reference_images", "reference_image_asset_identifiers", "reference_video_asset_identifiers"]),
   },
   {
     id: "source-size-needs-images",

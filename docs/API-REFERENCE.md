@@ -31,6 +31,9 @@ Fields of the operations this release serves (curated or raw) are listed below t
 | `ideogram_remove_object` | Remove a masked object from an image (white in the mask = remove) and fill the gap. Needs the source and a mask of the same size, each a local file, a public https URL or an Ideogram asset. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
 | `ideogram_upscale` | Enlarge an image (auto, Topaz Bloom, Redefine, Standard, Text Refine and Wonder, or Nano Banana Pro); each model takes its own controls. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
 | `ideogram_describe` | Describe an image in words (Ideogram 3.0) or as a structured JSON prompt (Ideogram 4.0). Takes a local file, a public https URL or an Ideogram asset. Describe has no price quote (the API offers no dry run for it). |
+| `ideogram_video_text` | A video from a text prompt (Seedance 2.5 by default, Seedance 2, Kling 3 Standard, MiniMax H3); each model takes its own duration, aspect ratio, resolution and audio controls. Saved as mp4 to the output directory; long jobs come back as a generation_id for ideogram_generation (video: true). ideogram_quote prices a call first. |
+| `ideogram_video_image` | A video that starts from an image (and optionally ends on another): Seedance 2.5 by default, Seedance 2, Kling 3 Standard, MiniMax H3. Takes local files, public https URLs or Ideogram assets. Saved as mp4; long jobs come back as a generation_id. ideogram_quote prices a call first. |
+| `ideogram_video_reference` | A video guided by reference images, audio clips (MP3/WAV, 2-30 s) and uploaded videos in prompt order: Seedance 2.5 by default, Seedance 2, MiniMax H3. Saved as mp4; long jobs come back as a generation_id. ideogram_quote prices a call first. |
 | `ideogram_layerize` | Turn a flat image into an editable design (Ideogram 3.0): the detected text comes back as positioned text blocks with matched fonts, sizes and colours, beside a text-free base image that is saved. Optional font files to match against; ideogram_quote prices a call first. |
 | `ideogram_edit` | Deprecated alias of ideogram_inpaint, kept through 2.x for 1.x callers: the same arguments and models (see ideogram_inpaint's schema). |
 | `ideogram_quote` | Ask Ideogram what a call would cost before making it: give the curated tool's name and the arguments you would pass it. Answers USD and credits from the API's own dry run (exact, or an estimate with its upper bound). Nothing is generated or billed. |
@@ -1347,33 +1350,276 @@ Rules:
 
 | model | operation | path | class | support | quotable | async | body |
 |---|---|---|---|---|---|---|---|
-| kling-3-standard-text-to-video | `post_generate_video_kling_v3_standard_text_to_video` | `POST /v2/video/generate/kling-3-standard-text-to-video` | documented | planned | yes | only | json |
-| minimax-h3-text-to-video | `post_generate_video_minimax_h3_text_to_video` | `POST /v2/video/generate/minimax-h3-text-to-video` | documented | planned | yes | only | json |
-| seedance-2-5-text-to-video | `post_generate_video_seed_dance25_text_to_video` | `POST /v2/video/generate/seedance-2-5-text-to-video` | documented | planned | yes | only | json |
-| seedance-2-text-to-video | `post_generate_video_seed_dance2_text_to_video` | `POST /v2/video/generate/seedance-2-text-to-video` | documented | planned | yes | only | json |
+| kling-3-standard-text-to-video | `post_generate_video_kling_v3_standard_text_to_video` | `POST /v2/video/generate/kling-3-standard-text-to-video` | documented | curated | yes | only | json |
+| minimax-h3-text-to-video | `post_generate_video_minimax_h3_text_to_video` | `POST /v2/video/generate/minimax-h3-text-to-video` | documented | curated | yes | only | json |
+| seedance-2-5-text-to-video | `post_generate_video_seed_dance25_text_to_video` | `POST /v2/video/generate/seedance-2-5-text-to-video` | documented | curated | yes | only | json |
+| seedance-2-text-to-video | `post_generate_video_seed_dance2_text_to_video` | `POST /v2/video/generate/seedance-2-text-to-video` | documented | curated | yes | only | json |
+
+#### kling-3-standard-text-to-video — `POST /v2/video/generate/kling-3-standard-text-to-video`
+
+Text to video with Kling v3 Standard
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | one of 16x9, 9x16, 1x1 |  |
+| `cfg_scale` | number |  |
+| `duration` | integer |  |
+| `generate_audio` | boolean |  |
+| `negative_prompt` | string |  |
+| `private` | boolean \| null |  |
+| `prompt` | string | yes |
+| `shot_type` | one of customize, intelligent |  |
+| `target_collection_id` | string |  |
+| `webhook_url` | string |  |
+
+#### minimax-h3-text-to-video — `POST /v2/video/generate/minimax-h3-text-to-video`
+
+Text to video with MiniMax H3
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | one of 21x9, 16x9, 4x3, 1x1, 3x4, 9x16 |  |
+| `duration` | integer |  |
+| `private` | boolean \| null |  |
+| `prompt` | string | yes |
+| `resolution` | one of 480P, 768P, 2K, 4K |  |
+| `target_collection_id` | string |  |
+| `webhook_url` | string |  |
+
+#### seedance-2-5-text-to-video — `POST /v2/video/generate/seedance-2-5-text-to-video`
+
+Text to video with Seedance 2.5
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | one of auto, 21x9, 16x9, 4x3, 1x1, 3x4, 9x16 |  |
+| `duration` | integer |  |
+| `generate_audio` | boolean |  |
+| `private` | boolean \| null |  |
+| `prompt` | string | yes |
+| `resolution` | one of 480p, 720p, 1080p |  |
+| `target_collection_id` | string |  |
+| `webhook_url` | string |  |
+
+#### seedance-2-text-to-video — `POST /v2/video/generate/seedance-2-text-to-video`
+
+Text to video with Seedance 2.0
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | one of auto, 21x9, 16x9, 4x3, 1x1, 3x4, 9x16 |  |
+| `duration` | integer |  |
+| `generate_audio` | boolean |  |
+| `private` | boolean \| null |  |
+| `prompt` | string | yes |
+| `resolution` | one of 480p, 720p |  |
+| `target_collection_id` | string |  |
+| `webhook_url` | string |  |
 
 ### video_image
 
 | model | operation | path | class | support | quotable | async | body |
 |---|---|---|---|---|---|---|---|
-| kling-3-standard-image-to-video | `post_generate_video_kling_v3_standard_image_to_video` | `POST /v2/video/generate/kling-3-standard-image-to-video` | documented | planned | yes | only | multipart + json |
-| minimax-h3-image-to-video | `post_generate_video_minimax_h3_image_to_video` | `POST /v2/video/generate/minimax-h3-image-to-video` | documented | planned | yes | only | multipart + json |
-| seedance-2-5-image-to-video | `post_generate_video_seed_dance25_image_to_video` | `POST /v2/video/generate/seedance-2-5-image-to-video` | documented | planned | yes | only | multipart + json |
-| seedance-2-image-to-video | `post_generate_video_seed_dance2_image_to_video` | `POST /v2/video/generate/seedance-2-image-to-video` | documented | planned | yes | only | multipart + json |
+| kling-3-standard-image-to-video | `post_generate_video_kling_v3_standard_image_to_video` | `POST /v2/video/generate/kling-3-standard-image-to-video` | documented | curated | yes | only | multipart + json |
+| minimax-h3-image-to-video | `post_generate_video_minimax_h3_image_to_video` | `POST /v2/video/generate/minimax-h3-image-to-video` | documented | curated | yes | only | multipart + json |
+| seedance-2-5-image-to-video | `post_generate_video_seed_dance25_image_to_video` | `POST /v2/video/generate/seedance-2-5-image-to-video` | documented | curated | yes | only | multipart + json |
+| seedance-2-image-to-video | `post_generate_video_seed_dance2_image_to_video` | `POST /v2/video/generate/seedance-2-image-to-video` | documented | curated | yes | only | multipart + json |
+
+#### kling-3-standard-image-to-video — `POST /v2/video/generate/kling-3-standard-image-to-video`
+
+Image to video with Kling v3 Standard
+
+| field | kind | required |
+|---|---|---|
+| `cfg_scale` | number |  |
+| `duration` | integer |  |
+| `end_image` | local file path or public https URL |  |
+| `end_image_asset_identifier` | object |  |
+| `generate_audio` | boolean |  |
+| `image` | local file path or public https URL |  |
+| `image_asset_identifier` | object |  |
+| `negative_prompt` | string |  |
+| `private` | boolean \| null |  |
+| `prompt` | string | yes |
+| `shot_type` | one of customize, intelligent |  |
+| `target_collection_id` | string |  |
+| `webhook_url` | string |  |
+
+File limits: `end_image` 50 MB; `image` 50 MB.
+
+Rules:
+- needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
+
+#### minimax-h3-image-to-video — `POST /v2/video/generate/minimax-h3-image-to-video`
+
+Image to video with MiniMax H3
+
+| field | kind | required |
+|---|---|---|
+| `duration` | integer |  |
+| `end_image` | local file path or public https URL |  |
+| `end_image_asset_identifier` | object |  |
+| `image` | local file path or public https URL |  |
+| `image_asset_identifier` | object |  |
+| `private` | boolean \| null |  |
+| `prompt` | string | yes |
+| `resolution` | one of 480P, 768P, 2K, 4K |  |
+| `target_collection_id` | string |  |
+| `webhook_url` | string |  |
+
+File limits: `end_image` 50 MB; `image` 50 MB.
+
+Rules:
+- needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
+
+#### seedance-2-5-image-to-video — `POST /v2/video/generate/seedance-2-5-image-to-video`
+
+Image to video with Seedance 2.5
+
+| field | kind | required |
+|---|---|---|
+| `duration` | integer |  |
+| `end_image` | local file path or public https URL |  |
+| `end_image_asset_identifier` | object |  |
+| `generate_audio` | boolean |  |
+| `image` | local file path or public https URL |  |
+| `image_asset_identifier` | object |  |
+| `private` | boolean \| null |  |
+| `prompt` | string | yes |
+| `resolution` | one of 480p, 720p, 1080p |  |
+| `target_collection_id` | string |  |
+| `webhook_url` | string |  |
+
+File limits: `end_image` 50 MB; `image` 50 MB.
+
+Rules:
+- needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
+
+#### seedance-2-image-to-video — `POST /v2/video/generate/seedance-2-image-to-video`
+
+Image to video with Seedance 2.0
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | one of auto, 21x9, 16x9, 4x3, 1x1, 3x4, 9x16 |  |
+| `duration` | integer |  |
+| `end_image` | local file path or public https URL |  |
+| `end_image_asset_identifier` | object |  |
+| `generate_audio` | boolean |  |
+| `image` | local file path or public https URL |  |
+| `image_asset_identifier` | object |  |
+| `private` | boolean \| null |  |
+| `prompt` | string | yes |
+| `resolution` | one of 480p, 720p |  |
+| `target_collection_id` | string |  |
+| `webhook_url` | string |  |
+
+File limits: `end_image` 50 MB; `image` 50 MB.
+
+Rules:
+- needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
 
 ### video_reference
 
 | model | operation | path | class | support | quotable | async | body |
 |---|---|---|---|---|---|---|---|
-| minimax-h3-reference-to-video | `post_edit_video_minimax_h3_reference_to_video` | `POST /v2/video/generate/minimax-h3-reference-to-video` | documented | planned | yes | only | multipart + json |
-| seedance-2-5-reference-to-video | `post_generate_video_seed_dance25_reference_to_video` | `POST /v2/video/generate/seedance-2-5-reference-to-video` | documented | planned | yes | only | multipart + json |
-| seedance-2-reference-to-video | `post_generate_video_seed_dance2_reference_to_video` | `POST /v2/video/generate/seedance-2-reference-to-video` | documented | planned | yes | only | multipart + json |
+| minimax-h3-reference-to-video | `post_edit_video_minimax_h3_reference_to_video` | `POST /v2/video/generate/minimax-h3-reference-to-video` | documented | curated | yes | only | multipart + json |
+| seedance-2-5-reference-to-video | `post_generate_video_seed_dance25_reference_to_video` | `POST /v2/video/generate/seedance-2-5-reference-to-video` | documented | curated | yes | only | multipart + json |
+| seedance-2-reference-to-video | `post_generate_video_seed_dance2_reference_to_video` | `POST /v2/video/generate/seedance-2-reference-to-video` | documented | curated | yes | only | multipart + json |
+
+#### minimax-h3-reference-to-video — `POST /v2/video/generate/minimax-h3-reference-to-video`
+
+Reference to video with MiniMax H3
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | one of 21x9, 16x9, 4x3, 1x1, 3x4, 9x16 |  |
+| `duration` | integer |  |
+| `private` | boolean \| null |  |
+| `prompt` | string | yes |
+| `prompt_expansion_mode` | one of disabled, fast, balanced, quality |  |
+| `reference_audios` | local file paths or public https URLs |  |
+| `reference_image_asset_identifiers` | array of object |  |
+| `reference_images` | local file paths or public https URLs |  |
+| `reference_video_asset_identifiers` | array of object |  |
+| `resolution` | one of 480P, 768P, 2K, 4K |  |
+| `target_collection_id` | string |  |
+| `webhook_url` | string |  |
+
+File limits: `reference_audios` 15 MB × 3; `reference_images` 50 MB × 9.
+
+#### seedance-2-5-reference-to-video — `POST /v2/video/generate/seedance-2-5-reference-to-video`
+
+Reference to video with Seedance 2.5
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | one of auto, 21x9, 16x9, 4x3, 1x1, 3x4, 9x16 |  |
+| `duration` | integer |  |
+| `generate_audio` | boolean |  |
+| `private` | boolean \| null |  |
+| `prompt` | string | yes |
+| `reference_audios` | local file paths or public https URLs |  |
+| `reference_image_asset_identifiers` | array of object |  |
+| `reference_images` | local file paths or public https URLs |  |
+| `reference_video_asset_identifiers` | array of object |  |
+| `resolution` | one of 480p, 720p, 1080p |  |
+| `target_collection_id` | string |  |
+| `webhook_url` | string |  |
+
+File limits: `reference_audios` 15 MB × 10; `reference_images` 50 MB × 9.
+
+Rules:
+- a reference-to-video model needs at least one reference image or video: reference_images, reference_image_asset_identifiers or reference_video_asset_identifiers
+
+#### seedance-2-reference-to-video — `POST /v2/video/generate/seedance-2-reference-to-video`
+
+Reference to video with Seedance 2.0
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | one of auto, 21x9, 16x9, 4x3, 1x1, 3x4, 9x16 |  |
+| `duration` | integer |  |
+| `generate_audio` | boolean |  |
+| `private` | boolean \| null |  |
+| `prompt` | string | yes |
+| `reference_audios` | local file paths or public https URLs |  |
+| `reference_image_asset_identifiers` | array of object |  |
+| `reference_images` | local file paths or public https URLs |  |
+| `reference_video_asset_identifiers` | array of object |  |
+| `resolution` | one of 480p, 720p |  |
+| `target_collection_id` | string |  |
+| `webhook_url` | string |  |
+
+File limits: `reference_audios` 15 MB × 3; `reference_images` 50 MB × 9.
+
+Rules:
+- a reference-to-video model needs at least one reference image or video: reference_images, reference_image_asset_identifiers or reference_video_asset_identifiers
 
 ### video_edit
 
 | model | operation | path | class | support | quotable | async | body |
 |---|---|---|---|---|---|---|---|
-| seedance-2 | `post_edit_video_seed_dance2` | `POST /v2/video/edit/seedance-2` | spec_only | planned | yes | only | json |
+| seedance-2 | `post_edit_video_seed_dance2` | `POST /v2/video/edit/seedance-2` | spec_only | raw | yes | only | json |
+
+#### seedance-2 — `POST /v2/video/edit/seedance-2`
+
+Edit video with Seedance 2.0
+
+| field | kind | required |
+|---|---|---|
+| `duration` | integer |  |
+| `end_frame_time` | number | yes |
+| `generate_audio` | boolean |  |
+| `is_end_frame_included` | boolean |  |
+| `is_start_frame_included` | boolean |  |
+| `private` | boolean \| null |  |
+| `prompt` | string | yes |
+| `resolution` | one of 480p, 720p |  |
+| `start_frame_time` | number | yes |
+| `target_collection_id` | string |  |
+| `video_asset_identifier` | object | yes |
+| `webhook_url` | string |  |
 
 ### tool
 

@@ -50,8 +50,18 @@ export interface LayeredItem {
   readonly textBlocks: readonly unknown[];
 }
 
+/** One generated video (the specification's `VideoObject`): the link expires like an image's; saved as mp4. */
+export interface VideoItem {
+  readonly url: string | null;
+  readonly prompt: string | null;
+  readonly resolution: string | null;
+  readonly aspectRatio: string | null;
+  readonly durationS: number | null;
+}
+
 export type Payload =
   | { readonly kind: "images"; readonly items: readonly ImageItem[] }
+  | { readonly kind: "videos"; readonly items: readonly VideoItem[] }
   | { readonly kind: "layered"; readonly items: readonly LayeredItem[] }
   | { readonly kind: "description"; readonly descriptionId: string; readonly texts: readonly string[]; readonly jsonPrompt: unknown }
   | { readonly kind: "record"; readonly body: unknown };
@@ -86,6 +96,15 @@ const ImageItemShape = z.looseObject({
   seed: z.number().optional(),
   prompt: z.string().optional(),
   is_image_safe: z.boolean().optional(),
+});
+
+const VideoItemShape = z.looseObject({
+  object_type: z.literal("video.generation"),
+  url: z.string().nullish(),
+  prompt: z.string().optional(),
+  resolution: z.string().optional(),
+  aspect_ratio: z.string().optional(),
+  duration: z.number().optional(),
 });
 
 const LayeredItemShape = z.looseObject({
@@ -131,6 +150,17 @@ function imageItems(data: readonly unknown[]): ImageItem[] | null {
   return items;
 }
 
+function videoItems(data: readonly unknown[]): VideoItem[] | null {
+  const items: VideoItem[] = [];
+  for (const raw of data) {
+    const item = VideoItemShape.safeParse(raw);
+    if (!item.success) return null;
+    const d = item.data;
+    items.push({ url: d.url ?? null, prompt: d.prompt ?? null, resolution: d.resolution ?? null, aspectRatio: d.aspect_ratio ?? null, durationS: d.duration ?? null });
+  }
+  return items;
+}
+
 function layeredItems(data: readonly unknown[]): LayeredItem[] | null {
   const items: LayeredItem[] = [];
   for (const raw of data) {
@@ -162,6 +192,8 @@ export function payloadOf(body: unknown): Payload | null {
   if (b.data === undefined) return b.generation_id === undefined ? { kind: "record", body } : null;
   const items = imageItems(b.data);
   if (items !== null) return { kind: "images", items };
+  const videos = videoItems(b.data);
+  if (videos !== null) return { kind: "videos", items: videos };
   const layered = layeredItems(b.data);
   return layered === null ? { kind: "record", body } : { kind: "layered", items: layered };
 }

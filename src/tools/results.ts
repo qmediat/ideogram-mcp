@@ -12,7 +12,7 @@ import { COUNTERS } from "../counters.js";
 import { INLINE_MAX_BYTES, INLINE_MAX_TOTAL_BYTES, mbText } from "../spec/overlay.js";
 import { IdeogramApiError } from "../errors.js";
 import { microsToUsd } from "../cost.js";
-import type { ImageItem, LayeredItem, Outcome, Payload } from "../lifecycle.js";
+import type { ImageItem, LayeredItem, Outcome, Payload, VideoItem } from "../lifecycle.js";
 import type { ToolContext } from "./context.js";
 
 /** JSON text of a value that may hold bigints (the generated schemas parse int64 as bigint). */
@@ -134,6 +134,28 @@ async function layeredResult(ctx: ToolContext, items: readonly LayeredItem[]): P
   return { lines: [head, ...images.lines, ...items.flatMap(designLines)], isError: !usable, files: images.files };
 }
 
+/** Generated videos: each saved as mp4 (the download client takes video/mp4), its measured length and size said. */
+async function videosResult(ctx: ToolContext, items: readonly VideoItem[]): Promise<Shaped> {
+  const withUrl = items.filter((item) => item.url !== null);
+  const results = await Promise.allSettled(withUrl.map((item) => ctx.client.download(item.url as string, ctx.outputDir, ctx.budget)));
+  const lines: string[] = [];
+  let saved = 0;
+  results.forEach((result, i) => {
+    const item = withUrl[i];
+    if (result.status === "fulfilled") {
+      saved += 1;
+      lines.push(`Saved: ${result.value.path}`, `  Duration: ${item.durationS ?? "?"} s · Resolution: ${item.resolution ?? "?"} · Aspect: ${item.aspectRatio ?? "?"}`);
+      if (item.prompt !== null) lines.push(`  Prompt used: ${item.prompt}`);
+      return;
+    }
+    COUNTERS.downloadFailures += 1;
+    lines.push(`Not saved: ${item.url} — ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`);
+  });
+  const withheld = items.length - withUrl.length;
+  if (withheld > 0) lines.push(`${withheld} video(s) listed without a link (nothing downloaded)`);
+  return { lines: [`${saved} of ${items.length} video(s) saved.`, ...lines], isError: saved === 0 };
+}
+
 function descriptionLines(payload: Extract<Payload, { kind: "description" }>): string[] {
   const lines = payload.texts.map((text, i) => `${i + 1}. ${text}`);
   if (payload.jsonPrompt !== null) lines.push(`JSON prompt:\n${jsonText(payload.jsonPrompt)}`);
@@ -146,6 +168,10 @@ async function completedResult(ctx: ToolContext, outcome: Extract<Outcome, { kin
   const payload = outcome.payload;
   if (payload.kind === "description") return { lines: [...head, ...descriptionLines(payload)], isError: false };
   if (payload.kind === "record") return { lines: [...head, jsonText(payload.body)], isError: false };
+  if (payload.kind === "videos") {
+    const videos = await videosResult(ctx, payload.items);
+    return { lines: [...head, ...videos.lines], isError: videos.isError }; // never inline: a video is not image content
+  }
   if (payload.kind === "layered") {
     const layered = await layeredResult(ctx, payload.items);
     return { lines: [...head, ...layered.lines], isError: layered.isError, files: layered.files };

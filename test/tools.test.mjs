@@ -174,7 +174,7 @@ test("ideogram_api refuses by class, by the support table and undocumented opera
     [{ operation: "post_generate_image" }, /legacy path/],
     [{ operation: "post_batch" }, /provider's own/],
     [{ operation: "get_usage_info" }, /web-app session/],
-    [{ operation: "post_generate_video_seed_dance2_text_to_video" }, /planned for a later release/],
+    [{ operation: "post_ad_resizer" }, /planned for a later release/],
     [{ operation: "post_reframe_image_auto" }, /set allow_undocumented: true/],
     [{ operation: "nope" }, /No operation nope/],
   ];
@@ -614,4 +614,41 @@ test("an inline read failure is an omission with its reason, never the loss of t
   } finally {
     await api.close();
   }
+});
+
+test("ideogram_video_text sends the model's JSON body async-only, a finished video is saved as mp4 with its measured length, never inlined", async () => {
+  const mp4 = Buffer.from("0000001c667479706973366d", "hex");
+  const handler = (req, _n, api) => {
+    if (req.url === "/v/a.mp4") return { status: 200, headers: { "content-type": "video/mp4" }, body: mp4 };
+    if (req.method === "POST") return { json: { generation_id: "v1", created: "2026-10-07T00:00:00Z" } };
+    return { json: { generation_id: "v1", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "video.generation", url: `${api.base}/v/a.mp4`, prompt: "a sunrise", resolution: "720p", aspect_ratio: "16:9", duration: 5 }] } };
+  };
+  const { requests, result, ctx } = await call("ideogram_video_text", { prompt: "a sunrise", duration: 5, aspect_ratio: "16x9", inline_images: true }, handler);
+  assert.equal(requests[0].url, "/v2/video/generate/seedance-2-5-text-to-video");
+  assert.deepEqual(sentJson(requests), { prompt: "a sunrise", duration: 5, aspect_ratio: "16x9", private: true });
+  assert.match(text(result), /Generation v1 completed\.\n1 of 1 video\(s\) saved\.\nSaved: .*\.mp4\n  Duration: 5 s · Resolution: 720p · Aspect: 16:9\n  Prompt used: a sunrise/);
+  assert.equal(result.content.length, 1, "a video is never inline image content");
+  assert.equal((await readdir(ctx.outputDir)).length, 1);
+  const kling = await call("ideogram_video_text", { model: "kling-3-standard-text-to-video", prompt: "x", cfg_scale: 0.5, wait_s: 0 }, handler);
+  assert.equal(kling.requests[0].url, "/v2/video/generate/kling-3-standard-text-to-video");
+  const foreign = await call("ideogram_video_text", { prompt: "x", cfg_scale: 0.5 }).catch((e) => e);
+  assert.match(foreign.message, /`cfg_scale` is not a parameter of seedance-2-5-text-to-video; the models that take it: kling-3-standard-text-to-video/);
+});
+
+test("ideogram_video_image takes the start and end images as parts; ideogram_video_reference sends audio references as MP3/WAV and refuses a PNG there", async () => {
+  const handler = (req) => (req.method === "POST" ? { json: { generation_id: "v2", created: "2026-10-07T00:00:00Z" } } : pending("v2"));
+  const img = await call("ideogram_video_image", { prompt: "pan", image: png, end_image: png, wait_s: 0 }, handler);
+  assert.equal(img.requests[0].url, "/v2/video/generate/seedance-2-5-image-to-video");
+  assert.match(img.requests[0].body.toString("latin1"), /name="image"; filename="image.png"/);
+  assert.match(img.requests[0].body.toString("latin1"), /name="end_image"; filename="end_image.png"/);
+  const wav = join(dir, "voice.wav");
+  await writeFile(wav, Buffer.from("52494646", "hex"));
+  const ref = await call("ideogram_video_reference", { prompt: "sing", reference_images: [png], reference_audios: [wav], wait_s: 0 }, handler);
+  assert.equal(ref.requests[0].url, "/v2/video/generate/seedance-2-5-reference-to-video");
+  assert.match(ref.requests[0].body.toString("latin1"), /name="reference_audios"; filename="reference_audios.wav"\r\nContent-Type: audio\/wav/);
+  const notAudio = await call("ideogram_video_reference", { prompt: "sing", reference_images: [png], reference_audios: [png] }).catch((e) => e);
+  assert.match(notAudio.message, /reference_audios: unsupported file type \.png; one of \.mp3, \.wav$/);
+  assert.match(text(ref.result), /Accepted: generation v2 is still running/);
+  const bare = await call("ideogram_video_reference", { prompt: "sing", reference_audios: [wav] }).catch((e) => e);
+  assert.match(bare.message, /needs at least one reference image or video/);
 });
