@@ -4,6 +4,8 @@
  * source material only. A field without an entry here is advertised with its type alone.
  */
 
+import { INLINE_MAX_BYTES, INLINE_MAX_TOTAL_BYTES, mbText } from "../spec/overlay.js";
+
 /** The fields a curated tool sets itself or leaves to `ideogram_api`: never part of a curated tool's input. */
 export const RESERVED_FIELDS: ReadonlySet<string> = new Set(["async", "internal", "webhook_url", "target_collection_id"]);
 
@@ -15,7 +17,7 @@ export const PRIVATE_FIELD = "private";
 /** Inputs of every curated tool that are not request fields. */
 export const CONTROL_FIELDS: ReadonlySet<string> = new Set(["model", "wait_s", "inline_images"]);
 
-export const INLINE_TEXT = "true: each saved image is also returned as image content (base64; one over 3.75 MB, or past 10 MB in total, by path only), for a client without file access";
+export const INLINE_TEXT = `true: each saved image is also returned as image content (base64; one over ${mbText(INLINE_MAX_BYTES, 2)}, or past ${mbText(INLINE_MAX_TOTAL_BYTES, 0)} in total, by path only), for a client without file access`;
 
 export const WAIT_TEXT =
   "Seconds to wait for the result (0-50, default 45). The job is accepted first; if it is still running when the wait ends, the result is its generation_id for ideogram_generation (never resubmitted, never billed twice).";
