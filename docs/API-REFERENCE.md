@@ -35,6 +35,9 @@ Fields of the operations this release serves (curated or raw) are listed below t
 | `ideogram_edit` | Deprecated alias of ideogram_inpaint, kept through 2.x for 1.x callers: the same arguments and models (see ideogram_inpaint's schema). |
 | `ideogram_quote` | Ask Ideogram what a call would cost before making it: give the curated tool's name and the arguments you would pass it. Answers USD and credits from the API's own dry run (exact, or an estimate with its upper bound). Nothing is generated or billed. |
 | `ideogram_generation` | Collect the result of a generation by its generation_id (from a tool that answered 'still running', or from an earlier session): waits up to wait_s for it, then saves its images. Reading a generation is free and never runs it again. |
+| `ideogram_usage` | Your organization's billed API usage as Ideogram reports it: dense time buckets of line items (product, endpoint, cost, units, the redacted API key), summed per product and per currency here, the buckets handed on unchanged (the shape ai-cost reads). Default: the last 7 days by day. Reads only. |
+| `ideogram_invoices` | Your organization's invoices with their line items — the billing record the usage reconciles against. Needs an organization-admin key. Reads only. |
+| `ideogram_api_keys` | The API keys in your organization, newest first, key material redacted (the id and the redacted prefix match the usage report's line items). Needs an organization-admin key. Reads only. |
 | `ideogram_operations` | Discover what Ideogram's API offers and what this server serves: no input = every family; family = its operations (model, class, support, quotable); operation = its fields, file limits and rules, ready for ideogram_api. |
 | `ideogram_api` | Advanced: call an Ideogram operation by id (from ideogram_operations) when no curated tool covers it — a model the documentation index does not list (allow_undocumented), or a call with webhook_url / target_collection_id. params holds path, query, headers and body apart; files maps local files or public https URLs to file fields. Checked against the operation's own schema before anything is sent; dry_run prices it instead. |
 
@@ -1421,10 +1424,34 @@ No body.
 | model | operation | path | class | support | quotable | async | body |
 |---|---|---|---|---|---|---|---|
 | — | `get_webhook_signing_jwks` | `GET /v1/.well-known/jwks.json` | v1_only | planned | no | none | none |
-| — | `get_account_api_keys` | `GET /v2/account/api-keys` | documented | planned | no | none | none |
-| — | `get_account_invoices` | `GET /v2/account/invoices` | documented | planned | no | none | none |
-| — | `get_account_usage` | `GET /v2/account/usage` | documented | planned | no | none | none |
-| — | `get_asset_reference_usage` | `GET /v2/assets/reference-usage` | spec_only | planned | no | none | none |
+| — | `get_account_api_keys` | `GET /v2/account/api-keys` | documented | curated | no | none | none |
+| — | `get_account_invoices` | `GET /v2/account/invoices` | documented | curated | no | none | none |
+| — | `get_account_usage` | `GET /v2/account/usage` | documented | curated | no | none | none |
+| — | `get_asset_reference_usage` | `GET /v2/assets/reference-usage` | spec_only | raw | no | none | none |
+
+#### get_account_api_keys — `GET /v2/account/api-keys`
+
+List API keys
+
+No body.
+
+#### get_account_invoices — `GET /v2/account/invoices`
+
+List invoices
+
+No body.
+
+#### get_account_usage — `GET /v2/account/usage`
+
+Get usage and spend
+
+No body.
+
+#### get_asset_reference_usage — `GET /v2/assets/reference-usage`
+
+Rank edit reference assets used by organization requests
+
+No body.
 
 ### training
 

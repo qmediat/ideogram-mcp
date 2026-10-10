@@ -4,6 +4,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { IdeogramApiError } from "./errors.js";
 import { callContext } from "./tools/context.js";
 import type { ServerContext, ToolDefinition } from "./tools/context.js";
+import { ACCOUNT_TOOLS } from "./tools/account.js";
 import { curatedDefinitions } from "./tools/curated.js";
 import { OPERATIONS_TOOL } from "./tools/discovery.js";
 import { GENERATION_TOOL } from "./tools/generation.js";
@@ -15,7 +16,7 @@ const { version } = createRequire(import.meta.url)("../package.json") as { versi
 
 /** Every tool of this release, in the order tools/list shows them. */
 export function toolDefinitions(): ToolDefinition[] {
-  return [...curatedDefinitions(), QUOTE_TOOL, GENERATION_TOOL, OPERATIONS_TOOL, RAW_TOOL];
+  return [...curatedDefinitions(), QUOTE_TOOL, GENERATION_TOOL, ...ACCOUNT_TOOLS, OPERATIONS_TOOL, RAW_TOOL];
 }
 
 /** A tool failure as the text the client sees: the API's typed error, or the refusal's own sentence. */

@@ -20,6 +20,8 @@ const EXAMPLES_CONTRADICTING_THEIR_SCHEMA = {
   GenerateImageIdeogram45Response: "generation_kind is null in the example, an enum (sampling | workflow) in the schema",
   PreciseEditImageIdeogram45Response: "generation_kind is null in the example, an enum (sampling | workflow) in the schema",
   ToolRemixResponse: 'seed is "" in the example, an integer in the schema',
+  ListAccountApiKeysResponse: "status is null in the example, an enum (active | disabled | archived) in the schema",
+  AssetReferenceUsageResponse: "attributes[].value_type is null in the example, an enum (TEXT | NUMBER) in the schema",
 };
 
 test("every served operation's response example parses with its generated schema, except the provider's own contradictions", () => {

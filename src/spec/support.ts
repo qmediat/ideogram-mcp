@@ -1,11 +1,12 @@
 /**
  * Runtime support of the shipped release, apart from the operation's class: what `ideogram_api` serves and what the
- * curated tools cover. In 2.1.0 (step 1 of docs/DESIGN-ideogram-v2.md):
+ * curated tools cover. In 2.2.0 (step 2 of docs/DESIGN-ideogram-v2.md):
  *
  *   curated  the documented models of the eleven image families (the seven of 1.x, precise edit, remove background,
- *            remove object, layerize), and the generation lookup
- *   raw      every other /v2/image operation — spec_only behind `allow_undocumented`
- *   planned  every other exposable operation (video, tools, workflows, account, v1_only): later releases
+ *            remove object, layerize), the generation lookup, the three documented account operations
+ *   raw      every other /v2/image operation and every spec_only operation of a curated family — behind
+ *            `allow_undocumented`
+ *   planned  every other exposable operation (video, tools, workflows, v1_only): later releases
  *
  * Classes legacy, internal and bearer_only are never supported.
  */
@@ -27,6 +28,7 @@ export const CURATED_FAMILIES: ReadonlySet<Family> = new Set<Family>([
   "upscale",
   "describe",
   "layerize",
+  "account",
 ]);
 
 export const CURATED_OPERATIONS_OUTSIDE_FAMILIES: ReadonlySet<string> = new Set(["get_generation_v2"]);
@@ -36,7 +38,7 @@ export function supportOf(op: Operation): SupportStatus {
   if (CURATED_OPERATIONS_OUTSIDE_FAMILIES.has(op.id)) return "curated";
   const curatedFamily = op.family !== null && CURATED_FAMILIES.has(op.family);
   if (curatedFamily && op.class === "documented") return "curated";
-  if (op.path.startsWith("/v2/image/")) return "raw";
+  if (op.path.startsWith("/v2/image/") || (curatedFamily && op.class === "spec_only")) return "raw";
   return "planned";
 }
 

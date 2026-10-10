@@ -99,6 +99,9 @@ Add to `claude_desktop_config.json`:
 | `ideogram_layerize` | A flat image as an editable design: the text-free base image (saved) and the detected text blocks (JSON: text, position, font, size, colour); optional `font_candidate_files` (.ttf, .otf, .woff, .woff2) to match against | `ideogram-3` |
 | `ideogram_quote` | The price of a call: `{"tool": "ideogram_generate", "arguments": {…}}` | every model that offers a dry run (all but describe) |
 | `ideogram_generation` | Collect a generation by `generation_id` (`video: true` for a video: the polls slow to 60 s apart, as the generating tool's wait did) | — |
+| `ideogram_usage` | Billed usage as Ideogram reports it: buckets of line items summed per product and currency, the buckets handed on (the shape ai-cost reads); default the last 7 days by day | — |
+| `ideogram_invoices` | The organization's invoices with their line items (organization-admin key) | — |
+| `ideogram_api_keys` | The organization's API keys, redacted (organization-admin key) | — |
 | `ideogram_operations` | What the API offers: families, operations, fields, limits | — |
 | `ideogram_api` | Any served operation by id, including the ones the documentation index does not list (the reframe models `auto`, `bria-expand`, `gpt-image-2-5-flare`, `nano-banana-pro`) | — |
 
@@ -112,6 +115,24 @@ address, no local name, no private address, no redirect), inside the call's budg
 `inline_images: true` on any tool that saves images returns each saved image under 3.75 MB, up to 10 MB per result,
 as image content beside the text (the others stay by path), so a client that cannot read this machine's files still
 sees the result. Both are off unless asked.
+
+### Usage, invoices, webhooks
+
+`ideogram_usage` asks `GET /v2/account/usage` for a range (RFC 3339 times, `1d` or `1h` buckets, the `api` and `app`
+sources) and answers with the sums per product and per currency — decimal strings, never floats — followed by the
+buckets exactly as Ideogram sent them, the shape a cost tool reads. `ideogram_invoices` and `ideogram_api_keys` need
+an API key owned by an organization admin (Ideogram answers 404 to any other key, and the tool says so).
+
+Ideogram signs its webhooks with Ed25519: the canonical message is `request_id\nuser_id\ntimestamp\nsha256_hex(body)`,
+the signature travels in `X-Ideogram-Webhook-Signature` (the key id in `X-Ideogram-Webhook-Key-Id`), the public keys
+are the JWKS at `GET https://api.ideogram.ai/v1/.well-known/jwks.json` (public; cache up to 24 h). The receiver — not
+this server, which has no public URL — verifies with the helper this package ships:
+
+```js
+import { verifyWebhook } from "@qmediat.io/ideogram-mcp/dist/webhooks.js";
+const kid = verifyWebhook({ body, requestId, userId, timestamp, signature: headers["x-ideogram-webhook-signature"], keyId: headers["x-ideogram-webhook-key-id"] }, jwks);
+if (kid === null) reject(); // the key id that verified, else null
+```
 
 ### Waiting, and collecting later
 

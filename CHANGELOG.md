@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 Step 1 of `docs/DESIGN-ideogram-v2.md`: every image family of Ideogram's documentation index has its own tool.
+Step 2: the account — usage and spend, invoices, API keys — and the webhook signature helper.
 
 ### Added
 
@@ -22,6 +23,19 @@ Step 1 of `docs/DESIGN-ideogram-v2.md`: every image family of Ideogram's documen
   each saved image under 3.75 MB (the model APIs behind the clients take 5 MiB of base64 per image), up to 10 MB per
   result, is also returned as MCP image content with its media type normalized, for a client without access to this
   machine's files; the others are named with their size and stay by path. Off by default.
+- `ideogram_usage`: the organization's billed API usage as Ideogram reports it (`GET /v2/account/usage`: dense time
+  buckets of line items — product, endpoint, cost, billed units, the redacted API key, the source), the last 7 days
+  by day unless told otherwise, summed per product and per currency as decimal strings (never floats), the buckets
+  handed on unchanged: the shape ai-cost reads. `ideogram_invoices` and `ideogram_api_keys` list what their
+  endpoints return; a 404 is said as what it is (an organization-admin key is needed). Reads only, never billed.
+- `verifyWebhook` (`dist/webhooks.js`): the canonical message Ideogram signs
+  (`request_id\nuser_id\ntimestamp\nsha256_hex(body)`) checked against the JWKS of `GET /v1/.well-known/jwks.json`
+  with Ed25519, the header's key first, a rotated key still accepted, the signature as base64, base64url or hex.
+  A helper for the receiver: this server receives no webhook itself (a stdio process has no public URL).
+- `get_asset_reference_usage` (spec-only) is served by `ideogram_api` behind `allow_undocumented`: a spec-only
+  operation of a curated family is raw, as the undocumented reframe models are. Support: curated 47 · raw 5 ·
+  planned 75. tools/list: 19 tools.
+
 - `ideogram_precise_edit` (Ideogram 4.5: the image, an optional mask, up to four `reference_images` or
   `reference_image_asset_identifiers`, `context_window`), `ideogram_remove_background` and `ideogram_remove_object`
   (ideogram-1), `ideogram_layerize` (Ideogram 3.0: the text-free base image is saved, the detected text blocks are
