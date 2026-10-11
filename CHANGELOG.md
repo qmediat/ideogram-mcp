@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Step 1 of `docs/DESIGN-ideogram-v2.md`: every image family of Ideogram's documentation index has its own tool.
 Step 2: the account — usage and spend, invoices, API keys — and the webhook signature helper.
+Step 3: custom-model training — datasets, their assets, the training of an Ideogram 4.0 or 3.0 model, the models.
 
 ### Added
 
@@ -42,6 +43,27 @@ Step 2: the account — usage and spend, invoices, API keys — and the webhook 
   missing header is null, never a throw. A helper for the receiver: this server receives no webhook itself (a stdio process has no public
   URL); where `request_id`, `user_id` and `timestamp` travel is not stated by the specification.
 - `ideogram_operations` and the API reference list an operation's path and query parameters.
+- `ideogram_datasets` (the list, searched by name, or one dataset with its files, captions and the models trained
+  from it), `ideogram_dataset_upload` (images, .txt caption sidecars and .zip archives — local paths or public https
+  URLs — into an existing dataset or a new one created from a name; what was accepted and what failed, with the
+  reason), `ideogram_train` (an Ideogram 4.0 or 3.0 model from a dataset of 15 to 100 images; any hyperparameter
+  routes to the advanced operation, each checked by its own schema; a field the model's training does not take is
+  refused by name) and `ideogram_models` (the list by scope and status, or one model with its training runs): the
+  v1 endpoints the index keeps for training, curated. `train_dataset_model` is served raw. Support: curated 57 · raw
+  6 · planned 64; tools/list: 23 tools.
+- A dataset created by `ideogram_dataset_upload` is named first in every answer that follows (an upload error, a
+  200 off the schema, a file that cannot be written), so a retry uploads into it instead of making another; a create
+  answered off its schema says a dataset MAY exist. A URL's last segment is percent-decoded before it names the part
+  (`red%20door.png` pairs with its caption as `red door.png`). every call with a side effect (create a dataset, upload assets, start a
+  training) has one typed outcome (`sendOperation`): refused, not sent, unknown, or the answer — a refused or never-sent
+  upload says "Nothing was uploaded", an unknown one "the assets MAY be in the dataset", an unknown train "a training
+  MAY have started and will be billed"; the client's status-0 errors carry `details.sent` (false when the budget ended
+  or the connection was refused before anything left this machine). The raw answer's file is best-effort: a directory
+  that cannot be written shows the answer inline and never turns a success into an error (`rawWriteFailures` counted);
+  a LISTING whose answer is neither written nor small enough to print is an error (the data is the listing). The same
+  typed decision reaches every surface that sends a request with a side effect: a family tool or `ideogram_api` whose
+  non-GET request fails after it left (a 5xx, a cut connection) says the operation MAY have run and be billed. A
+  decoded URL segment is cut at its last slash or backslash before it names a part (`..%2F..%2Fx.png` is `x.png`).
 - `get_asset_reference_usage` (spec-only) is served by `ideogram_api` behind `allow_undocumented`: a spec-only
   operation of a curated family is raw, as the undocumented reframe models are. Support: curated 47 · raw 5 ·
   planned 75. tools/list: 19 tools.

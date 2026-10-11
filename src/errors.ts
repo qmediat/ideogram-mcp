@@ -13,6 +13,9 @@ export interface ApiErrorDetails {
   readonly retryAfterS?: number;
   readonly maxInflight?: number;
   readonly taskCompletionSpeed?: string;
+  /** A failure before any response (status 0) only: false when the request certainly never left this machine, true when
+   * it may have reached Ideogram — the caller of a non-idempotent request decides from this, never from the wording. */
+  readonly sent?: boolean;
 }
 
 /** What the caller can do about each reject reason. */

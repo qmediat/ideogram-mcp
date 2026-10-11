@@ -30,6 +30,10 @@ const EXPECTED_TOOLS = [
   "ideogram_usage",
   "ideogram_invoices",
   "ideogram_api_keys",
+  "ideogram_datasets",
+  "ideogram_dataset_upload",
+  "ideogram_train",
+  "ideogram_models",
   "ideogram_operations",
   "ideogram_api",
 ];

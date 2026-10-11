@@ -13,11 +13,13 @@ export interface Counters {
   downloadFailures: number;
   /** A saved image that could not be read back for an inline answer. */
   inlineReadFailures: number;
+  /** An answer received whole that could not be written to the output directory (shown inline instead). */
+  rawWriteFailures: number;
 }
 
-export const COUNTERS: Counters = { retries: 0, contractMismatches: 0, pollErrors: 0, downloadFailures: 0, inlineReadFailures: 0 };
+export const COUNTERS: Counters = { retries: 0, contractMismatches: 0, pollErrors: 0, downloadFailures: 0, inlineReadFailures: 0, rawWriteFailures: 0 };
 
 export function countersLine(): string {
   const c = COUNTERS;
-  return `since start: ${c.retries} retries, ${c.contractMismatches} contract mismatches, ${c.pollErrors} poll errors, ${c.downloadFailures} failed downloads, ${c.inlineReadFailures} inline read-backs failed`;
+  return `since start: ${c.retries} retries, ${c.contractMismatches} contract mismatches, ${c.pollErrors} poll errors, ${c.downloadFailures} failed downloads, ${c.inlineReadFailures} inline read-backs failed, ${c.rawWriteFailures} answers not written to disk`;
 }

@@ -11,7 +11,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { ApiRequest } from "../client.js";
 import { quote } from "../cost.js";
 import { quoteText } from "./quote.js";
-import { execute, WAIT_DEFAULT_S, WAIT_MAX_S } from "../lifecycle.js";
+import { WAIT_DEFAULT_S, WAIT_MAX_S } from "../lifecycle.js";
 import type { OperationClass } from "../spec/classify.js";
 import { constraintViolations, sourceRefusal } from "../spec/overlay.js";
 import { bodySchemaFor, operationById } from "../spec/operations.js";
@@ -23,6 +23,7 @@ import type { QueryValue, Scalar } from "../wire.js";
 import type { ToolContext, ToolDefinition } from "./context.js";
 import type { ToolArguments } from "./family.js";
 import { INLINE_TEXT } from "./fields.js";
+import { executeTold } from "./reads.js";
 import { outcomeResult, textResult } from "./results.js";
 
 const CLASS_REFUSAL: Readonly<Partial<Record<OperationClass, string>>> = {
@@ -138,8 +139,9 @@ async function runRaw(ctx: ToolContext, input: ToolArguments): Promise<CallToolR
     if (priced.kind !== "quote") return outcomeResult(ctx, priced, notes);
     return textResult([quoteText(priced.quote), ...notes].join("\n"));
   }
-  const outcome = await execute(ctx.client, req, { waitS: args.wait_s ?? WAIT_DEFAULT_S, clock: ctx.clock, budget: ctx.budget });
-  return outcomeResult(ctx, outcome, notes, { inlineImages: args.inline_images === true });
+  const run = await executeTold(ctx, req, args.wait_s ?? WAIT_DEFAULT_S);
+  if (run.kind === "result") return run.result;
+  return outcomeResult(ctx, run.outcome, notes, { inlineImages: args.inline_images === true });
 }
 
 export const RAW_TOOL: ToolDefinition = {

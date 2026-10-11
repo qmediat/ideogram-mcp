@@ -154,11 +154,19 @@ test("the support table: the eleven image families' documented models and the ge
   assert.equal(supportOf(op("get_account_usage")), "curated", "the account listings are curated since 2.2.0");
   assert.equal(supportOf(op("get_asset_reference_usage")), "raw", "a spec-only operation of a curated family is raw (opt-in at call time)");
   assert.equal(supportOf(op("get_webhook_signing_jwks")), "planned", "v1-only stays for step 5");
+  assert.equal(supportOf(op("train_model_v4_advanced")), "curated", "the training tools cover it since 2.3.0");
+  assert.equal(supportOf(op("train_dataset_model")), "raw", "the one training operation no tool covers is raw");
   assert.equal(supportOf(op("post_generate_image")), "unsupported", "legacy");
   assert.equal(servedByRawCall(op("post_ad_resizer")), false);
   const counts = {};
   for (const o of OPERATIONS) counts[supportOf(o)] = (counts[supportOf(o)] ?? 0) + 1;
-  assert.deepEqual(counts, { curated: 47, raw: 5, planned: 75, unsupported: 73 });
+  assert.deepEqual(counts, { curated: 57, raw: 6, planned: 64, unsupported: 73 });
+});
+
+test("a dataset upload is the one operation whose file field names the ZIP archives and caption sidecars", async () => {
+  const { DATASET_UPLOAD_OPERATIONS } = await import("../dist/spec/overlay.js");
+  const stating = OPERATIONS.filter((o) => isExposable(o) && o.facts.fileFields.some((f) => /ZIP archives containing images and captions/.test(fieldDescription(o, f.name) ?? ""))).map((o) => o.id);
+  assert.deepEqual(new Set(stating), DATASET_UPLOAD_OPERATIONS);
 });
 
 test("a font field is the one whose description names the font formats; every other file field takes images", () => {
