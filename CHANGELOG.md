@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.5.0] - 2026-10-11
 
+One release for steps 1–5 of `docs/DESIGN-ideogram-v2.md`: the paragraphs below state each step's counts as they stood after that step; the release ends at 38 tools (tools/list 131 396 bytes, budget 136 KB), support curated 80 · raw 47 · planned 0 · unsupported 73, 178 tests. Nothing a 2.0.0 client used is removed (the `video` input of `ideogram_generation` existed only inside this series).
+
 Step 1 of `docs/DESIGN-ideogram-v2.md`: every image family of Ideogram's documentation index has its own tool.
 Step 2: the account — usage and spend, invoices, API keys — and the webhook signature helper.
 Step 3: custom-model training — datasets, their assets, the training of an Ideogram 4.0 or 3.0 model, the models.
