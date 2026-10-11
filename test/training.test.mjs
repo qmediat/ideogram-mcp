@@ -67,6 +67,8 @@ test("ideogram_dataset_upload creates the dataset from a name, then uploads imag
   const byUrl = await call("ideogram_dataset_upload", { dataset_id: "ds1", files: ["__BASE__/remote/c.txt", "__BASE__/remote/d.zip"] }, handler);
   const parts = byUrl.requests.find((r) => r.url === "/datasets/ds1/upload_assets").body.toString("latin1");
   assert.match(parts, /filename="c.txt"\r\nContent-Type: text\/plain/, "a caption by URL");
+  const spaced = await call("ideogram_dataset_upload", { dataset_id: "ds1", files: ["__BASE__/remote/red%20door.png"] }, (req) => (req.url === "/remote/red%20door.png" ? { status: 200, headers: { "content-type": "image/png" }, body: PNG } : { json: uploaded }));
+  assert.match(spaced.requests.find((r) => r.url === "/datasets/ds1/upload_assets").body.toString("latin1"), /filename="red door.png"/, "a URL's segment is decoded: the pairing is by the decoded name");
   assert.match(parts, /filename="d.zip"\r\nContent-Type: application\/zip/, "a zip by URL under its alias is sent as application/zip");
   const onImage = await call("ideogram_remix", { prompt: "x", image: caption }, handler).catch((e) => e);
   assert.match(onImage.message, /image: unsupported file type \.txt; one of \.png, \.jpg, \.jpeg, \.webp$/, "the dataset types do not leak to an image field");
@@ -75,6 +77,10 @@ test("ideogram_dataset_upload creates the dataset from a name, then uploads imag
   assert.match(text(orphan.result), /^Dataset brand refs created: ds1\.\nThe upload failed; upload again with dataset_id "ds1", not with name\./, "a failed upload after the create names the dataset first");
   const cut = await call("ideogram_dataset_upload", { name: "brand refs", files: [png] }, (req) => (req.method === "POST" && req.url === "/datasets" ? { json: dataset } : { status: 503, json: { error: "down" } }));
   assert.match(text(cut.result), /^Dataset brand refs created: ds1\.\nThe upload failed; upload again with dataset_id "ds1", not with name\./, "a 5xx after the create names the dataset too");
+  const offSchema = await call("ideogram_dataset_upload", { name: "brand refs", files: [png] }, (req) => (req.method === "POST" && req.url === "/datasets" ? { json: dataset } : { json: { success_count: "three" } }));
+  assert.match(text(offSchema.result), /^Dataset brand refs created: ds1\.\nIdeogram answered 200 with a body that does not match/, "a 200 off the schema after the create names the dataset too");
+  const createOff = await call("ideogram_dataset_upload", { name: "brand refs", files: [png] }, () => ({ json: { dataset_id: 7 } }));
+  assert.match(text(createOff.result), /A dataset named "brand refs" MAY have been created: list ideogram_datasets before creating it again/);
   const traversal = await call("ideogram_datasets", { dataset_id: "../../escape" }, () => ({ json: { dataset: { ...dataset, dataset_id: "../../escape" }, file_count: 0, custom_model_ids: [], files: [] } }));
   assert.match(text(traversal.result), /ideogram-dataset-____escape\.json/, "a caller's id is a sanitized file-name component");
   const twin = await call("ideogram_dataset_upload", { dataset_id: "ds1", files: [png, join(dir, "sub", "a.png")] }, handler).catch((e) => e);
@@ -101,6 +107,19 @@ test("ideogram_train routes to the plain operation, or the advanced one when a h
   assert.match(text(padded.result), /model_name must be 5-30 characters/, "judged as sent, never trimmed");
   const down = await call("ideogram_train", { dataset_id: "ds1", model_name: "Planet Drip" }, () => ({ status: 503, json: { error: "down" } }));
   assert.match(text(down.result), /a training MAY have started and will be billed/, "a 5xx after the request left");
+  const { IdeogramApiError } = await import("../dist/errors.js");
+  const api0 = await startFakeApi(() => ({ json: started }));
+  try {
+    const ctx0 = await testContext(api0.base, join(dir, "out-budget"));
+    const client0 = Object.create(ctx0.client);
+    client0.call = async () => { throw new IdeogramApiError(0, "CALL_TIMEOUT", "the call's time ran out before this request could be made", { sent: false }); };
+    await assert.rejects((await tool("ideogram_train")).handler({ ...ctx0, client: client0 }, { dataset_id: "ds1", model_name: "Planet Drip" }), (error) => error.code === "CALL_TIMEOUT" && !/MAY have started/.test(error.message), "a budget that ended before the request left started nothing: the typed error is the answer, no warning");
+    client0.call = async () => { throw new IdeogramApiError(0, "CALL_TIMEOUT", "the call's time ran out; the request was in flight", { sent: true }); };
+    const inFlight = await (await tool("ideogram_train")).handler({ ...ctx0, client: client0 }, { dataset_id: "ds1", model_name: "Planet Drip" });
+    assert.match(text(inFlight), /MAY have started/, "a request that left may have started a billed training");
+  } finally {
+    await api0.close();
+  }
   const refused = await call("ideogram_train", { dataset_id: "ds1", model_name: "Planet Drip" }, () => ({ status: 404, json: { error: "no" } }));
   assert.match(text(refused.result), /the dataset is not yours, does not exist, or this key cannot train/);
   assert.doesNotMatch(text(refused.result), /MAY have started/);

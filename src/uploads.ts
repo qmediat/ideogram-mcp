@@ -52,7 +52,15 @@ const TYPE_ALIASES: Readonly<Record<string, string>> = { "application/x-zip-comp
  * without its query, a local path's basename; a quote, a control character or a backslash in it becomes `_`. */
 function partName(op: Operation, field: string, source: string, ext: string): string {
   if (!DATASET_UPLOAD_OPERATIONS.has(op.id)) return `${field}${ext}`;
-  const raw = isRemoteInput(source) ? (new URL(source).pathname.split("/").pop() ?? "") : basename(source);
+  const segment = isRemoteInput(source) ? (new URL(source).pathname.split("/").pop() ?? "") : basename(source);
+  let raw = segment;
+  if (isRemoteInput(source)) {
+    try {
+      raw = decodeURIComponent(segment); // "red%20door.png" is the file "red door.png": the pairing is by the decoded name
+    } catch {
+      raw = segment;
+    }
+  }
   const name = raw.replace(/["\\\u0000-\u001f\u007f]/g, "_");
   return name === "" ? `${field}${ext}` : name;
 }

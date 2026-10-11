@@ -190,9 +190,9 @@ export class IdeogramClient {
 
   private networkError(idempotent: boolean, error: unknown): IdeogramApiError {
     if (error instanceof BudgetEnded) return error.toApiError(idempotent);
-    const sent = !idempotent && !failedBeforeSending(error);
-    const note = sent ? "; the request may have reached Ideogram, so it was not sent again (it could be billed twice)" : "";
-    return new IdeogramApiError(0, "NETWORK_ERROR", `Network error: ${networkErrorText(error)}${note}`);
+    const sent = !failedBeforeSending(error);
+    const note = sent && !idempotent ? "; the request may have reached Ideogram, so it was not sent again (it could be billed twice)" : "";
+    return new IdeogramApiError(0, "NETWORK_ERROR", `Network error: ${networkErrorText(error)}${note}`, { sent });
   }
 
   /** Sends one request inside the call's budget; resolves with the parsed 2xx body, rejects with a typed IdeogramApiError. */
@@ -313,7 +313,7 @@ class BudgetEnded extends Error {
       : idempotent
         ? " while the request was in flight"
         : "; the request was in flight and may have reached Ideogram, so it was not sent again (it could be billed twice)";
-    return new IdeogramApiError(0, BUDGET_END_CODE[this.why], `${this.message}${when}`);
+    return new IdeogramApiError(0, BUDGET_END_CODE[this.why], `${this.message}${when}`, { sent: this.inFlight });
   }
 }
 

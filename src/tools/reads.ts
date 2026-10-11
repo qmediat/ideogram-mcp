@@ -27,9 +27,6 @@ export function operation(id: string): Operation {
   return op;
 }
 
-/** An answer exactly as received: written to a file in the output directory (named by what was asked, so two
- * reports never overwrite each other; readable by the owner only — an account's answers carry emails and key
- * prefixes), inline too when small. The one mechanism of every listing, the mismatch path included. */
 /** A file-name component from caller-controlled text: letters, digits and a few marks only, bounded — never a separator. */
 export function fileNameComponent(text: string): string {
   return text.replace(/[^0-9A-Za-z,_.-]/g, "_").replace(/\.{2,}/g, "_").slice(0, 120) || "_";
@@ -41,6 +38,9 @@ export function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** An answer exactly as received: written to a file in the output directory (named by what was asked, so two
+ * reports never overwrite each other; readable by the owner only — an account's answers carry emails and key
+ * prefixes), inline too when small. The one mechanism of every listing, the mismatch path included. */
 export async function rawLines(ctx: ToolContext, what: string, name: string, value: unknown): Promise<string[]> {
   const text = JSON.stringify(value, null, 2) ?? "null";
   const bytes = Buffer.byteLength(text, "utf8");

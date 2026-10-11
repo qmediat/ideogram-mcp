@@ -21,7 +21,7 @@ import type { ToolContext, ToolDefinition } from "./context.js";
 import type { ToolArguments } from "./family.js";
 import { IdeogramApiError } from "../errors.js";
 import { apiErrorResult, errorText, operation, rawLines, readOperation } from "./reads.js";
-import { jsonText, textResult } from "./results.js";
+import { textResult } from "./results.js";
 
 const LIST_DATASETS = operation("list_datasets");
 const GET_DATASET = operation("get_dataset");
@@ -93,33 +93,38 @@ async function runUpload(ctx: ToolContext, args: ToolArguments): Promise<CallToo
   const input = UploadInput.safeParse(args);
   if (!input.success) return textResult(`ideogram_dataset_upload: ${issues(input.error)}`, true);
   if ((input.data.dataset_id === undefined) === (input.data.name === undefined)) return textResult("ideogram_dataset_upload: give dataset_id (an existing dataset) or name (a new one), not both", true);
+  let uploads;
   try {
-    const uploads = await loadUploads(UPLOAD_ASSETS, input.data.files.map((path) => ({ field: "files", path })), ctx.remote);
-    let datasetId: string;
-    let created = "";
-    if (input.data.dataset_id !== undefined) datasetId = input.data.dataset_id;
-    else {
-      const made = await createDataset(ctx, input.data.name as string);
-      if (made.kind === "result") return made.result;
-      datasetId = made.id;
-      created = `Dataset ${input.data.name} created: ${datasetId}.\n`;
+    uploads = await loadUploads(UPLOAD_ASSETS, input.data.files.map((path) => ({ field: "files", path })), ctx.remote);
+  } catch (error) {
+    return apiErrorResult(error, "ideogram_dataset_upload", OWNER);
+  }
+  let datasetId: string;
+  let created = "";
+  if (input.data.dataset_id !== undefined) datasetId = input.data.dataset_id;
+  else {
+    const made = await createDataset(ctx, input.data.name as string).catch((error: unknown) => ({ kind: "result" as const, result: apiErrorResult(error, "ideogram_dataset_upload", "this key cannot create datasets") }));
+    if (made.kind === "result") {
+      // a 200 off the schema: a dataset MAY exist under that name — said, so a retry lists first instead of creating twice
+      const text = made.result.content.map((c) => (c.type === "text" ? c.text : "")).join("");
+      return textResult(/does not match its own specification/.test(text) ? `${text}\nA dataset named "${input.data.name}" MAY have been created: list ideogram_datasets before creating it again.` : text, true);
     }
-    let answer;
-    try {
-      answer = await readOperation(ctx, { op: UPLOAD_ASSETS, path: { dataset_id: datasetId }, body: { media: "multipart", fields: {}, files: uploads, jsonParts: [] } }, zUploadDatasetAssetsResponse);
-    } catch (error) {
-      // the dataset exists whatever the upload did (a 404, a 5xx, a network cut, the budget's end alike): its id is the
-      // first line, so a retry uses it instead of making another
-      if (created === "") return apiErrorResult(error, "ideogram_dataset_upload", OWNER);
-      return textResult(`${created}The upload failed; upload again with dataset_id "${datasetId}", not with name.\nideogram_dataset_upload: ${errorText(error)}`, true);
-    }
-    if (!answer.ok) return created === "" ? answer.result : textResult(`${created}${answer.result.content.map((c) => (c.type === "text" ? c.text : "")).join("")}`, true);
+    datasetId = made.id;
+    created = `Dataset ${input.data.name} created: ${datasetId}.\n`;
+  }
+  // from here the dataset exists whatever happens (an upload error, a 200 off the schema, a file that cannot be written):
+  // its id is the first line of every answer, so a retry uses it instead of making another
+  try {
+    const answer = await readOperation(ctx, { op: UPLOAD_ASSETS, path: { dataset_id: datasetId }, body: { media: "multipart", fields: {}, files: uploads, jsonParts: [] } }, zUploadDatasetAssetsResponse);
+    if (!answer.ok) return textResult(`${created}${answer.result.content.map((c) => (c.type === "text" ? c.text : "")).join("")}`, true);
     const a = answer.data;
     const failed = a.failed_assets.map((f) => `  ${f.file_name ?? "(unnamed)"}: ${f.failure_reason}`);
     const lines = [`${created}${a.success_count} of ${a.total_count} asset(s) uploaded to dataset ${datasetId}${a.failure_count > 0 ? `, ${a.failure_count} failed:` : "."}`, ...failed, ...(await rawLines(ctx, "As Ideogram sent it", `dataset-upload-${datasetId}-${ctx.clock.now()}`, answer.raw))];
     return textResult(lines.join("\n"), a.success_count === 0);
   } catch (error) {
-    return apiErrorResult(error, "ideogram_dataset_upload", OWNER);
+    const retry = created === "" ? "" : `The upload failed; upload again with dataset_id "${datasetId}", not with name.\n`;
+    const said = error instanceof IdeogramApiError && error.status === 404 ? `ideogram_dataset_upload: ${OWNER} (Ideogram's answer: ${error.message}).` : `ideogram_dataset_upload: ${errorText(error)}`;
+    return textResult(`${created}${retry}${said}`, true);
   }
 }
 
@@ -158,14 +163,15 @@ async function runTrain(ctx: ToolContext, args: ToolArguments): Promise<CallTool
     try {
       answer = await readOperation(ctx, { op, body: { media: "json", fields: body, files: [], jsonParts: [] } }, zTrainDatasetModelResponse);
     } catch (error) {
-      // a 4xx is the API's refusal (nothing started); anything else after the request left may have started a billed training
-      const refused = error instanceof IdeogramApiError && error.status >= 400 && error.status < 500;
+      // a 4xx is the API's refusal and a failure before the request left (the budget's end, a refused connect — the
+      // client's typed `sent: false`) started nothing; anything else after the request left may have started a billed training
+      const refused = error instanceof IdeogramApiError && ((error.status >= 400 && error.status < 500) || error.details.sent === false);
       if (refused) return apiErrorResult(error, "ideogram_train", "the dataset is not yours, does not exist, or this key cannot train");
       return textResult(`ideogram_train: ${errorText(error)}\nThe request had left this machine: a training MAY have started and will be billed — list ideogram_models before starting it again.`, true);
     }
     if (!answer.ok) return textResult(`${answer.result.content.map((c) => (c.type === "text" ? c.text : "")).join("")}\nThe API answered 200: a training MAY have started and will be billed — list ideogram_models before starting it again.`, true);
     const t = answer.data;
-    return textResult([`Training started: model ${t.model_name} (${t.model_id}) from dataset ${t.dataset_id}, status ${t.training_status}.`, `Follow it with ideogram_models {"model_id": "${t.model_id}"}; when it is COMPLETED, generate with its custom_model_uri (ideogram_generate, model ${model}-custom-model).`, "As Ideogram sent it:", jsonText(answer.raw)].join("\n"));
+    return textResult([`Training started: model ${t.model_name} (${t.model_id}) from dataset ${t.dataset_id}, status ${t.training_status}.`, `Follow it with ideogram_models {"model_id": "${t.model_id}"}; when it is COMPLETED, generate with its custom_model_uri (ideogram_generate, model ${model}-custom-model).`, ...(await rawLines(ctx, "As Ideogram sent it", `train-${t.model_id}`, answer.raw))].join("\n"));
   } catch (error) {
     return apiErrorResult(error, "ideogram_train", "the dataset is not yours, does not exist, or this key cannot train");
   }

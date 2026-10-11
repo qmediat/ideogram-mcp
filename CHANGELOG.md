@@ -51,6 +51,12 @@ Step 3: custom-model training — datasets, their assets, the training of an Ide
   refused by name) and `ideogram_models` (the list by scope and status, or one model with its training runs): the
   v1 endpoints the index keeps for training, curated. `train_dataset_model` is served raw. Support: curated 57 · raw
   6 · planned 64; tools/list: 23 tools.
+- A dataset created by `ideogram_dataset_upload` is named first in every answer that follows (an upload error, a
+  200 off the schema, a file that cannot be written), so a retry uploads into it instead of making another; a create
+  answered off its schema says a dataset MAY exist. A URL's last segment is percent-decoded before it names the part
+  (`red%20door.png` pairs with its caption as `red door.png`). `ideogram_train` says "a training MAY have started"
+  only when the request may have reached Ideogram: the client's status-0 errors carry `details.sent` (false when the
+  budget ended or the connection was refused before anything left this machine).
 - `get_asset_reference_usage` (spec-only) is served by `ideogram_api` behind `allow_undocumented`: a spec-only
   operation of a curated family is raw, as the undocumented reframe models are. Support: curated 47 · raw 5 ·
   planned 75. tools/list: 19 tools.

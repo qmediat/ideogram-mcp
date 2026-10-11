@@ -107,6 +107,7 @@ test("a POST whose connection drops after the body was sent is not sent again, a
     const error = await new IdeogramClient(options).call(request(generateOp, { prompt: "x" }), openBudget()).catch((e) => e);
     assert.equal(error.code, "NETWORK_ERROR");
     assert.match(error.message, /may have reached Ideogram/);
+    assert.equal(error.details.sent, true, "typed for the caller: the request may have reached Ideogram");
     assert.equal(api.requests.length, 1);
   } finally {
     await api.close();

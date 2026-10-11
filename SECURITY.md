@@ -44,7 +44,7 @@ We will acknowledge your report within 48 hours and aim to release a fix within 
 
 | Threat | Protection |
 |--------|-----------|
-| **Path traversal** | Extension allowlist for uploads per field (images; fonts, audio and training assets where the specification names them); the local file name is never sent (a file goes as `<field>.<ext>`) — except a training asset's own name, never its directory, which the API pairs captions by (quotes and control characters replaced; two assets under one name refused); a file written to the output directory is named from a sanitized component, never from a caller's text as it is |
+| **Path traversal** | Extension allowlist for uploads per field (images; fonts and training assets where the specification names them); the local file name is never sent (a file goes as `<field>.<ext>`) — except a training asset's own name, never its directory, which the API pairs captions by (quotes and control characters replaced; two assets under one name refused); a file written to the output directory is named from a sanitized component, never from a caller's text as it is |
 | **Symlink attacks** | `lstat()` on the image path before reading — a symlinked file is rejected; a symlinked parent directory is resolved |
 | **File size DoS** | `stat()` check of every file before any is read, against its operation and field's own limit as Ideogram's specification states it (describe 10 MB, remix 50 MB, 25 MB × 5 for Ideogram 4.5's images, …; 50 MB where none is stated), the number of files per field and any whole-request cap |
 | **Filename injection** | Output filenames are `ideogram-{timestamp}-{random}.{ext}` — no user input |
