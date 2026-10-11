@@ -18,7 +18,8 @@ import { fileURLToPath } from "node:url";
 export const DUPLICATES = "jscpd-baseline.json";
 
 /** @param {...string} args */
-const git = (...args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+const git = (...args) =>
+  execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 1 << 28 }); // a large tree
 
 /**
  * A count read from a baseline: a whole number ≥ 0, or the file cannot be trusted (cannot tell).
@@ -188,7 +189,7 @@ function growth(ref, tracked) {
 export function measuredDuplicates(reportPath) {
   const stats = JSON.parse(readFileSync(reportPath, "utf8")).statistics.total;
   if (!stats.sources) throw new Error(`${reportPath}: jscpd analyzed no files — check its paths and ignore patterns`);
-  return stats.duplicatedLines;
+  return countOf(stats.duplicatedLines, `${reportPath}: statistics.total.duplicatedLines`);
 }
 
 /** @param {string} reportPath @returns {string[]} */
