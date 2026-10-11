@@ -130,7 +130,11 @@ Step 5: the commercial tools and the v1 utilities, each one operation; nothing o
   and says only the fields the operation has (snap mask takes no asset). A tool may carry its own field sentences
   (`FamilyToolSpec.fieldTexts`: magic prompt's aspect ratios take an x, snap mask's image takes no asset); a tool whose
   operation is no job (magic prompt, provenance, logos, snap mask) takes no `wait_s`; snap mask's answer is said as
-  what it is (white = the object; invert it for inpaint and remove object). `responseMedia` knows `video` too.
+  what it is (white = the object: as is for remove object, whose mask takes white as the region to remove, inverted for
+  inpaint, whose mask takes black). A 2xx that is no file of the kind, or over the cap, keeps the save's own typed
+  error ("the operation ran and answered, with no file this server keeps"); only a failed write is a lost answer. The
+  body probe reads its optional top-level fields as unknown, so a body of another shape is never turned into a
+  record. `responseMedia` knows `video` too.
 
 - `ideogram_precise_edit` (Ideogram 4.5: the image, an optional mask, up to four `reference_images` or
   `reference_image_asset_identifiers`, `context_window`), `ideogram_remove_background` and `ideogram_remove_object`

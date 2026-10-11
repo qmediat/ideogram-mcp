@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { startFakeApi, testClientOptions, fakeClock, realBudget } from "./support/fake-api.mjs";
 
 const { IdeogramClient } = await import("../dist/client.js");
-const { execute, resume, asAsync, fetchGeneration, POLL_CAP_MS } = await import("../dist/lifecycle.js");
+const { execute, resume, asAsync, fetchGeneration, payloadOf, POLL_CAP_MS } = await import("../dist/lifecycle.js");
 const { operationById } = await import("../dist/spec/operations.js");
 const { COUNTERS } = await import("../dist/counters.js");
 const { toolCallBudget } = await import("../dist/budget.js");
@@ -105,6 +105,12 @@ test("a 2xx body the generated schema rejects is a ContractMismatch, never a suc
   assert.equal(outcome.generationId, "g6", "the id is kept so the paid job is not lost");
   assert.match(outcome.issues.join("\n"), /^seed: /m);
   assert.equal(COUNTERS.contractMismatches, before + 1);
+});
+
+test("the body probe never rejects a body for a top-level field of another shape: images beside an aspect_ratio null are still images", () => {
+  const payload = payloadOf({ generation_id: "g", aspect_ratio: null, layers: null, data: [{ object_type: "image.generation", url: "https://ideogram.ai/a.png", prompt: "p", resolution: "1024x1024", seed: 1, is_image_safe: true }] });
+  assert.equal(payload.kind, "images");
+  assert.equal(payload.items.length, 1);
 });
 
 test("a completed poll in the API's real shape (created with a +00:00 offset and microseconds, asset_id null) is Completed", async () => {

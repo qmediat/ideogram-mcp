@@ -128,9 +128,9 @@ const BodyShape = z.looseObject({
   description_id: z.string().optional(),
   descriptions: z.array(z.looseObject({ text: z.string() })).optional(),
   json_prompt: z.unknown().optional(),
-  base_image_url: z.string().nullish(),
-  layers: z.array(z.unknown()).optional(),
-  aspect_ratio: z.string().optional(),
+  base_image_url: z.unknown().optional(), // read as unknown: the probe must never reject a body for a field another kind spells differently
+  layers: z.unknown().optional(),
+  aspect_ratio: z.unknown().optional(),
 });
 
 /** The generation id a body carries, read without trusting the rest of it. */
@@ -195,11 +195,11 @@ export function payloadOf(body: unknown): Payload | null {
   const b = parsed.data;
   if (b.descriptions !== undefined || b.json_prompt !== undefined) {
     const texts = (b.descriptions ?? []).map((d) => d.text);
-    return { kind: "description", descriptionId: b.description_id ?? "", texts, jsonPrompt: b.json_prompt ?? null, aspectRatio: b.aspect_ratio ?? null }; // a magic prompt names the ratio the model picked
+    return { kind: "description", descriptionId: b.description_id ?? "", texts, jsonPrompt: b.json_prompt ?? null, aspectRatio: typeof b.aspect_ratio === "string" ? b.aspect_ratio : null }; // a magic prompt names the ratio the model picked
   }
-  if (b.layers !== undefined) {
+  if (Array.isArray(b.layers)) {
     // layerize logos (v1): one design — the text-free base image and the detected layers, each naming the reference it matched
-    return { kind: "layered", items: [{ baseImageUrl: b.base_image_url ?? null, url: null, htmlUrl: null, resolution: null, seed: null, isImageSafe: true, textBlocks: b.layers, blocksKind: "layers" }] };
+    return { kind: "layered", items: [{ baseImageUrl: typeof b.base_image_url === "string" ? b.base_image_url : null, url: null, htmlUrl: null, resolution: null, seed: null, isImageSafe: true, textBlocks: b.layers, blocksKind: "layers" }] };
   }
   if (b.data === undefined) return b.generation_id === undefined ? { kind: "record", body } : null;
   const items = imageItems(b.data);

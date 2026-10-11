@@ -124,6 +124,9 @@ export async function fileAnswer(what: string, ctx: ToolContext, req: ApiRequest
     if (error instanceof IdeogramApiError && error.code === "ANSWER_NOT_SAVED") {
       return textResult(`${what}: ${error.message}\nThe operation ran and answered; the file is lost here. Sending it again runs it again.`, true);
     }
+    if (error instanceof IdeogramApiError && error.status >= 200 && error.status < 300) {
+      return textResult(`${what}: ${error.message}\nThe operation ran and answered, with no file this server keeps.`, true); // not a file of the kind, or over the cap
+    }
     const note = req.op.method !== "GET" && sideEffectOf(error) === "unknown" ? `\nThe request had left this machine: ${req.op.id} MAY have run — send it again only if the answer is not in the output directory.` : "";
     return textResult(`${what}: ${errorText(error)}${note}`, true);
   }

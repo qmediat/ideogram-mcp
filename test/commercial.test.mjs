@@ -114,7 +114,7 @@ test("ideogram_snap_mask saves the PNG the operation answers with; an answer of 
   assert.ok(z.toJSONSchema((await tool("ideogram_ad_resizer")).inputSchema, { io: "input", unrepresentable: "any" }).properties.wait_s, "a job keeps its wait");
   const magicSchema = z.toJSONSchema((await tool("ideogram_magic_prompt")).inputSchema, { io: "input", unrepresentable: "any" });
   assert.match(magicSchema.properties.aspect_ratio.description, /AUTO .* with an x/, "magic prompt's own aspect sentence, not the tool family's colon");
-  assert.match((await tool("ideogram_snap_mask")).description, /invert it for ideogram_inpaint and ideogram_remove_object/);
+  assert.match((await tool("ideogram_snap_mask")).description, /as is for ideogram_remove_object \(white = the region to remove\)[\s\S]*invert it for ideogram_inpaint/, "the mask colours as the two operations define them");
   assert.ok(snapSchema.properties.inline_images, "but it can be returned inline");
   let n429 = 0;
   const retried = await call("ideogram_snap_mask", { image: png, mask: png }, () => (n429++ === 0 ? { status: 429, headers: { "retry-after": "0" }, json: { error: "slow down" } } : { status: 200, headers: { "content-type": "image/png" }, body: PNG }));
@@ -134,7 +134,8 @@ test("ideogram_snap_mask saves the PNG the operation answers with; an answer of 
   }
   const json = await call("ideogram_snap_mask", { image: png, mask: png }, () => ({ json: { error: "unexpected" } }));
   assert.equal(json.result.isError, true);
-  assert.match(text(json.result), /ideogram_snap_mask: .*Expected an image, got: application\/json/);
+  assert.match(text(json.result), /^ideogram_snap_mask: post_snap_mask answered 200: Expected an image, got: application\/json\nThe operation ran and answered, with no file this server keeps\.$/, "an answer that is no file is said as such, never as a lost file");
+  assert.doesNotMatch(text(json.result), /Sending it again runs it again|MAY have run/);
   const refused = await call("ideogram_snap_mask", { image: png, mask: png }, () => ({ status: 400, json: { error: "mask size" } }));
   assert.match(text(refused.result), /ideogram_snap_mask: Ideogram API error HTTP_400 \(400\): mask size/);
   assert.doesNotMatch(text(refused.result), /MAY have run/);

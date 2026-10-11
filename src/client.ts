@@ -210,15 +210,17 @@ export class IdeogramClient {
 
   /** Sends one request whose 200 is a file, not JSON (snap mask answers the mask as image/png): the same send as
    * call() — the body's cap, the 429 and never-sent retries, the typed errors — then the body streamed into `outputDir`
-   * under the kind's cap and types, exactly as a download is. A 200 whose file cannot be written is ANSWER_NOT_SAVED:
-   * the operation ran, its answer is lost here (never "may have run"). */
+   * under the kind's cap and types, exactly as a download is. A 200 that is not a file of the kind, or over the cap, keeps
+   * the save's own code (DOWNLOAD_INVALID_TYPE, DOWNLOAD_TOO_LARGE) with the status it came with; a 200 whose file cannot
+   * be written is ANSWER_NOT_SAVED: the operation ran, its answer is lost here (never "may have run"). */
   async callToFile(req: ApiRequest, outputDir: string, budget: CallBudget, kind: MediaKind): Promise<SavedFile> {
     const response = await this.send(req, budget, kind === "video" ? "video/mp4" : "image/*");
     try {
       return await this.saveResponse(response, outputDir, budget, kind);
     } catch (error) {
-      const text = error instanceof IdeogramApiError ? error.message : networkErrorText(error);
-      throw new IdeogramApiError(response.status, "ANSWER_NOT_SAVED", `${req.op.id} answered ${response.status}; its answer could not be saved: ${text}`, { sent: true });
+      // the save's own refusals (not a file of the kind, over the cap) say what the answer was; a failed write is the loss
+      if (error instanceof IdeogramApiError && error.code !== "NETWORK_ERROR") throw new IdeogramApiError(response.status, error.code, `${req.op.id} answered ${response.status}: ${error.message}`, { sent: true });
+      throw new IdeogramApiError(response.status, "ANSWER_NOT_SAVED", `${req.op.id} answered ${response.status}; its answer could not be saved: ${error instanceof IdeogramApiError ? error.message : networkErrorText(error)}`, { sent: true });
     }
   }
 
