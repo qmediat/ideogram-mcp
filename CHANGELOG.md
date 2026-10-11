@@ -11,6 +11,7 @@ Step 1 of `docs/DESIGN-ideogram-v2.md`: every image family of Ideogram's documen
 Step 2: the account — usage and spend, invoices, API keys — and the webhook signature helper.
 Step 3: custom-model training — datasets, their assets, the training of an Ideogram 4.0 or 3.0 model, the models.
 Step 4: video — from a prompt, from an image, from references.
+Step 5: the commercial tools and the v1 utilities, each one operation; nothing of the specification is planned any more.
 
 ### Added
 
@@ -94,6 +95,24 @@ Step 4: video — from a prompt, from an image, from references.
 - `get_asset_reference_usage` (spec-only) is served by `ideogram_api` behind `allow_undocumented`: a spec-only
   operation of a curated family is raw, as the undocumented reframe models are. Support: curated 47 · raw 5 ·
   planned 75. tools/list: 19 tools.
+- Twelve single-operation tools (`src/tools/commercial.ts`) on the family mechanism — a `FamilyToolSpec` may name one
+  operation: no `model` input, the operation's own fields, the same checks (schema, the shared rules, `private`
+  defaulting to true), the same request and result shaping. The documented commercial tools `ideogram_ad_localizer`,
+  `ideogram_ad_resizer`, `ideogram_ad_variations`, `ideogram_colorways`, `ideogram_ghost_mannequin`,
+  `ideogram_material_swap`, `ideogram_model_pose_variants`, `ideogram_sketch_to_render` (generations: accepted, waited
+  for, saved; `ideogram_quote` prices the five that offer a dry run — measured 2026-10-11: ad resizer 0.1025 USD,
+  colorways 0.0717, material swap 0.0798; ad localizer and ghost mannequin answered "not available to this account"
+  on the test key), and the v1 utilities `ideogram_magic_prompt` (the JSON prompt printed), `ideogram_layerize_logos`
+  (the base image saved, the detected layers listed with the reference each matched), `ideogram_provenance` (the
+  record printed) and `ideogram_snap_mask` (the operation answers the mask as image/png: saved as any image is, under
+  the image cap and types — `callToFile`; a 5xx says the request MAY have run, never resent). The `image` /
+  `image_asset_identifier` rule reaches colorways and material swap (their prose: "Provide exactly one of").
+  Support: curated 80 · raw 47 · planned 0 · unsupported 73 — a v1-only operation of a curated family (the v1 model
+  variants, the webhook JWKS) and every spec-only or customer-specific tool and workflow run through `ideogram_api`
+  (`allow_undocumented` where unlisted). tools/list: 38 tools, 130 479 bytes (the budget is 136 KB from this step;
+  the twelve tools with their field sentences cost 32.8 KB). An operation's `async` kind is read from its answer: a
+  200 that is a generation id with at most its time and status is a job; one that NAMES a generation beside its own
+  facts (provenance verify) is an answer, never polled. The facts carry `responseMedia` (json · image · none).
 
 - `ideogram_precise_edit` (Ideogram 4.5: the image, an optional mask, up to four `reference_images` or
   `reference_image_asset_identifiers`, `context_window`), `ideogram_remove_background` and `ideogram_remove_object`

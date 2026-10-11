@@ -151,14 +151,17 @@ function familyOf(facts: SpecOperationFacts, cls: OperationClass): FamilyMatch |
   return match;
 }
 
-const PAYLOAD_KEYS: readonly string[] = ["data", "descriptions", "json_prompt", "api_keys", "invoices", "buckets", "assets"];
-
+/** `optional`: the body takes `async`; `only`: the 200 is an acknowledgement — a generation id with at most its time and
+ * status, no payload (an answer that NAMES a generation beside its own facts, like provenance verify's, is no job);
+ * `none`: anything else. */
 function asyncKindOf(facts: SpecOperationFacts): AsyncKind {
   if (facts.asyncField) return "optional";
   const props = facts.responseProperties;
-  const acknowledgement = props.includes("generation_id") && !props.some((p) => PAYLOAD_KEYS.includes(p));
+  const acknowledgement = props.includes("generation_id") && props.every((p) => ACKNOWLEDGEMENT_PROPERTIES.has(p));
   return acknowledgement ? "only" : "none";
 }
+
+const ACKNOWLEDGEMENT_PROPERTIES: ReadonlySet<string> = new Set(["generation_id", "created", "status", "seed"]);
 
 /** The generated schemas by lower-cased export name (the generator's names are a case transform of operationId). */
 const GENERATED_BY_NAME: ReadonlyMap<string, ZodType> = new Map(

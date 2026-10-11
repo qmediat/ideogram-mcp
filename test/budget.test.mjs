@@ -12,7 +12,7 @@ const { createServer } = await import("../dist/server.js");
 const { documentedModelsOf } = await import("../dist/registry.js");
 const { IdeogramClient, defaultClientOptions } = await import("../dist/client.js");
 
-const BUDGET_BYTES = 104 * 1024;
+const BUDGET_BYTES = 136 * 1024; // 38 tools after step 5: the twelve single-operation tools cost 32.8 KB with their field sentences (130 479 bytes measured on 2026-10-11)
 
 async function listTools() {
   const ctx = { client: new IdeogramClient(defaultClientOptions("unused")), outputDir: "/tmp/unused", clock: { now: () => 0, sleep: async () => {} } };
@@ -27,7 +27,7 @@ async function listTools() {
   }
 }
 
-test("the serialized tools/list is within the 104 KB budget", async () => {
+test("the serialized tools/list is within the 136 KB budget", async () => {
   const listed = await listTools();
   const bytes = Buffer.byteLength(JSON.stringify(listed));
   assert.ok(bytes <= BUDGET_BYTES, `tools/list is ${bytes} bytes, over ${BUDGET_BYTES}`);

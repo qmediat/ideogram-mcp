@@ -8,7 +8,7 @@ import { test } from "node:test";
 const { OPERATIONS, operationById, isExposable } = await import("../dist/spec/operations.js");
 const { quoteAllowed, quoteRefusal, responseSchemaFor, fileLimitsOf, CONSTRAINTS, constraintViolations, MB, requestLimitOf, requestBytesRefusal, UNSTATED_REQUEST_BYTES, UNSTATED_FILE_BYTES, FONT_FILE_FIELDS } =
   await import("../dist/spec/overlay.js");
-const { supportOf, servedByRawCall } = await import("../dist/spec/support.js");
+const { supportOf, operationsWithSupport, servedByRawCall } = await import("../dist/spec/support.js");
 
 const spec = JSON.parse(readFileSync(new URL("../spec/openapi.json", import.meta.url), "utf8"));
 const op = (id) => {
@@ -164,14 +164,20 @@ test("the support table: the eleven image families' documented models and the ge
   assert.equal(supportOf(op("post_edit_video_seed_dance2")), "raw", "the spec-only video edit is raw behind the flag");
   assert.equal(supportOf(op("get_account_usage")), "curated", "the account listings are curated since 2.2.0");
   assert.equal(supportOf(op("get_asset_reference_usage")), "raw", "a spec-only operation of a curated family is raw (opt-in at call time)");
-  assert.equal(supportOf(op("get_webhook_signing_jwks")), "planned", "v1-only stays for step 5");
+  assert.equal(supportOf(op("get_webhook_signing_jwks")), "raw", "a v1-only operation of a curated family runs raw since 2.5.0");
+  assert.equal(supportOf(op("post_generate_image_flux2_klein")), "raw", "a v1 model variant of a curated family runs raw since 2.5.0");
   assert.equal(supportOf(op("train_model_v4_advanced")), "curated", "the training tools cover it since 2.3.0");
   assert.equal(supportOf(op("train_dataset_model")), "raw", "the one training operation no tool covers is raw");
   assert.equal(supportOf(op("post_generate_image")), "unsupported", "legacy");
-  assert.equal(servedByRawCall(op("post_ad_resizer")), false);
+  assert.equal(servedByRawCall(op("post_ad_resizer")), true, "a curated operation runs raw as well");
   const counts = {};
   for (const o of OPERATIONS) counts[supportOf(o)] = (counts[supportOf(o)] ?? 0) + 1;
-  assert.deepEqual(counts, { curated: 68, raw: 7, planned: 52, unsupported: 73 });
+  assert.deepEqual(counts, { curated: 80, raw: 47, unsupported: 73 });
+  assert.equal(supportOf(op("post_ad_resizer")), "curated", "a commercial tool of 2.5.0");
+  assert.equal(supportOf(op("post_snap_mask")), "curated", "a v1 utility of 2.5.0");
+  assert.equal(supportOf(op("post_lookbook")), "raw", "a spec-only workflow is raw behind the flag");
+  assert.equal(supportOf(op("post_skechers_style_edit")), "raw", "a customer-specific tool is raw behind the flag, never curated");
+  assert.equal(operationsWithSupport("planned").length, 0, "nothing is planned after step 5");
 });
 
 test("a dataset upload is the one operation whose file field names the ZIP archives and caption sidecars", async () => {

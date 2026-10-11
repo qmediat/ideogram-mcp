@@ -228,11 +228,29 @@ export class IdeogramClient {
     }
   }
 
+  /** Sends one request whose 200 is a file, not JSON (snap mask answers the mask as image/png): the body is streamed
+   * into `outputDir` under the kind's cap and types, exactly as a download is; a non-2xx is the typed API error. Sent
+   * once (a POST that may have run is never resent — a retry would be billed twice), inside the call's budget. */
+  async callToFile(req: ApiRequest, outputDir: string, budget: CallBudget, kind: MediaKind): Promise<SavedFile> {
+    const { url, body } = this.encode(req);
+    const headers: Record<string, string> = { ...req.headers, "Api-Key": this.options.apiKey, Accept: kind === "video" ? "video/mp4" : "image/*" };
+    if (body !== null) headers["Content-Type"] = body.contentType;
+    const result = await this.attempt(req.op.method, url, headers, body?.bytes ?? null, budget);
+    if (result.kind === "network") throw this.networkError(req.op.method === "GET", result.error);
+    if (!result.response.ok) throw await errorFromResponse(result.response);
+    return this.saveResponse(result.response, outputDir, budget, kind);
+  }
+
   /** Downloads one generated file into `outputDir`, streamed with a byte counter; nothing is left behind on failure. */
   async download(url: string, outputDir: string, budget: CallBudget, kind: MediaKind = "image"): Promise<SavedFile> {
     this.checkDownloadUrl(url);
-    const maxBytes = kind === "video" ? MAX_VIDEO_DOWNLOAD_BYTES : this.options.maxDownloadBytes;
     const response = await this.fetchDownload(url, budget);
+    return this.saveResponse(response, outputDir, budget, kind);
+  }
+
+  /** A 2xx response's body as a file of the expected kind: the type and the cap checked, the bytes streamed. */
+  private async saveResponse(response: Response, outputDir: string, budget: CallBudget, kind: MediaKind): Promise<SavedFile> {
+    const maxBytes = kind === "video" ? MAX_VIDEO_DOWNLOAD_BYTES : this.options.maxDownloadBytes;
     const contentType = (response.headers.get("Content-Type") ?? "").toLowerCase();
     const extension = MEDIA_EXTENSIONS.find(([prefix]) => contentType.startsWith(prefix) && prefix.startsWith(kind))?.[1];
     if (extension === undefined) {

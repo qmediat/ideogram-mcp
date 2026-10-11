@@ -23,7 +23,7 @@ import type { QueryValue, Scalar } from "../wire.js";
 import type { ToolContext, ToolDefinition } from "./context.js";
 import type { ToolArguments } from "./family.js";
 import { INLINE_TEXT } from "./fields.js";
-import { executeTold } from "./reads.js";
+import { executeTold, fileAnswer } from "./reads.js";
 import { outcomeResult, textResult } from "./results.js";
 
 const CLASS_REFUSAL: Readonly<Partial<Record<OperationClass, string>>> = {
@@ -139,6 +139,7 @@ async function runRaw(ctx: ToolContext, input: ToolArguments): Promise<CallToolR
     if (priced.kind !== "quote") return outcomeResult(ctx, priced, notes);
     return textResult([quoteText(priced.quote), ...notes].join("\n"));
   }
+  if (op.facts.responseMedia === "image") return fileAnswer("ideogram_api", ctx, req); // the answer IS the file (snap mask's PNG), through the raw call too
   const run = await executeTold(ctx, req, args.wait_s ?? WAIT_DEFAULT_S);
   if (run.kind === "result") return run.result;
   return outcomeResult(ctx, run.outcome, notes, { inlineImages: args.inline_images === true });

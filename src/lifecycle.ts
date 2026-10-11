@@ -126,6 +126,8 @@ const BodyShape = z.looseObject({
   description_id: z.string().optional(),
   descriptions: z.array(z.looseObject({ text: z.string() })).optional(),
   json_prompt: z.unknown().optional(),
+  base_image_url: z.string().nullish(),
+  layers: z.array(z.unknown()).optional(),
 });
 
 /** The generation id a body carries, read without trusting the rest of it. */
@@ -191,6 +193,10 @@ export function payloadOf(body: unknown): Payload | null {
     const texts = (b.descriptions ?? []).map((d) => d.text);
     return { kind: "description", descriptionId: b.description_id ?? "", texts, jsonPrompt: b.json_prompt ?? null };
   }
+  if (b.layers !== undefined) {
+    // layerize logos (v1): one design — the text-free base image and the detected layers, each naming the reference it matched
+    return { kind: "layered", items: [{ baseImageUrl: b.base_image_url ?? null, url: null, htmlUrl: null, resolution: null, seed: null, isImageSafe: true, textBlocks: b.layers }] };
+  }
   if (b.data === undefined) return b.generation_id === undefined ? { kind: "record", body } : null;
   const items = imageItems(b.data);
   if (items !== null) return { kind: "images", items };
@@ -234,6 +240,9 @@ export async function execute(client: IdeogramClient, req: ApiRequest, options: 
   const payload = payloadOf(body);
   const generationId = generationIdOf(body);
   if (payload !== null) return { kind: "completed", generationId, payload, usageCostUsdMicros: null };
+  // an operation that is no job (provenance verify) answers a record that may NAME a generation (the one that made the
+  // image): nothing to poll — the body is the answer
+  if (req.op.async === "none") return { kind: "completed", generationId: null, payload: { kind: "record", body }, usageCostUsdMicros: null };
   if (generationId === null) throw new Error(`${req.op.id} answered without a payload or a generation id`);
   const deadline = started + clampWait(options.waitS) * 1000;
   return poll(client, generationId, deadline, POLL_CAP_MS, options.budget);

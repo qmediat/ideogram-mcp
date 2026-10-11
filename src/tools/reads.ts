@@ -11,6 +11,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { ApiRequest } from "../client.js";
 import type { BodyInput, QueryValue, Scalar } from "../wire.js";
 import { COUNTERS } from "../counters.js";
+import { mbText } from "../spec/overlay.js";
 import { contractMismatch, execute } from "../lifecycle.js";
 import type { Outcome } from "../lifecycle.js";
 import { IdeogramApiError } from "../errors.js";
@@ -108,6 +109,18 @@ export async function sendOperation<T extends z.ZodType>(ctx: ToolContext, reque
     return { kind: "answer", read: await readOperation(ctx, request, schema) };
   } catch (error) {
     return { kind: sideEffectOf(error), error };
+  }
+}
+
+/** An operation whose 200 is a file (snap mask's image/png): the body saved as the result — the one path of the curated
+ * tool and `ideogram_api` alike; a failure that may have run says so (the request is never resent). */
+export async function fileAnswer(what: string, ctx: ToolContext, req: ApiRequest): Promise<CallToolResult> {
+  try {
+    const saved = await ctx.client.callToFile(req, ctx.outputDir, ctx.budget, "image");
+    return textResult(`Saved: ${saved.path} (${mbText(saved.bytes, 2)}, ${saved.contentType.split(";")[0]})`);
+  } catch (error) {
+    const note = req.op.method !== "GET" && sideEffectOf(error) === "unknown" ? `\nThe request had left this machine: ${req.op.id} MAY have run — send it again only if the answer is not in the output directory.` : "";
+    return textResult(`${what}: ${errorText(error)}${note}`, true);
   }
 }
 

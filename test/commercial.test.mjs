@@ -1,0 +1,99 @@
+// The single-operation tools of 2.5.0: each runs its one operation with the operation's own fields (no model input),
+// the commercial tools as generations (accepted → pending or saved), the v1 utilities with their own answers: a JSON
+// prompt printed, a provenance record printed, the detected layers beside the saved base image, a snapped mask saved
+// from an image/png answer. Against the fake API; nothing live.
+import assert from "node:assert/strict";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after, test } from "node:test";
+import { z } from "zod/v4";
+import { startFakeApi, testContext, tool, PNG } from "./support/fake-api.mjs";
+
+const dir = await mkdtemp(join(tmpdir(), "ideogram-commercial-"));
+const png = join(dir, "ad.png");
+await writeFile(png, PNG);
+after(() => rm(dir, { recursive: true, force: true }));
+
+const accepted = (id) => ({ json: { generation_id: id, created: "2026-10-07T00:00:00Z" } });
+const pending = (id) => ({ json: { generation_id: id, status: "pending", created: "2026-10-07T00:00:00Z" } });
+const text = (r) => r.content.map((c) => (c.type === "text" ? c.text : "")).join("\n");
+
+async function call(name, args, handler = (req) => (req.method === "POST" ? accepted("c1") : pending("c1"))) {
+  const api = await startFakeApi((req, n) => handler(req, n, api));
+  try {
+    const ctx = await testContext(api.base, join(dir, `out-${Math.random().toString(16).slice(2)}`));
+    const result = await (await tool(name)).handler(ctx, args);
+    return { result, requests: api.requests, ctx };
+  } finally {
+    await api.close();
+  }
+}
+
+test("a commercial tool runs its one operation with its own fields: no model input, foreign fields refused by name, the generation accepted", async () => {
+  const schema = z.toJSONSchema((await tool("ideogram_ad_resizer")).inputSchema, { io: "input", unrepresentable: "any" });
+  assert.equal(schema.properties.model, undefined, "a single-operation tool advertises no model");
+  assert.ok(schema.properties.resolution && schema.properties.platform && schema.properties.inline_images, "its own fields, each with our sentence, and the inline option");
+  assert.match(schema.properties.platform.description, /safe zone/);
+  assert.equal(schema.oneOf.length, 1, "one variant");
+  assert.ok(schema.oneOf[0].properties.resolution.enum.includes("1080x1920"), "the variant carries the operation's own enum");
+  const run = await call("ideogram_ad_resizer", { image: png, resolution: "1080x1080", platform: "meta", wait_s: 0 });
+  assert.equal(run.requests[0].url, "/v2/tool/ad-resizer");
+  assert.match(run.requests[0].body.toString("latin1"), /name="image"; filename="image.png"/);
+  assert.match(run.requests[0].body.toString("latin1"), /name="private"\r\n\r\ntrue/, "private defaults to true as on every curated call");
+  assert.match(text(run.result), /Accepted: generation c1 is still running/);
+  const foreign = await call("ideogram_ad_resizer", { image: png, resolution: "1080x1080", num_videos: 2 }).catch((e) => e);
+  assert.match(foreign.message, /`num_videos` is not a parameter of ideogram_ad_resizer \(post_ad_resizer\)/);
+  const withModel = await call("ideogram_ad_resizer", { image: png, resolution: "1080x1080", model: "x" }).catch((e) => e);
+  assert.match(withModel.message, /runs one operation \(post_ad_resizer\); it takes no model/);
+  const badSize = await call("ideogram_ad_resizer", { image: png, resolution: "1024x1024" }).catch((e) => e);
+  assert.match(badSize.message, /ideogram_ad_resizer refuses the input:\nresolution: Invalid option/);
+  const both = await call("ideogram_colorways", { image: png, image_asset_identifier: { asset_type: "UPLOAD", asset_id: "AAAAAAAAAAAAAAAAAAAAAA" }, colors: ["#B3202C"], masks: [png] }).catch((e) => e);
+  assert.match(both.message, /image and image_asset_identifier are alternatives/, "the shared rules reach the commercial tools");
+  const localized = await call("ideogram_ad_localizer", { image: png, language: "de", exact_copy: "Sale => Angebot", wait_s: 0 });
+  assert.equal(localized.requests[0].url, "/v2/tool/ad-localizer");
+  assert.match(localized.requests[0].body.toString("latin1"), /name="exact_copy"\r\n\r\nSale => Angebot/);
+  const quote = await call("ideogram_quote", { tool: "ideogram_colorways", arguments: { image: png, colors: ["#B3202C"], masks: [png] } }, () => ({ json: { object: "price_quote", billing_identifier: "colorways", quantity: 1, usd_micros: 100000, credit_millis: 100, qualifier: "exact" } }));
+  assert.equal(quote.requests[0]?.url, "/v2/tool/colorways?dry_run=true", text(quote.result));
+  const noDryRun = await call("ideogram_quote", { tool: "ideogram_ad_variations", arguments: { image: png, variation_type: "people" } });
+  assert.match(text(noDryRun.result), /post_ad_variations does not declare dry_run/, "a commercial tool without a dry run is refused locally, never sent");
+  assert.match(text(quote.result), /0\.100000 USD exact/);
+});
+
+test("the v1 utilities answer in their own shapes: a JSON prompt, a provenance record, the detected layers beside the saved base image", async () => {
+  const example = JSON.parse(await readFile(new URL("../spec/openapi.json", import.meta.url), "utf8")).components.schemas.MagicPromptV4Response.example; // the provider's own example: schema-complete
+  const magic = await call("ideogram_magic_prompt", { text_prompt: "a lighthouse at dawn" }, () => ({ json: example }));
+  assert.equal(magic.requests[0].url, "/v1/ideogram-v4/magic-prompt");
+  assert.deepEqual(JSON.parse(magic.requests[0].body.toString()), { text_prompt: "a lighthouse at dawn" });
+  assert.match(text(magic.result), /JSON prompt:\n\{\n  "compositional_deconstruction": \{/);
+  const noPrice = await call("ideogram_quote", { tool: "ideogram_magic_prompt", arguments: { text_prompt: "x" } });
+  assert.equal(noPrice.result.isError, true, "no dry run on the v1 utility");
+  const prov = await call("ideogram_provenance", { content: png }, () => ({ json: { provenance_detected: true, provider: "Ideogram", system_version: "3.0", generation_id: "g1", created_at: "2026-10-01T00:00:00Z", validation_state: "VALID" } }));
+  assert.equal(prov.requests[0].url, "/v1/provenance/verify");
+  assert.match(prov.requests[0].body.toString("latin1"), /name="content"; filename="content.png"/);
+  assert.match(text(prov.result), /"provenance_detected": true/);
+  const logos = await call("ideogram_layerize_logos", { design_image: png, reference_images: [png] }, (req, _n, api) => (req.url === "/b/base.png" ? { status: 200, headers: { "content-type": "image/png" }, body: PNG } : { json: { base_image_url: `${api.base}/b/base.png`, layers: [{ ref_id: "REF_0", x: 0, y: 0, width: 10, height: 10 }] } }));
+  assert.equal(logos.requests[0].url, "/v1/layerize-logos");
+  assert.match(logos.requests[0].body.toString("latin1"), /name="design_image"; filename="design_image.png"[\s\S]*name="reference_images"; filename="reference_images.png"/);
+  assert.match(text(logos.result), /1 of 1 base image\(s\) saved \(1 design\(s\)\)\.\nSaved: .*\.png[\s\S]*Text blocks of design 1 \(1\):\n\[\n  \{\n    "ref_id": "REF_0"/);
+});
+
+test("ideogram_snap_mask saves the PNG the operation answers with; an answer of another type or a failure is said", async () => {
+  const snapped = await call("ideogram_snap_mask", { image: png, mask: png }, () => ({ status: 200, headers: { "content-type": "image/png" }, body: PNG }));
+  assert.equal(snapped.requests[0].url, "/v1/snap-mask");
+  assert.match(snapped.requests[0].body.toString("latin1"), /name="image"; filename="image.png"[\s\S]*name="mask"; filename="mask.png"/);
+  assert.match(text(snapped.result), /^Saved: .*\.png \(0\.00 MB, image\/png\)$/);
+  assert.equal((await readdir(snapped.ctx.outputDir)).length, 1);
+  const json = await call("ideogram_snap_mask", { image: png, mask: png }, () => ({ json: { error: "unexpected" } }));
+  assert.equal(json.result.isError, true);
+  assert.match(text(json.result), /ideogram_snap_mask: .*Expected an image, got: application\/json/);
+  const refused = await call("ideogram_snap_mask", { image: png, mask: png }, () => ({ status: 400, json: { error: "mask size" } }));
+  assert.match(text(refused.result), /ideogram_snap_mask: Ideogram API error HTTP_400 \(400\): mask size/);
+  assert.doesNotMatch(text(refused.result), /MAY have run/);
+  const down = await call("ideogram_snap_mask", { image: png, mask: png }, () => ({ status: 503, json: { error: "down" } }));
+  assert.match(text(down.result), /MAY have run — send it again only if the answer is not in the output directory/);
+  const raw = await call("ideogram_api", { operation: "post_snap_mask", files: [{ field: "image", path: png }, { field: "mask", path: png }] }, () => ({ status: 200, headers: { "content-type": "image/png" }, body: PNG }));
+  assert.match(text(raw.result), /^Saved: .*\.png \(0\.00 MB, image\/png\)$/, "the raw call saves a file answer the same way");
+  const missing = await call("ideogram_snap_mask", { image: png }).catch((e) => e);
+  assert.match(missing.message, /ideogram_snap_mask refuses the input:\nmask: /, "both files are required by the schema");
+});

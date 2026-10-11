@@ -49,17 +49,32 @@ export const CURATED_OPERATIONS_OUTSIDE_FAMILIES: ReadonlySet<string> = new Set(
   "train_model_v4_advanced",
   "train_model_v3",
   "train_model_v3_advanced",
+  // the single-operation tools of 2.5.0 (src/tools/commercial.ts): the documented commercial tools and the v1 utilities
+  "post_ad_localizer",
+  "post_ad_resizer",
+  "post_ad_variations",
+  "post_colorways",
+  "post_ghost_mannequin",
+  "post_material_swap",
+  "post_model_pose_variants",
+  "post_sketch_to_render",
+  "post_magic_prompt_v4",
+  "post_layerize_logos",
+  "post_provenance_verify",
+  "post_snap_mask",
 ]);
 
-/** Families served through `ideogram_api` in full, whatever the class of their operations (the training family is v1-only). */
-export const RAW_FAMILIES: ReadonlySet<Family> = new Set<Family>(["training", "video_edit"]);
+/** Families served through `ideogram_api` in full, whatever the class of their operations (the training family is
+ * v1-only; the tool and workflow families hold the spec-only and customer-specific operations — skechers, swan,
+ * sole-swap, the workflows — that no curated tool wraps, 2.5.0). */
+export const RAW_FAMILIES: ReadonlySet<Family> = new Set<Family>(["training", "video_edit", "tool", "workflow"]);
 
 export function supportOf(op: Operation): SupportStatus {
   if (!isExposable(op)) return "unsupported";
   if (CURATED_OPERATIONS_OUTSIDE_FAMILIES.has(op.id)) return "curated";
   const curatedFamily = op.family !== null && CURATED_FAMILIES.has(op.family);
   if (curatedFamily && op.class === "documented") return "curated";
-  if (op.path.startsWith("/v2/image/") || (curatedFamily && op.class === "spec_only")) return "raw";
+  if (op.path.startsWith("/v2/image/") || (curatedFamily && (op.class === "spec_only" || op.class === "v1_only"))) return "raw"; // a v1 model variant of a curated family (ernie, flux, the v4 tiers, the p-image tiers…) runs raw since 2.5.0
   if (op.family !== null && RAW_FAMILIES.has(op.family)) return "raw";
   return "planned";
 }

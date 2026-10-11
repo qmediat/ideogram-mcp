@@ -4,7 +4,8 @@
  */
 import { z } from "zod/v4";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { executeTold } from "./reads.js";
+import { COMMERCIAL_TOOLS } from "./commercial.js";
+import { executeTold, fileAnswer } from "./reads.js";
 import type { ToolContext, ToolDefinition } from "./context.js";
 import { advertisedSchema, prepare } from "./family.js";
 import type { FamilyToolSpec, ToolArguments } from "./family.js";
@@ -115,10 +116,12 @@ export const FAMILY_TOOLS: readonly FamilyToolSpec[] = [
     title: "Layerize a design",
     description: `Turn a flat image into an editable design (Ideogram 3.0): the detected text comes back as positioned text blocks with matched fonts, sizes and colours, beside a text-free base image that is saved. Optional font files to match against; ideogram_quote prices a call first.`,
   },
+  ...COMMERCIAL_TOOLS,
 ];
 
 async function runFamilyTool(spec: FamilyToolSpec, ctx: ToolContext, args: ToolArguments): Promise<CallToolResult> {
   const call = await prepare(spec, args, ctx.remote);
+  if (call.req.op.facts.responseMedia === "image") return fileAnswer(spec.name, ctx, call.req); // the answer IS the file (snap mask's PNG)
   const run = await executeTold(ctx, call.req, call.waitS);
   if (run.kind === "result") return run.result;
   return outcomeResult(ctx, run.outcome, call.notes, { inlineImages: args.inline_images === true });
