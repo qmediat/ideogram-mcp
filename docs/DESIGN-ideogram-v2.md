@@ -324,8 +324,8 @@ Measured on the PR's head (branch `qmt/v2-foundation`, 2026-10-07):
 | generated code (`src/generated/`) | 438 932 bytes | 614 400 (`scripts/spec-generate.mjs`) |
 | tools/list over a real MCP session | 12 tools, 62 871 bytes (2.0.0); 16 tools, 73 582 bytes (step 1, 2026-10-10); 19 tools, 79 115 bytes (step 2, after step 1b); 23 tools, 83 184 bytes (step 3); 26 tools, 98 341 bytes (step 4, measured at d0222c5); 38 tools, 132 254 bytes (step 5) | 139 264 since step 5 (106 496 through step 4), 90 112 through step 3, 81 920 through step 2 (`test/budget.test.mjs`) |
 | support | curated 40 · raw 7 · planned 80 · unsupported 73 (2.0.0); curated 44 · raw 4 · planned 79 · unsupported 73 (step 1); curated 47 · raw 5 · planned 75 · unsupported 73 (step 2); curated 57 · raw 6 · planned 64 · unsupported 73 (step 3); curated 68 · raw 7 · planned 52 · unsupported 73 (step 4); curated 80 · raw 47 · planned 0 · unsupported 73 (step 5) | `src/spec/support.ts` |
-| tests | 83, all passing (`npm test`; the live dry-run suite included when a key is set) | — |
-| live dry-run suite (`test/live-dry-run.test.mjs`, funded key) | 33 quotes in `docs/PRICES-2026-10-07.md`, 4 custom-model skips, 0 failures, 0 USD | every curated quotable model |
+| tests | 178, all passing after step 5 (`npm test`; the live dry-run suite included when a key is set) — 83 at 2.0.0 | — |
+| live dry-run suite (`test/live-dry-run.test.mjs`, funded key) | 33 quotes in `docs/PRICES-2026-10-07.md`, 4 custom-model skips, 0 failures, 0 USD; 2026-10-11 after step 5: 51 quotes, 2 operations not available to the test key (ad localizer, ghost mannequin), 4 custom-model skips, 0 failures, 0 USD (`docs/PRICES-2026-10-11.md`) | every curated quotable model |
 
 Commands green at the head: `npm run typecheck`, `npm test` (83), `npm run spec:check` (regeneration byte-identical),
 `node scripts/api-reference.mjs --check`, `actionlint` on both workflows, `npm audit --omit=dev --audit-level=high`
