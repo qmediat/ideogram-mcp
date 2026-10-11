@@ -16,10 +16,10 @@ const zip = join(dir, "more.zip"); await writeFile(zip, Buffer.from("504b0506" +
 const ttf = join(dir, "f.ttf"); await writeFile(ttf, Buffer.from("00010000", "hex"));
 await (await import("node:fs/promises")).mkdir(join(dir, "sub")); await writeFile(join(dir, "sub", "a.png"), PNG);
 
-async function call(name, args, handler) {
+async function call(name, args, handler, outputDir = join(dir, `out-${Math.random().toString(16).slice(2)}`)) {
   const api = await startFakeApi((req, n) => handler(req, n, api));
   try {
-    const ctx = await testContext(api.base, join(dir, `out-${Math.random().toString(16).slice(2)}`));
+    const ctx = await testContext(api.base, outputDir);
     const withBase = JSON.parse(JSON.stringify(args).replaceAll("__BASE__", api.base));
     const result = await (await tool(name)).handler(ctx, withBase);
     return { result, requests: api.requests };
@@ -74,9 +74,20 @@ test("ideogram_dataset_upload creates the dataset from a name, then uploads imag
   assert.match(onImage.message, /image: unsupported file type \.txt; one of \.png, \.jpg, \.jpeg, \.webp$/, "the dataset types do not leak to an image field");
   const orphan = await call("ideogram_dataset_upload", { name: "brand refs", files: [png] }, (req) => (req.method === "POST" && req.url === "/datasets" ? { json: dataset } : { status: 404, json: { error: "gone" } }));
   assert.equal(orphan.result.isError, true);
-  assert.match(text(orphan.result), /^Dataset brand refs created: ds1\.\nThe upload failed; upload again with dataset_id "ds1", not with name\./, "a failed upload after the create names the dataset first");
+  assert.match(text(orphan.result), /^Dataset brand refs created: ds1\.\nNothing was uploaded\. Upload again with dataset_id "ds1", not with name\./, "a refused upload after the create names the dataset first: nothing is in");
   const cut = await call("ideogram_dataset_upload", { name: "brand refs", files: [png] }, (req) => (req.method === "POST" && req.url === "/datasets" ? { json: dataset } : { status: 503, json: { error: "down" } }));
-  assert.match(text(cut.result), /^Dataset brand refs created: ds1\.\nThe upload failed; upload again with dataset_id "ds1", not with name\./, "a 5xx after the create names the dataset too");
+  assert.match(text(cut.result), /^Dataset brand refs created: ds1\.\nideogram_dataset_upload: .*503.*\nThe assets MAY be in the dataset: show it \(ideogram_datasets \{"dataset_id": "ds1"\}\) before uploading again/, "a 5xx after the create names the dataset and says the assets may be in");
+  assert.doesNotMatch(text(cut.result), /Upload again with dataset_id/, "a request that may have gone through is never told to upload again");
+  const create504 = await call("ideogram_dataset_upload", { name: "brand refs", files: [png] }, () => ({ status: 504, json: { error: "late" } }));
+  assert.match(text(create504.result), /504[\s\S]*A dataset named "brand refs" MAY have been created: list ideogram_datasets before creating it again/, "a 5xx on the create: a dataset may exist");
+  const create400 = await call("ideogram_dataset_upload", { name: "brand refs", files: [png] }, () => ({ status: 400, json: { error: "bad name" } }));
+  assert.doesNotMatch(text(create400.result), /MAY have been created/, "a refusal made nothing");
+  assert.match(text(create400.result), /400/);
+  const fileDir = join(dir, "not-a-dir"); // the output directory is a FILE: nothing can be written under it
+  await writeFile(fileDir, "x");
+  const unwritable = await call("ideogram_dataset_upload", { name: "brand refs", files: [png] }, (req) => (req.method === "POST" && req.url === "/datasets" ? { json: dataset } : { json: uploaded }), join(fileDir, "out"));
+  assert.match(text(unwritable.result), /^Dataset brand refs created: ds1\.\n3 of 4 asset\(s\) uploaded to dataset ds1, 1 failed:\n[\s\S]*As Ideogram sent it: not written to .*ENOTDIR[^\n]*\n\{\n  "total_count": 4/, "a 200 whose raw answer cannot be written is still the success it was: the id first, the answer shown inline");
+  assert.equal(unwritable.result.isError, undefined, "an unwritable disk is not an upload error");
   const offSchema = await call("ideogram_dataset_upload", { name: "brand refs", files: [png] }, (req) => (req.method === "POST" && req.url === "/datasets" ? { json: dataset } : { json: { success_count: "three" } }));
   assert.match(text(offSchema.result), /^Dataset brand refs created: ds1\.\nIdeogram answered 200 with a body that does not match/, "a 200 off the schema after the create names the dataset too");
   const createOff = await call("ideogram_dataset_upload", { name: "brand refs", files: [png] }, () => ({ json: { dataset_id: 7 } }));
@@ -113,7 +124,11 @@ test("ideogram_train routes to the plain operation, or the advanced one when a h
     const ctx0 = await testContext(api0.base, join(dir, "out-budget"));
     const client0 = Object.create(ctx0.client);
     client0.call = async () => { throw new IdeogramApiError(0, "CALL_TIMEOUT", "the call's time ran out before this request could be made", { sent: false }); };
-    await assert.rejects((await tool("ideogram_train")).handler({ ...ctx0, client: client0 }, { dataset_id: "ds1", model_name: "Planet Drip" }), (error) => error.code === "CALL_TIMEOUT" && !/MAY have started/.test(error.message), "a budget that ended before the request left started nothing: the typed error is the answer, no warning");
+    const early = await (await tool("ideogram_train")).handler({ ...ctx0, client: client0 }, { dataset_id: "ds1", model_name: "Planet Drip" });
+    assert.match(text(early), /^ideogram_train: Ideogram API error CALL_TIMEOUT \(0\): the call's time ran out before this request could be made$/, "a budget that ended before the request left started nothing: the typed error alone, no warning");
+    client0.call = async () => { throw new Error("the request body is 61 MB; upload_dataset_assets takes at most 50 MB"); };
+    const refusedHere = await (await tool("ideogram_train")).handler({ ...ctx0, client: client0 }, { dataset_id: "ds1", model_name: "Planet Drip" });
+    assert.doesNotMatch(text(refusedHere), /MAY have started/, "a refusal raised on this machine before any request started nothing");
     client0.call = async () => { throw new IdeogramApiError(0, "CALL_TIMEOUT", "the call's time ran out; the request was in flight", { sent: true }); };
     const inFlight = await (await tool("ideogram_train")).handler({ ...ctx0, client: client0 }, { dataset_id: "ds1", model_name: "Planet Drip" });
     assert.match(text(inFlight), /MAY have started/, "a request that left may have started a billed training");
@@ -122,6 +137,11 @@ test("ideogram_train routes to the plain operation, or the advanced one when a h
   }
   const refused = await call("ideogram_train", { dataset_id: "ds1", model_name: "Planet Drip" }, () => ({ status: 404, json: { error: "no" } }));
   assert.match(text(refused.result), /the dataset is not yours, does not exist, or this key cannot train/);
+  const trainFileDir = join(dir, "not-a-dir-train");
+  await writeFile(trainFileDir, "x");
+  const trainUnwritable = await call("ideogram_train", { dataset_id: "ds1", model_name: "Planet Drip" }, () => ({ json: started }), join(trainFileDir, "out"));
+  assert.match(text(trainUnwritable.result), /^Training started: model Planet Drip \(m2\) from dataset ds1, status TRAINING\.\nFollow it with ideogram_models[^\n]*\nAs Ideogram sent it: not written to .*(ENOTDIR|not a directory)/i, "a started training is reported with its id whatever the disk does");
+  assert.equal(trainUnwritable.result.isError, undefined);
   assert.doesNotMatch(text(refused.result), /MAY have started/);
   const short = await call("ideogram_train", { dataset_id: "ds1", model_name: "abc" }, () => ({ json: started }));
   assert.match(text(short.result), /model_name must be 5-30 characters/);

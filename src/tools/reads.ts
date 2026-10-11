@@ -10,6 +10,7 @@ import type { z } from "zod/v4";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { ApiRequest } from "../client.js";
 import type { BodyInput, QueryValue, Scalar } from "../wire.js";
+import { COUNTERS } from "../counters.js";
 import { contractMismatch } from "../lifecycle.js";
 import { IdeogramApiError } from "../errors.js";
 import { operationById } from "../spec/operations.js";
@@ -40,15 +41,53 @@ export function errorText(error: unknown): string {
 
 /** An answer exactly as received: written to a file in the output directory (named by what was asked, so two
  * reports never overwrite each other; readable by the owner only — an account's answers carry emails and key
- * prefixes), inline too when small. The one mechanism of every listing, the mismatch path included. */
+ * prefixes), inline too when small. The one mechanism of every listing, the mismatch path included. Best-effort:
+ * the answer has already happened on the server (a dataset made, a training started), so a directory that cannot be
+ * written never turns it into an error — the answer is shown inline instead and the failure is counted. */
 export async function rawLines(ctx: ToolContext, what: string, name: string, value: unknown): Promise<string[]> {
   const text = JSON.stringify(value, null, 2) ?? "null";
   const bytes = Buffer.byteLength(text, "utf8");
-  await mkdir(ctx.outputDir, { recursive: true });
   const path = join(ctx.outputDir, `ideogram-${fileNameComponent(name)}.json`);
-  await writeFile(path, text, { mode: 0o600 });
+  const shown = bytes <= INLINE_JSON_BYTES ? [text] : [];
+  try {
+    await mkdir(ctx.outputDir, { recursive: true });
+    await writeFile(path, text, { mode: 0o600 });
+  } catch (error) {
+    COUNTERS.rawWriteFailures += 1;
+    const size = shown.length === 0 ? `; too large to print here (${bytes} bytes)` : "";
+    return [`${what}: not written to ${path} (${errorText(error)})${size}`, ...shown];
+  }
   const head = `${what}: ${path} (${bytes} bytes, owner-readable)`;
-  return bytes <= INLINE_JSON_BYTES ? [head, text] : [`${head}; not printed here, over ${INLINE_JSON_BYTES} bytes`];
+  return shown.length > 0 ? [head, ...shown] : [`${head}; not printed here, over ${INLINE_JSON_BYTES} bytes`];
+}
+
+/** What a failed call with a side effect (a dataset made, assets added, a training started) did on the server:
+ * `refused` (a 4xx: nothing happened), `not-sent` (the request never left this machine — the client's typed
+ * `details.sent: false`, or a refusal raised here before any request), `unknown` (it may have reached Ideogram). */
+export type SideEffect = "refused" | "not-sent" | "unknown";
+
+export function sideEffectOf(error: unknown): SideEffect {
+  if (!(error instanceof IdeogramApiError)) return "not-sent"; // the client types every failure after a request left; a plain Error is raised before one (the body's size, a location check)
+  if (error.status >= 400 && error.status < 500) return "refused";
+  if (error.status === 0 && error.details.sent === false) return "not-sent";
+  return "unknown";
+}
+
+export type Sent<T> = { readonly kind: "answer"; readonly read: Read<T> } | { readonly kind: SideEffect; readonly error: unknown };
+
+/** One non-idempotent call, never thrown: the answer (checked against its schema, the mismatch kept) or the failure
+ * typed by what it did on the server — the one decision every tool with a side effect makes. */
+export async function sendOperation<T extends z.ZodType>(ctx: ToolContext, request: ReadRequest, schema: T): Promise<Sent<z.infer<T>>> {
+  try {
+    return { kind: "answer", read: await readOperation(ctx, request, schema) };
+  } catch (error) {
+    return { kind: sideEffectOf(error), error };
+  }
+}
+
+/** The text of a result (its text blocks joined), for a tool that prefixes its own lines to another's answer. */
+export function resultText(result: CallToolResult): string {
+  return result.content.map((c) => (c.type === "text" ? c.text : "")).join("");
 }
 
 export interface ReadRequest {

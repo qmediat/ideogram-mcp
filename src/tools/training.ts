@@ -20,7 +20,8 @@ import type { QueryValue } from "../wire.js";
 import type { ToolContext, ToolDefinition } from "./context.js";
 import type { ToolArguments } from "./family.js";
 import { IdeogramApiError } from "../errors.js";
-import { apiErrorResult, errorText, operation, rawLines, readOperation } from "./reads.js";
+import { apiErrorResult, errorText, operation, rawLines, readOperation, resultText, sendOperation } from "./reads.js";
+import type { Sent, SideEffect } from "./reads.js";
 import { textResult } from "./results.js";
 
 const LIST_DATASETS = operation("list_datasets");
@@ -80,13 +81,30 @@ const UploadInput = z.strictObject({
 
 type Created = { readonly kind: "id"; readonly id: string } | { readonly kind: "result"; readonly result: CallToolResult };
 
+const CANNOT_CREATE = "this key cannot create datasets";
+
+/** The dataset by name — made, or the failure typed: a refusal and a request that never left made nothing; anything
+ * else (a 5xx, a cut connection, a 200 off the schema) MAY have made one, and says so before a retry makes a second. */
 async function createDataset(ctx: ToolContext, name: string): Promise<Created> {
   const schema = bodySchemaFor(CREATE_DATASET, "json");
   const body = { name };
   const checked = schema?.safeParse(body);
   if (checked !== undefined && !checked.success) return { kind: "result", result: textResult(`ideogram_dataset_upload: name: ${issues(checked.error)}`, true) };
-  const made = await readOperation(ctx, { op: CREATE_DATASET, body: { media: "json", fields: body, files: [], jsonParts: [] } }, zCreateDatasetResponse);
-  return made.ok ? { kind: "id", id: made.data.dataset_id } : { kind: "result", result: made.result };
+  const sent = await sendOperation(ctx, { op: CREATE_DATASET, body: { media: "json", fields: body, files: [], jsonParts: [] } }, zCreateDatasetResponse);
+  const mayExist = `A dataset named "${name}" MAY have been created: list ideogram_datasets before creating it again.`;
+  if (sent.kind === "answer") {
+    if (sent.read.ok) return { kind: "id", id: sent.read.data.dataset_id };
+    return { kind: "result", result: textResult(`${resultText(sent.read.result)}\n${mayExist}`, true) };
+  }
+  const said = failureText(sent, "ideogram_dataset_upload", CANNOT_CREATE);
+  return { kind: "result", result: textResult(sent.kind === "unknown" ? `${said}\n${mayExist}` : said, true) };
+}
+
+/** A failure as a tool says it: a 404 with what it means here, any other failure with the API's words. */
+function failureText(sent: Extract<Sent<unknown>, { kind: SideEffect }>, what: string, notFoundMeans: string): string {
+  const e = sent.error;
+  if (e instanceof IdeogramApiError && e.status === 404) return `${what}: ${notFoundMeans} (Ideogram's answer: ${e.message}).`;
+  return `${what}: ${errorText(e)}`;
 }
 
 async function runUpload(ctx: ToolContext, args: ToolArguments): Promise<CallToolResult> {
@@ -103,29 +121,38 @@ async function runUpload(ctx: ToolContext, args: ToolArguments): Promise<CallToo
   let created = "";
   if (input.data.dataset_id !== undefined) datasetId = input.data.dataset_id;
   else {
-    const made = await createDataset(ctx, input.data.name as string).catch((error: unknown) => ({ kind: "result" as const, result: apiErrorResult(error, "ideogram_dataset_upload", "this key cannot create datasets") }));
-    if (made.kind === "result") {
-      // a 200 off the schema: a dataset MAY exist under that name — said, so a retry lists first instead of creating twice
-      const text = made.result.content.map((c) => (c.type === "text" ? c.text : "")).join("");
-      return textResult(/does not match its own specification/.test(text) ? `${text}\nA dataset named "${input.data.name}" MAY have been created: list ideogram_datasets before creating it again.` : text, true);
-    }
+    const made = await createDataset(ctx, input.data.name as string);
+    if (made.kind === "result") return made.result;
     datasetId = made.id;
     created = `Dataset ${input.data.name} created: ${datasetId}.\n`;
   }
-  // from here the dataset exists whatever happens (an upload error, a 200 off the schema, a file that cannot be written):
-  // its id is the first line of every answer, so a retry uses it instead of making another
+  // from here the dataset exists whatever happens: its id is the first line of every answer, so a retry uses it
+  // instead of making another (a failure of this tool's own code included)
   try {
-    const answer = await readOperation(ctx, { op: UPLOAD_ASSETS, path: { dataset_id: datasetId }, body: { media: "multipart", fields: {}, files: uploads, jsonParts: [] } }, zUploadDatasetAssetsResponse);
-    if (!answer.ok) return textResult(`${created}${answer.result.content.map((c) => (c.type === "text" ? c.text : "")).join("")}`, true);
-    const a = answer.data;
-    const failed = a.failed_assets.map((f) => `  ${f.file_name ?? "(unnamed)"}: ${f.failure_reason}`);
-    const lines = [`${created}${a.success_count} of ${a.total_count} asset(s) uploaded to dataset ${datasetId}${a.failure_count > 0 ? `, ${a.failure_count} failed:` : "."}`, ...failed, ...(await rawLines(ctx, "As Ideogram sent it", `dataset-upload-${datasetId}-${ctx.clock.now()}`, answer.raw))];
-    return textResult(lines.join("\n"), a.success_count === 0);
+    const lines = await uploadAssets(ctx, datasetId, uploads, created);
+    return textResult(`${created}${lines.text}`, lines.isError);
   } catch (error) {
-    const retry = created === "" ? "" : `The upload failed; upload again with dataset_id "${datasetId}", not with name.\n`;
-    const said = error instanceof IdeogramApiError && error.status === 404 ? `ideogram_dataset_upload: ${OWNER} (Ideogram's answer: ${error.message}).` : `ideogram_dataset_upload: ${errorText(error)}`;
-    return textResult(`${created}${retry}${said}`, true);
+    return textResult(`${created}ideogram_dataset_upload: ${errorText(error)}`, true);
   }
+}
+
+/** The upload into an existing dataset, typed by what it did: done (with what failed per asset), refused or never sent
+ * (nothing is in; upload again), or unknown (the assets MAY be in; a second upload would add them twice). */
+async function uploadAssets(ctx: ToolContext, datasetId: string, uploads: Awaited<ReturnType<typeof loadUploads>>, created: string): Promise<{ text: string; isError: boolean }> {
+  const sent = await sendOperation(ctx, { op: UPLOAD_ASSETS, path: { dataset_id: datasetId }, body: { media: "multipart", fields: {}, files: uploads, jsonParts: [] } }, zUploadDatasetAssetsResponse);
+  const again = created === "" ? "" : `Upload again with dataset_id "${datasetId}", not with name.\n`;
+  const mayBeIn = `The assets MAY be in the dataset: show it (ideogram_datasets {"dataset_id": "${datasetId}"}) before uploading again — a second upload adds them twice.`;
+  if (sent.kind === "answer") {
+    if (!sent.read.ok) return { text: `${resultText(sent.read.result)}\n${mayBeIn}`, isError: true };
+    const a = sent.read.data;
+    const failed = a.failed_assets.map((f) => `  ${f.file_name ?? "(unnamed)"}: ${f.failure_reason}`);
+    const head = `${a.success_count} of ${a.total_count} asset(s) uploaded to dataset ${datasetId}${a.failure_count > 0 ? `, ${a.failure_count} failed:` : "."}`;
+    const kept = await rawLines(ctx, "As Ideogram sent it", `dataset-upload-${datasetId}-${ctx.clock.now()}`, sent.read.raw);
+    return { text: [head, ...failed, ...kept].join("\n"), isError: a.success_count === 0 };
+  }
+  const said = failureText(sent, "ideogram_dataset_upload", OWNER);
+  if (sent.kind === "unknown") return { text: `${said}\n${mayBeIn}`, isError: true };
+  return { text: `Nothing was uploaded. ${again}${said}`, isError: true };
 }
 
 const TrainInput = z.strictObject({
@@ -158,23 +185,17 @@ async function runTrain(ctx: ToolContext, args: ToolArguments): Promise<CallTool
   if (checked !== undefined && !checked.success) return textResult(`ideogram_train (${op.id}): ${issues(checked.error)}`, true);
   const rules = constraintViolations(op, body);
   if (rules.length > 0) return textResult(`ideogram_train: ${rules.join("; ")}`, true);
-  try {
-    let answer;
-    try {
-      answer = await readOperation(ctx, { op, body: { media: "json", fields: body, files: [], jsonParts: [] } }, zTrainDatasetModelResponse);
-    } catch (error) {
-      // a 4xx is the API's refusal and a failure before the request left (the budget's end, a refused connect — the
-      // client's typed `sent: false`) started nothing; anything else after the request left may have started a billed training
-      const refused = error instanceof IdeogramApiError && ((error.status >= 400 && error.status < 500) || error.details.sent === false);
-      if (refused) return apiErrorResult(error, "ideogram_train", "the dataset is not yours, does not exist, or this key cannot train");
-      return textResult(`ideogram_train: ${errorText(error)}\nThe request had left this machine: a training MAY have started and will be billed — list ideogram_models before starting it again.`, true);
-    }
-    if (!answer.ok) return textResult(`${answer.result.content.map((c) => (c.type === "text" ? c.text : "")).join("")}\nThe API answered 200: a training MAY have started and will be billed — list ideogram_models before starting it again.`, true);
-    const t = answer.data;
-    return textResult([`Training started: model ${t.model_name} (${t.model_id}) from dataset ${t.dataset_id}, status ${t.training_status}.`, `Follow it with ideogram_models {"model_id": "${t.model_id}"}; when it is COMPLETED, generate with its custom_model_uri (ideogram_generate, model ${model}-custom-model).`, ...(await rawLines(ctx, "As Ideogram sent it", `train-${t.model_id}`, answer.raw))].join("\n"));
-  } catch (error) {
-    return apiErrorResult(error, "ideogram_train", "the dataset is not yours, does not exist, or this key cannot train");
+  const sent = await sendOperation(ctx, { op, body: { media: "json", fields: body, files: [], jsonParts: [] } }, zTrainDatasetModelResponse);
+  const mayRun = "a training MAY have started and will be billed — list ideogram_models before starting it again.";
+  if (sent.kind === "answer") {
+    if (!sent.read.ok) return textResult(`${resultText(sent.read.result)}\nThe API answered 200: ${mayRun}`, true);
+    const t = sent.read.data;
+    const kept = await rawLines(ctx, "As Ideogram sent it", `train-${t.model_id}`, sent.read.raw); // best-effort: the training runs whatever this disk does
+    return textResult([`Training started: model ${t.model_name} (${t.model_id}) from dataset ${t.dataset_id}, status ${t.training_status}.`, `Follow it with ideogram_models {"model_id": "${t.model_id}"}; when it is COMPLETED, generate with its custom_model_uri (ideogram_generate, model ${model}-custom-model).`, ...kept].join("\n"));
   }
+  // a refusal (4xx) and a request that never left started nothing; anything else may have
+  const said = failureText(sent, "ideogram_train", "the dataset is not yours, does not exist, or this key cannot train");
+  return textResult(sent.kind === "unknown" ? `${said}\nThe request had left this machine: ${mayRun}` : said, true);
 }
 
 const ModelsInput = z
