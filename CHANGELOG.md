@@ -132,7 +132,8 @@ Step 5: the commercial tools and the v1 utilities, each one operation; nothing o
   operation is no job (magic prompt, provenance, logos, snap mask) takes no `wait_s`; snap mask's answer is said as
   what it is (white = the object: as is for remove object, whose mask takes white as the region to remove, inverted for
   inpaint, whose mask takes black). A 2xx that is no file of the kind, or over the cap, keeps the save's own typed
-  error ("the operation ran and answered, with no file this server keeps"); only a failed write is a lost answer. The
+  error ("the operation ran and answered, with no file this server keeps"); anything else — a failed write, a cut
+  connection, the budget's end mid-body — is a lost answer ("sending it again runs it again"). The
   body probe reads its optional top-level fields as unknown, so a body of another shape is never turned into a
   record. `responseMedia` knows `video` too.
 

@@ -53,6 +53,9 @@ export const MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;
  * estimates from the bit rates — no real video was measured). */
 export const MAX_VIDEO_DOWNLOAD_BYTES = 512 * 1024 * 1024;
 
+/** The two ways a 2xx body is refused by the save itself (never a loss): not a file of the kind, or over the cap. */
+const SAVE_REFUSALS: ReadonlySet<string> = new Set(["DOWNLOAD_INVALID_TYPE", "DOWNLOAD_TOO_LARGE"]);
+
 /** What a download is expected to be: the result's kind decides the accepted media types and the cap — a video link
  * that answers an image (a placeholder behind a 200) is refused, never saved as the promised mp4. */
 export type MediaKind = "image" | "video";
@@ -218,8 +221,9 @@ export class IdeogramClient {
     try {
       return await this.saveResponse(response, outputDir, budget, kind);
     } catch (error) {
-      // the save's own refusals (not a file of the kind, over the cap) say what the answer was; a failed write is the loss
-      if (error instanceof IdeogramApiError && error.code !== "NETWORK_ERROR") throw new IdeogramApiError(response.status, error.code, `${req.op.id} answered ${response.status}: ${error.message}`, { sent: true });
+      // the save's own refusals (not a file of the kind, over the cap) say what the answer was; anything else — a failed
+      // write, a cut connection, the budget's end mid-body — is the answer lost
+      if (error instanceof IdeogramApiError && SAVE_REFUSALS.has(error.code)) throw new IdeogramApiError(response.status, error.code, `${req.op.id} answered ${response.status}: ${error.message}`, { sent: true });
       throw new IdeogramApiError(response.status, "ANSWER_NOT_SAVED", `${req.op.id} answered ${response.status}; its answer could not be saved: ${error instanceof IdeogramApiError ? error.message : networkErrorText(error)}`, { sent: true });
     }
   }
