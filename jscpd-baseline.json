@@ -1,1 +1,7 @@
-{"duplicatedLines":11}
+{
+  "duplicatedLines": 23,
+  "files": {
+    "test/account.test.mjs": 11,
+    "test/commercial.test.mjs": 12
+  }
+}
