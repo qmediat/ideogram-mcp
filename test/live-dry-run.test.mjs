@@ -74,7 +74,15 @@ function minimalArguments(spec, variant) {
   if (source !== undefined && !(source in args) && spec.family !== "generate") args[source] = MINIMAL[source]; // generate is quoted as text-to-image
   if (spec.family === "inpaint" || spec.family === "remove_object") args.mask = mask;
   if (variant.fields.has("character_reference_images")) args.character_reference_images = MINIMAL.character_reference_images; // the API requires one; the schema does not say so
+  if (spec.family === "video_reference") args.reference_images = [image]; // the API requires a reference image or video; the prose says so, the schema does not
+  if (spec.family.startsWith("video")) args.duration = minimumDuration(variant); // omitted, Seedance is quoted at its MAXIMUM length (measured 2026-10-11): the smallest request names the minimum
   return { args };
+}
+
+function minimumDuration(variant) {
+  const duration = z.toJSONSchema(variant.schema, { io: "input", unrepresentable: "any" }).properties?.duration;
+  assert.equal(typeof duration?.minimum, "number", `${variant.model}: the schema states no minimum duration — the smallest request cannot be named`);
+  return duration.minimum;
 }
 
 function quotableCases() {

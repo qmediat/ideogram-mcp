@@ -23,6 +23,9 @@ export interface Quote {
   readonly qualifier: "exact" | "estimate";
   /** The most an estimate can cost, USD with six places; null for an exact quote. */
   readonly upperBoundUsd: string | null;
+  /** What the dry run leaves out of the price, when the request asks for it: measured 2026-10-11, `generate_audio`
+   * changes no video quote while the specification says audio roughly doubles the cost. Null when nothing is left out. */
+  readonly caveat: string | null;
 }
 
 export type QuoteOutcome = { readonly kind: "quote"; readonly quote: Quote } | ContractMismatch;
@@ -58,6 +61,7 @@ export async function quote(client: IdeogramClient, req: ApiRequest, budget: Cal
       credits: millisToCredits(q.credit_millis),
       qualifier: q.qualifier,
       upperBoundUsd: q.upper_bound_usd_micros === undefined ? null : microsToUsd(q.upper_bound_usd_micros),
+      caveat: req.body?.fields.generate_audio === true ? "the dry run does not price generate_audio (Ideogram: an audio track roughly doubles the cost)" : null,
     },
   };
 }

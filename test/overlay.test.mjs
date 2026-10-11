@@ -100,6 +100,12 @@ test("the constraints refuse what the API refuses and pass what it takes", () =>
     ["post_precise_edit_image_v2_ideogram45", { prompt: "x", mask: "m.png" }, /mask needs the source image/],
     ["post_generate_image_v2_ideogram_v3", { prompt: "x", style_preset: "BRIGHT_ART", style_codes: ["ABCD1234"] }, /style_preset/],
     ["post_inpaint_image_v2_ideogram_v3", { prompt: "x", image: "a.png" }, /inpaint needs/],
+    ["post_generate_video_seed_dance25_reference_to_video", { prompt: "x", reference_audios: ["a.wav"] }, /needs at least one reference image or video/],
+    ["post_edit_video_minimax_h3_reference_to_video", { prompt: "x", reference_audios: ["a.wav"] }, /needs at least one reference image or video/],
+    ["post_generate_video_seed_dance25_reference_to_video", { prompt: "x", reference_images: ["a.png"], reference_image_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "a" }] }, /cannot be combined/],
+    ["post_edit_video_minimax_h3_reference_to_video", { prompt: "x", reference_images: Array(9).fill("a.png"), reference_video_asset_identifiers: Array(3).fill({ asset_type: "RESPONSE", asset_id: "a" }), reference_audios: ["a.wav"] }, /at most 12 references/],
+    ["post_generate_video_kling_v3_standard_image_to_video", { prompt: "x", image: "a.png", image_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" } }, /image and image_asset_identifier are alternatives/],
+    ["post_generate_video_kling_v3_standard_image_to_video", { prompt: "x", image: "a.png", end_image: "b.png", end_image_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" } }, /end_image and end_image_asset_identifier/],
     ["post_generate_image_v2_ideogram_v3_character", { prompt: "x", character_reference_mask: "m.png", character_reference_collection_id: "c" }, /character_reference_images/],
     ["post_generate_image_v2_ideogram_v3_character", { prompt: "x" }, /character model needs a character reference/],
     ["post_remix_image_v2_ideogram_v3_character", { prompt: "x", image: "a.png" }, /character model needs a character reference/],
@@ -139,6 +145,10 @@ test("the constraints refuse what the API refuses and pass what it takes", () =>
     ["post_layerize_design_ideogram_v3", { image: "a.png", font_candidate_files: ["1.ttf", "2.ttf", "3.ttf", "4.ttf", "5.ttf"] }],
     ["post_generate_image_v2_ideogram_v3_character", { prompt: "x", character_reference_collection_id: "c" }],
     ["post_inpaint_image_v2_ideogram_v3_character", { prompt: "x", image: "a.png", mask: "m.png", character_reference_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "a" }] }],
+    ["post_generate_video_seed_dance25_reference_to_video", { prompt: "x", reference_video_asset_identifiers: [{ asset_type: "RESPONSE", asset_id: "a" }] }],
+    ["post_edit_video_minimax_h3_reference_to_video", { prompt: "x", reference_images: Array(9).fill("a.png"), reference_video_asset_identifiers: Array(3).fill({ asset_type: "RESPONSE", asset_id: "a" }) }],
+    ["post_generate_video_seed_dance25_text_to_video", { prompt: "x", resolution: "720p", aspect_ratio: "16x9" }],
+    ["post_generate_video_kling_v3_standard_image_to_video", { prompt: "x", image: "a.png", end_image_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" } }],
   ];
   for (const [id, fields] of passing) assert.deepEqual(constraintViolations(op(id), fields), [], id);
 });
@@ -150,7 +160,8 @@ test("the support table: the eleven image families' documented models and the ge
     assert.equal(supportOf(op(id)), "curated", `${id} is curated since 2.1.0`);
   }
   assert.equal(supportOf(op("post_reframe_image_auto")), "raw", "a spec-only image operation is raw (opt-in at call time)");
-  assert.equal(supportOf(op("post_generate_video_seed_dance2_text_to_video")), "planned");
+  assert.equal(supportOf(op("post_generate_video_seed_dance2_text_to_video")), "curated", "the video tools cover it since 2.4.0");
+  assert.equal(supportOf(op("post_edit_video_seed_dance2")), "raw", "the spec-only video edit is raw behind the flag");
   assert.equal(supportOf(op("get_account_usage")), "curated", "the account listings are curated since 2.2.0");
   assert.equal(supportOf(op("get_asset_reference_usage")), "raw", "a spec-only operation of a curated family is raw (opt-in at call time)");
   assert.equal(supportOf(op("get_webhook_signing_jwks")), "planned", "v1-only stays for step 5");
@@ -160,13 +171,19 @@ test("the support table: the eleven image families' documented models and the ge
   assert.equal(servedByRawCall(op("post_ad_resizer")), false);
   const counts = {};
   for (const o of OPERATIONS) counts[supportOf(o)] = (counts[supportOf(o)] ?? 0) + 1;
-  assert.deepEqual(counts, { curated: 57, raw: 6, planned: 64, unsupported: 73 });
+  assert.deepEqual(counts, { curated: 68, raw: 7, planned: 52, unsupported: 73 });
 });
 
 test("a dataset upload is the one operation whose file field names the ZIP archives and caption sidecars", async () => {
   const { DATASET_UPLOAD_OPERATIONS } = await import("../dist/spec/overlay.js");
   const stating = OPERATIONS.filter((o) => isExposable(o) && o.facts.fileFields.some((f) => /ZIP archives containing images and captions/.test(fieldDescription(o, f.name) ?? ""))).map((o) => o.id);
   assert.deepEqual(new Set(stating), DATASET_UPLOAD_OPERATIONS);
+});
+
+test("an audio field is the one whose description names MP3 or WAV", async () => {
+  const { AUDIO_FILE_FIELDS } = await import("../dist/spec/overlay.js");
+  const fields = new Set(OPERATIONS.filter(isExposable).flatMap((o) => o.facts.fileFields.filter((f) => /MP3 or WAV/.test(fieldDescription(o, f.name) ?? "")).map((f) => f.name)));
+  assert.deepEqual(fields, AUDIO_FILE_FIELDS);
 });
 
 test("a font field is the one whose description names the font formats; every other file field takes images", () => {

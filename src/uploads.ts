@@ -10,7 +10,7 @@
  */
 import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { basename, extname, resolve } from "node:path";
-import { DATASET_UPLOAD_OPERATIONS, fileLimitsOf, FONT_FILE_FIELDS, mbText, requestLimitOf } from "./spec/overlay.js";
+import { AUDIO_FILE_FIELDS, DATASET_UPLOAD_OPERATIONS, fileLimitsOf, FONT_FILE_FIELDS, mbText, requestLimitOf } from "./spec/overlay.js";
 import type { FileLimit } from "./spec/overlay.js";
 import type { Operation } from "./spec/operations.js";
 import { isRemoteInput } from "./remote-input.js";
@@ -45,7 +45,7 @@ export const FONT_TYPES: Readonly<Record<string, string>> = {
 export const DATASET_TYPES: Readonly<Record<string, string>> = { ...UPLOAD_TYPES, ".txt": "text/plain", ".json": "application/json", ".zip": "application/zip" };
 
 /** Media types a remote server may name for a type above (the part is sent as the canonical one). */
-const TYPE_ALIASES: Readonly<Record<string, string>> = { "application/x-zip-compressed": "application/zip", "image/jpg": "image/jpeg", "text/json": "application/json" };
+const TYPE_ALIASES: Readonly<Record<string, string>> = { "application/x-zip-compressed": "application/zip", "image/jpg": "image/jpeg", "text/json": "application/json", "audio/mp3": "audio/mpeg", "audio/x-wav": "audio/wav", "audio/wave": "audio/wav" };
 
 /** The part's file name: `<field>.<ext>` (nothing local leaves the machine), or the asset's own name for a training
  * upload (the directory never, the name yes — the API pairs a caption with its image by it): a URL's last segment
@@ -76,9 +76,13 @@ function checkUniqueNames(op: Operation, parts: readonly UploadPart[]): void {
   }
 }
 
-/** The types a field's files may have: fonts for a font field, training assets for a dataset upload, images for every other. */
+/** The media types an audio reference is sent as (the formats the specification names). */
+export const AUDIO_TYPES: Readonly<Record<string, string>> = { ".mp3": "audio/mpeg", ".wav": "audio/wav" };
+
+/** The types a field's files may have: fonts for a font field, audio for an audio field, training assets for a dataset upload, images for every other. */
 export function uploadTypesFor(field: string, op?: Operation): Readonly<Record<string, string>> {
   if (FONT_FILE_FIELDS.has(field)) return FONT_TYPES;
+  if (AUDIO_FILE_FIELDS.has(field)) return AUDIO_TYPES;
   if (op !== undefined && DATASET_UPLOAD_OPERATIONS.has(op.id)) return DATASET_TYPES;
   return UPLOAD_TYPES;
 }

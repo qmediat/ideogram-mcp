@@ -1,13 +1,15 @@
 /**
  * Runtime support of the shipped release, apart from the operation's class: what `ideogram_api` serves and what the
- * curated tools cover. In 2.3.0 (step 3 of docs/DESIGN-ideogram-v2.md):
+ * curated tools cover. In 2.4.0 (step 4 of docs/DESIGN-ideogram-v2.md):
  *
  *   curated  the documented models of the eleven image families (the seven of 1.x, precise edit, remove background,
  *            remove object, layerize), the generation lookup, the three documented account operations, and the
- *            training operations the four training tools cover (v1-only: the index keeps training on v1)
+ *            training operations the four training tools cover (v1-only: the index keeps training on v1), the three
+ *            video families (text, image, reference to video)
  *   raw      every other /v2/image operation, every spec_only operation of a curated family (behind
- *            `allow_undocumented`), and the one training operation no tool covers (train_dataset_model)
- *   planned  every other exposable operation (video, tools, workflows, the other v1_only): later releases
+ *            `allow_undocumented`), the one training operation no tool covers (train_dataset_model), the video edit
+ *            (spec_only: behind the flag)
+ *   planned  every other exposable operation (tools, workflows, the other v1_only): later releases
  *
  * Classes legacy, internal and bearer_only are never supported.
  */
@@ -30,6 +32,9 @@ export const CURATED_FAMILIES: ReadonlySet<Family> = new Set<Family>([
   "describe",
   "layerize",
   "account",
+  "video_text",
+  "video_image",
+  "video_reference",
 ]);
 
 export const CURATED_OPERATIONS_OUTSIDE_FAMILIES: ReadonlySet<string> = new Set([
@@ -47,7 +52,7 @@ export const CURATED_OPERATIONS_OUTSIDE_FAMILIES: ReadonlySet<string> = new Set(
 ]);
 
 /** Families served through `ideogram_api` in full, whatever the class of their operations (the training family is v1-only). */
-export const RAW_FAMILIES: ReadonlySet<Family> = new Set<Family>(["training"]);
+export const RAW_FAMILIES: ReadonlySet<Family> = new Set<Family>(["training", "video_edit"]);
 
 export function supportOf(op: Operation): SupportStatus {
   if (!isExposable(op)) return "unsupported";

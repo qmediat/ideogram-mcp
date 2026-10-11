@@ -84,7 +84,7 @@ Request        = { path: {…}, query: {…}, headers: {…}, body: {media: "mul
                  fields, `generation_id` in the path); never one flat object (consult F6)
 Lifecycle      = Accepted {generation_id} is what a tool returns by default the moment the API accepts the job; an
                  optional bounded wait (`wait_s`, default 45, max 50: the MCP SDK's client timeout is 60 s — consult F3,
-                 Gemini F1) polls GET /v2/generations/{id} (2 s → ×1.5 → 30 s cap, 60 s for video — Gemini F6) and returns
+                 Gemini F1) polls GET /v2/generations/{id} (2 s → ×1.5 → 30 s cap, one cap for images and video: within a 50 s wait the gaps never reach it — Gemini F6, step 4 X8) and returns
                  Completed {payload} | Failed {failure_reason} | Pending {generation_id, how to resume}; `ideogram_generation`
                  resumes any id across restarts (operation ids are kept in the result so the client never resubmits paid
                  work). Retries: a POST is retried ONLY when the connection failed before the request was sent or the API
@@ -147,7 +147,7 @@ src/tools/<family>.ts             one curated tool per family: generate, precise
                                   replace_background, remove_background, remove_object, describe, layerize, upscale
                                   (step 0 migrates the 7 that exist; step 1 adds the rest of the family set)
 src/tools/raw.ts                  ideogram_api (step 0) · src/tools/generation.ts (poll a generation_id) · quote.ts
-src/tools/video.ts (step 4) · src/tools/commercial/*.ts (step 5) — the order of 2026-10-10 (section 8)
+src/tools/curated.ts also holds the three video family tools (step 4) · src/tools/commercial/*.ts (step 5) — the order of 2026-10-10 (section 8)
 src/tools/reads.ts                one request outside the generation lifecycle: query/path/body by the operation's schemas, the answer
                                   by its response schema, kept raw beside the parsed (steps 2 and 3)
 src/tools/account.ts              ideogram_usage · ideogram_invoices · ideogram_api_keys (step 2): decimal sums, the buckets as received
@@ -162,8 +162,9 @@ docs/API-REFERENCE.md             generated from Operation[] (family × model ×
 Tool naming keeps the 1.x names (`ideogram_generate`, `ideogram_edit` → kept as the alias of `ideogram_inpaint` for one
 major version with a deprecation note, `ideogram_remix`, `ideogram_reframe`, `ideogram_replace_background`,
 `ideogram_upscale`, `ideogram_describe`), adds `model` to each, and adds `ideogram_precise_edit`, `ideogram_remove_background`,
-`ideogram_remove_object`, `ideogram_layerize`, `ideogram_quote`, `ideogram_generation`, `ideogram_api`, later
-`ideogram_usage`, `ideogram_video`, the commercial tools.
+`ideogram_remove_object`, `ideogram_layerize`, `ideogram_quote`, `ideogram_generation`, `ideogram_api`, then
+`ideogram_usage` / `ideogram_invoices` / `ideogram_api_keys` (step 2), the training tools (step 3), `ideogram_video_text` /
+`ideogram_video_image` / `ideogram_video_reference` (step 4), later the commercial tools.
 
 ## 4. Error policy (what fails loud, what is tolerated and counted)
 
@@ -193,11 +194,12 @@ major version with a deprecation note, `ideogram_remix`, `ideogram_reframe`, `id
 
 | bound | value | why |
 |---|---|---|
-| tools/list from step 1 | 16 tools (19 from step 2: 79 115 bytes over a real session on 2026-10-10, after step 1b's inline_images text; 23 from step 3: 83 338 bytes before the training tools' field prose was trimmed — the budget is 88 KB from step 3, 80 KB held through step 2), advertised schema ≤ 88 KB serialized, measured in `tests/budget.test.mjs` (73 582 bytes over a real session on 2026-10-10: step 1's four families cost 7.3 KB of schema and `private` on every variant 2.8 KB; 64 KB was the estimate before step 1; a definition shorter than its `$ref` is inlined) | the count alone says nothing (consult F15): the bytes and the routing accuracy are what a client pays |
+| tools/list from step 1 | 16 tools (19 from step 2: 79 115 bytes over a real session on 2026-10-10, after step 1b's inline_images text; 23 from step 3: 83 184 bytes; 26 from step 4: 98 341 bytes, the three video families 15 KB on the wire — the budget is 104 KB from step 4, 88 KB through step 3, 80 KB through step 2), advertised schema ≤ 104 KB serialized, measured in `tests/budget.test.mjs` (73 582 bytes over a real session on 2026-10-10: step 1's four families cost 7.3 KB of schema and `private` on every variant 2.8 KB; 64 KB was the estimate before step 1; a definition shorter than its `$ref` is inlined) | the count alone says nothing (consult F15): the bytes and the routing accuracy are what a client pays |
 | generated code | ≤ 600 KB committed (`src/generated/`) | 486 schemas × zod; filtered to the exposed operations |
+| download cap | 50 MiB for an image (`MAX_DOWNLOAD_BYTES`); 512 MiB for a video (`MAX_VIDEO_DOWNLOAD_BYTES`, passed by the video result) — an estimate from bit rates (a 4K × 15 s MiniMax or a 1080p × 30 s Seedance mp4 is far above 50 MiB; no real video was measured). Named limit: every download runs inside the call's 55 s budget and a re-collect starts the transfer over — a video that cannot arrive in time is "Not saved" with its link for the client to fetch (step 4 r1, Codex) | a billed video must not end "Not saved" on a cap sized for images (step 4, cross-review X6) |
 | one budget per tool call | `CallBudget` (src/budget.ts): deadline = start + 55 s (the caller's 60 s minus a margin) and the caller's cancellation signal (the SDK's `extra.signal`); every HTTP attempt, retry sleep (Retry-After included), poll and download of the call is judged against what remains; a POST is resent only when the time left covers an attempt as long as the one just rejected; a download the budget cuts is "Not saved" beside the id; one attempt is bounded by the budget's remainder — the 120 s attempt cap only where a longer budget leaves more, never inside a tool call | pieces of a call bounded apart (a sleep budget, a per-request timeout) added up past the caller — step back after #36 r2 (Codex: a 429 answered at 40 s was resent at 70 s) |
 | wait inside a tool call | default 45 s, max 50 s, then Pending {generation_id} | the MCP SDK's client timeout is 60 s (consult F3) |
-| poll | 2 s → ×1.5 → 30 s cap (60 s video); `ideogram_generation` resumes without limit | 180 polls per video would court 429s (Gemini F6) |
+| poll | 2 s → ×1.5 → 30 s cap, the same for video (the gaps 2, 3, 4.5, 6.75, 10.1, 15.2 s never reach it within a call); `ideogram_generation` resumes without limit | 180 polls per video would court 429s (Gemini F6); a video cap was a knob with no effect (step 4 X8) |
 | upload | per operation from the spec (describe 10 MB, precise edit 50 MB, generate 25 MB × 5…), enforced before the call | one cap was wrong for both ends (consult F12) |
 | download | streamed to disk with a byte counter, 50 MB cap, allow-listed hosts | today's downloader buffers the whole body before the cap (consult F12) |
 | live tests | `dry_run` only in CI: 0 USD; real generations by hand, each named with its quote | cost is counted (§0 of the operator's rules) |
@@ -245,12 +247,16 @@ default is the operator's call, recorded in the CHANGELOG when taken.
 | 1 | 2.1.0 | `ideogram_precise_edit` (4.5), `ideogram_remove_background`, `ideogram_remove_object`, `ideogram_layerize` (the transparent, custom-model and character variants shipped in step 0 as models of the family tools) — every image family of the index; then, opt-in for a client without file access: inline image content in a tool's result (base64, under a byte cap) and an HTTPS URL as an image input (public hosts only, no redirects, the field's own size limit; the threat model in section 9b) |
 | 2 | 2.2.0 | `ideogram_usage` (the shape ai-cost reads: the buckets unchanged after the sums), `ideogram_invoices`, `ideogram_api_keys` (`src/tools/account.ts`); the webhook signature helper `verifyWebhook` (`src/webhooks.ts`: Ed25519 against the JWKS, documented in the README); a spec-only operation of a curated family is raw |
 | 3 | 2.3.0 | v1-only custom-model training (`src/tools/training.ts`): `ideogram_datasets` (list / search / one), `ideogram_dataset_upload` (create from a name + upload images, captions, archives through the one upload loader), `ideogram_train` (4.0 / 3.0, plain or advanced by the hyperparameters given, each schema its own), `ideogram_models` (list / one) — the official MCP's third headline workflow; `train_dataset_model` raw |
-| 4 | 2.4.0 | `ideogram_video` (text/image/reference-to-video, model enum; async only; mp4 download) + video edit |
+| 4 | 2.4.0 | `ideogram_video_text`, `ideogram_video_image`, `ideogram_video_reference` on the family mechanism (one tool per video family, a model enum each; async only; the `videos` payload saved as mp4, never inline; audio references MP3/WAV); the spec-only video edit raw |
 | 5 | 2.5.0 | the commercial tools and workflows (each its own inputs; the customer-specific ones — skechers, swan, sole-swap — through `ideogram_api` only), the rest of v1 (magic-prompt-v4, snap-mask, layerize-logos, provenance/verify) and the v1 model variants through `ideogram_api` |
 
 The order after step 2 was changed on 2026-10-10 (operator GO on the RAR: training before video because the official
 MCP ships it as a headline workflow and video is eleven operations of another medium without a demand signal; the
 commercial tools last because part of them are one customer's endpoints). The families of the steps are unchanged.
+
+A client that never generates video still receives the video tools' 15 KB in tools/list: a way to hide families
+(an environment variable naming the families a server advertises) is a follow-up for a later step, not a reason to
+drop the per-model exactness.
 
 ## 9. Out of scope
 
@@ -312,8 +318,8 @@ Measured on the PR's head (branch `qmt/v2-foundation`, 2026-10-07):
 | operations in the snapshot | 200 | — |
 | classes (the one rule, `src/spec/classify.ts`) | documented 66 · spec_only 20 · v1_only 41 · legacy 32 · internal 9 · bearer_only 32 | `test/classify.test.mjs` pins the counts |
 | generated code (`src/generated/`) | 438 932 bytes | 614 400 (`scripts/spec-generate.mjs`) |
-| tools/list over a real MCP session | 12 tools, 62 871 bytes (2.0.0); 16 tools, 73 582 bytes (step 1, 2026-10-10); 19 tools, 79 115 bytes (step 2, after step 1b); 23 tools, 83 338 bytes (step 3) | 90 112 since step 3, 81 920 through step 2 (`test/budget.test.mjs`) |
-| support | curated 40 · raw 7 · planned 80 · unsupported 73 (2.0.0); curated 44 · raw 4 · planned 79 · unsupported 73 (step 1); curated 47 · raw 5 · planned 75 · unsupported 73 (step 2); curated 57 · raw 6 · planned 64 · unsupported 73 (step 3) | `src/spec/support.ts` |
+| tools/list over a real MCP session | 12 tools, 62 871 bytes (2.0.0); 16 tools, 73 582 bytes (step 1, 2026-10-10); 19 tools, 79 115 bytes (step 2, after step 1b); 23 tools, 83 184 bytes (step 3); 26 tools, 98 341 bytes (step 4, measured at d0222c5) | 106 496 since step 4, 90 112 through step 3, 81 920 through step 2 (`test/budget.test.mjs`) |
+| support | curated 40 · raw 7 · planned 80 · unsupported 73 (2.0.0); curated 44 · raw 4 · planned 79 · unsupported 73 (step 1); curated 47 · raw 5 · planned 75 · unsupported 73 (step 2); curated 57 · raw 6 · planned 64 · unsupported 73 (step 3); curated 68 · raw 7 · planned 52 · unsupported 73 (step 4) | `src/spec/support.ts` |
 | tests | 83, all passing (`npm test`; the live dry-run suite included when a key is set) | — |
 | live dry-run suite (`test/live-dry-run.test.mjs`, funded key) | 33 quotes in `docs/PRICES-2026-10-07.md`, 4 custom-model skips, 0 failures, 0 USD | every curated quotable model |
 

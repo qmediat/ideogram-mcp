@@ -17,5 +17,5 @@ test("the reference lists every family with its models and the fields of each se
   assert.match(text, /### generate\n\n\| model \| operation/);
   assert.match(text, /#### ideogram-4-5 — `POST \/v2\/image\/generate\/ideogram-4-5`/);
   assert.match(text, /\| `quality` \| one of very_low, low, medium, high \|/);
-  assert.doesNotMatch(text, /#### seedance-2-text-to-video/, "a planned operation is listed, not detailed");
+  assert.doesNotMatch(text, /#### post_ad_resizer/, "a planned operation is listed, not detailed");
 });

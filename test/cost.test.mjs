@@ -30,7 +30,7 @@ test("a quote sends dry_run=true and returns USD and credits as decimal strings"
     assert.equal(api.requests[0].url, "/v2/image/generate/ideogram-3?dry_run=true");
     assert.deepEqual(outcome, {
       kind: "quote",
-      quote: { operation: "post_generate_image_v2_ideogram_v3", model: "ideogram-3", billingIdentifier: "ideogram-3-default", quantity: 2, usd: "0.120000", credits: "0.120", qualifier: "estimate", upperBoundUsd: "0.150000" },
+      quote: { operation: "post_generate_image_v2_ideogram_v3", model: "ideogram-3", billingIdentifier: "ideogram-3-default", quantity: 2, usd: "0.120000", credits: "0.120", qualifier: "estimate", upperBoundUsd: "0.150000", caveat: null },
     });
   } finally {
     await api.close();

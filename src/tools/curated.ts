@@ -1,5 +1,5 @@
 /**
- * The curated family tools (the eleven image families of 2.1.0) and the 1.x alias `ideogram_edit`. The model lists come from the registry (the
+ * The curated family tools (the eleven image families of 2.1.0, the three video families of 2.4.0) and the 1.x alias `ideogram_edit`. The model lists come from the registry (the
  * snapshot's documented models); the texts are ours.
  */
 import { z } from "zod/v4";
@@ -86,6 +86,27 @@ export const FAMILY_TOOLS: readonly FamilyToolSpec[] = [
     legacyInputs: {
       describe_model_version: z.enum(["V_2", "V_3"]).optional().describe("1.x name of the model, deprecated: V_3 = model ideogram-3"),
     },
+  },
+  {
+    name: "ideogram_video_text",
+    family: "video_text",
+    defaultModel: "seedance-2-5-text-to-video",
+    title: "Video from a prompt",
+    description: `A video from a text prompt (Seedance 2.5 by default, Seedance 2, Kling 3 Standard, MiniMax H3); each model takes its own duration, aspect ratio, resolution and audio controls. Saved as mp4 to the output directory (never inline); long jobs come back as a generation_id for ideogram_generation. Give duration to know the price: omitted, Seedance is quoted at its maximum length. ideogram_quote prices a call first.`,
+  },
+  {
+    name: "ideogram_video_image",
+    family: "video_image",
+    defaultModel: "seedance-2-5-image-to-video",
+    title: "Video from an image",
+    description: `A video that starts from an image (and optionally ends on another): Seedance 2.5 by default, Seedance 2, Kling 3 Standard, MiniMax H3. Takes local files, public https URLs or Ideogram assets. Saved as mp4; long jobs come back as a generation_id. ideogram_quote prices a call first.`,
+  },
+  {
+    name: "ideogram_video_reference",
+    family: "video_reference",
+    defaultModel: "seedance-2-5-reference-to-video",
+    title: "Video from references",
+    description: `A video guided by reference images, audio clips (MP3/WAV: 2-30 s on Seedance 2.5, 2-15 s on Seedance 2 and MiniMax) and videos stored with Ideogram, in prompt order: Seedance 2.5 by default, Seedance 2, MiniMax H3; at least one reference image or video. Saved as mp4; long jobs come back as a generation_id. ideogram_quote prices a call first.`,
   },
   {
     name: "ideogram_layerize",
