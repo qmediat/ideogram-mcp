@@ -3,3 +3,4 @@
 src/generated/** linguist-generated=true -diff
 spec/openapi.json linguist-generated=true -diff
 docs/API-REFERENCE.md linguist-generated=true
+eslint-suppressions.json linguist-generated=true
