@@ -37,6 +37,14 @@ test("ideogram_datasets lists (with a search) and shows one dataset with its fil
   const one = await call("ideogram_datasets", { dataset_id: "ds1" }, () => ({ json: { dataset, file_count: 2, custom_model_ids: ["m1"], files: [{ file_name: "a.png", file_size_bytes: 16, caption: "a red door" }, { file_name: "b.png" }] } }));
   assert.equal(one.requests[0].url, "/datasets/ds1");
   assert.match(text(one.result), /Dataset brand refs \(ds1\): 2 file\(s\), 1 model\(s\) trained from it: m1\.\n  a\.png \(16 bytes\) — a red door\n  b\.png/);
+  const fileDir = join(dir, "listing-not-a-dir");
+  await writeFile(fileDir, "x");
+  const big = await call("ideogram_datasets", {}, () => ({ json: { datasets: Array(900).fill(dataset) } }), join(fileDir, "out"));
+  assert.equal(big.result.isError, true, "a listing too large to print whose file could not be written is an error: the data is nowhere the client can read");
+  assert.match(text(big.result), /^900 dataset\(s\)[\s\S]*As Ideogram sent them: not written to .*; too large to print here \(\d+ bytes\)$/);
+  const small = await call("ideogram_datasets", {}, () => ({ json: { datasets: [dataset] } }), join(fileDir, "out"));
+  assert.equal(small.result.isError, undefined, "a small listing is printed whole: the write failure is said, not an error");
+  assert.match(text(small.result), /not written to [\s\S]*"dataset_id": "ds1"/);
   const gone = await call("ideogram_datasets", { dataset_id: "nope" }, () => ({ status: 404, json: { error: "not found" } }));
   assert.equal(gone.result.isError, true);
   assert.match(text(gone.result), /the dataset is not yours or does not exist \(Ideogram's answer: /);
@@ -69,6 +77,11 @@ test("ideogram_dataset_upload creates the dataset from a name, then uploads imag
   assert.match(parts, /filename="c.txt"\r\nContent-Type: text\/plain/, "a caption by URL");
   const spaced = await call("ideogram_dataset_upload", { dataset_id: "ds1", files: ["__BASE__/remote/red%20door.png"] }, (req) => (req.url === "/remote/red%20door.png" ? { status: 200, headers: { "content-type": "image/png" }, body: PNG } : { json: uploaded }));
   assert.match(spaced.requests.find((r) => r.url === "/datasets/ds1/upload_assets").body.toString("latin1"), /filename="red door.png"/, "a URL's segment is decoded: the pairing is by the decoded name");
+  const smuggled = await call("ideogram_dataset_upload", { dataset_id: "ds1", files: ["__BASE__/remote/..%2F..%2Fx.png", "__BASE__/remote/a%5Cb.png"] }, (req) => (req.url.startsWith("/remote/") ? { status: 200, headers: { "content-type": "image/png" }, body: PNG } : { json: uploaded }));
+  const smuggledBody = smuggled.requests.find((r) => r.url === "/datasets/ds1/upload_assets").body.toString("latin1");
+  assert.match(smuggledBody, /filename="x.png"/, "a decoded slash never names a directory: the last segment is the name");
+  assert.match(smuggledBody, /filename="b.png"/, "a decoded backslash likewise");
+  assert.doesNotMatch(smuggledBody, /filename="[^"]*[\/\\]/, "no separator leaves the machine in a part name");
   assert.match(parts, /filename="d.zip"\r\nContent-Type: application\/zip/, "a zip by URL under its alias is sent as application/zip");
   const onImage = await call("ideogram_remix", { prompt: "x", image: caption }, handler).catch((e) => e);
   assert.match(onImage.message, /image: unsupported file type \.txt; one of \.png, \.jpg, \.jpeg, \.webp$/, "the dataset types do not leak to an image field");
@@ -137,6 +150,14 @@ test("ideogram_train routes to the plain operation, or the advanced one when a h
   }
   const refused = await call("ideogram_train", { dataset_id: "ds1", model_name: "Planet Drip" }, () => ({ status: 404, json: { error: "no" } }));
   assert.match(text(refused.result), /the dataset is not yours, does not exist, or this key cannot train/);
+  const rawTrain503 = await call("ideogram_api", { operation: "train_dataset_model", allow_undocumented: true, params: { path: { dataset_id: "ds1" }, body: { model_name: "Planet Drip" } } }, () => ({ status: 503, json: { error: "down" } }));
+  assert.match(text(rawTrain503.result), /HTTP_503[\s\S]*The request had left this machine: train_dataset_model MAY have run and be billed — check before sending it again/, "ideogram_api says what the training tools say: a 5xx on a call with a side effect may have run");
+  assert.equal(rawTrain503.result.isError, true);
+  await assert.rejects(call("ideogram_api", { operation: "train_dataset_model", allow_undocumented: true, params: { path: { dataset_id: "ds1" }, body: { model_name: "Planet Drip" } } }, () => ({ status: 400, json: { error: "bad" } })), (e) => e.status === 400 && !/MAY have run/.test(e.message), "a refusal is the bare typed error: nothing ran");
+  const generate503 = await call("ideogram_generate", { prompt: "x" }, () => ({ status: 503, json: { error: "down" } }));
+  assert.match(text(generate503.result), /post_generate_image_v2_ideogram_v3 MAY have run and be billed/, "a family tool's generation likewise");
+  const list503 = await call("ideogram_models", {}, () => ({ status: 503, json: { error: "down" } })).catch((e) => e);
+  assert.doesNotMatch(String(list503.message ?? text(list503.result)), /MAY have run/, "a GET carries no such note");
   const trainFileDir = join(dir, "not-a-dir-train");
   await writeFile(trainFileDir, "x");
   const trainUnwritable = await call("ideogram_train", { dataset_id: "ds1", model_name: "Planet Drip" }, () => ({ json: started }), join(trainFileDir, "out"));

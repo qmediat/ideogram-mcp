@@ -4,7 +4,7 @@
  */
 import { z } from "zod/v4";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { execute } from "../lifecycle.js";
+import { executeTold } from "./reads.js";
 import type { ToolContext, ToolDefinition } from "./context.js";
 import { advertisedSchema, prepare } from "./family.js";
 import type { FamilyToolSpec, ToolArguments } from "./family.js";
@@ -98,8 +98,9 @@ export const FAMILY_TOOLS: readonly FamilyToolSpec[] = [
 
 async function runFamilyTool(spec: FamilyToolSpec, ctx: ToolContext, args: ToolArguments): Promise<CallToolResult> {
   const call = await prepare(spec, args, ctx.remote);
-  const outcome = await execute(ctx.client, call.req, { waitS: call.waitS, clock: ctx.clock, budget: ctx.budget });
-  return outcomeResult(ctx, outcome, call.notes, { inlineImages: args.inline_images === true });
+  const run = await executeTold(ctx, call.req, call.waitS);
+  if (run.kind === "result") return run.result;
+  return outcomeResult(ctx, run.outcome, call.notes, { inlineImages: args.inline_images === true });
 }
 
 export function familyToolDefinition(spec: FamilyToolSpec): ToolDefinition {

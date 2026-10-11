@@ -59,7 +59,11 @@ Step 3: custom-model training — datasets, their assets, the training of an Ide
   upload says "Nothing was uploaded", an unknown one "the assets MAY be in the dataset", an unknown train "a training
   MAY have started and will be billed"; the client's status-0 errors carry `details.sent` (false when the budget ended
   or the connection was refused before anything left this machine). The raw answer's file is best-effort: a directory
-  that cannot be written shows the answer inline and never turns a success into an error (`rawWriteFailures` counted).
+  that cannot be written shows the answer inline and never turns a success into an error (`rawWriteFailures` counted);
+  a LISTING whose answer is neither written nor small enough to print is an error (the data is the listing). The same
+  typed decision reaches every surface that sends a request with a side effect: a family tool or `ideogram_api` whose
+  non-GET request fails after it left (a 5xx, a cut connection) says the operation MAY have run and be billed. A
+  decoded URL segment is cut at its last slash or backslash before it names a part (`..%2F..%2Fx.png` is `x.png`).
 - `get_asset_reference_usage` (spec-only) is served by `ideogram_api` behind `allow_undocumented`: a spec-only
   operation of a curated family is raw, as the undocumented reframe models are. Support: curated 47 · raw 5 ·
   planned 75. tools/list: 19 tools.

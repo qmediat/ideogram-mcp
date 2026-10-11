@@ -14,7 +14,7 @@ import { zGetAccountUsageResponse, zListAccountApiKeysResponse, zListAccountInvo
 import type { QueryValue } from "../wire.js";
 import type { ToolContext, ToolDefinition } from "./context.js";
 import type { ToolArguments } from "./family.js";
-import { apiErrorResult, operation, rawLines, readOperation } from "./reads.js";
+import { apiErrorResult, listingResult, operation, rawLines, readOperation } from "./reads.js";
 import { textResult } from "./results.js";
 
 const HOUR_MS = 3_600_000;
@@ -150,7 +150,7 @@ async function runUsage(ctx: ToolContext, args: ToolArguments): Promise<CallTool
     const width = input.data.bucket_width ?? "1d";
     const sources = input.data.sources ?? ["api", "app"];
     const buckets = (answer.raw as { buckets?: unknown }).buckets ?? [];
-    return textResult([...summaryLines(answer.data, width), ...(await rawLines(ctx, "Buckets as Ideogram sent them (the shape ai-cost reads)", usageName(query, width, sources), buckets))].join("\n"));
+    return listingResult(summaryLines(answer.data, width), await rawLines(ctx, "Buckets as Ideogram sent them (the shape ai-cost reads)", usageName(query, width, sources), buckets));
   } catch (error) {
     return apiErrorResult(error, "Reading the usage", "needs an API key whose owner is an organization admin — Ideogram answers 404 to a key owned by another member");
   }
@@ -162,7 +162,7 @@ async function runInvoices(ctx: ToolContext): Promise<CallToolResult> {
     if (!answer.ok) return answer.result;
     const rows = answer.data.invoices.map((inv) => `${inv.start_time} → ${inv.end_time}: ${inv.total} ${inv.currency_code}, ${inv.status}${inv.paid_time ? `, paid ${inv.paid_time}` : ""} (${inv.line_items.length} line item(s))`);
     const raw = (answer.raw as { invoices?: unknown }).invoices ?? [];
-    return textResult([`${rows.length} invoice(s).`, ...rows, ...(await rawLines(ctx, "Invoices as Ideogram sent them", `invoices-${ctx.clock.now()}`, raw))].join("\n"));
+    return listingResult([`${rows.length} invoice(s).`, ...rows], await rawLines(ctx, "Invoices as Ideogram sent them", `invoices-${ctx.clock.now()}`, raw));
   } catch (error) {
     return apiErrorResult(error, "Listing invoices", "needs an API key whose owner is an organization admin — Ideogram answers 404 to a key owned by another member");
   }
@@ -174,7 +174,7 @@ async function runApiKeys(ctx: ToolContext): Promise<CallToolResult> {
     if (!answer.ok) return answer.result;
     const rows = answer.data.api_keys.map((k) => `${k.redacted_api_key} (${k.api_key_id}) ${k.status}${k.label ? ` "${k.label}"` : ""}, created ${k.creation_time}${k.creator_display_label ? ` by ${k.creator_display_label}` : ""}`);
     const raw = (answer.raw as { api_keys?: unknown }).api_keys ?? [];
-    return textResult([`${rows.length} API key(s), newest first (key material redacted by Ideogram).`, ...rows, ...(await rawLines(ctx, "API keys as Ideogram sent them", `api-keys-${ctx.clock.now()}`, raw))].join("\n"));
+    return listingResult([`${rows.length} API key(s), newest first (key material redacted by Ideogram).`, ...rows], await rawLines(ctx, "API keys as Ideogram sent them", `api-keys-${ctx.clock.now()}`, raw));
   } catch (error) {
     return apiErrorResult(error, "Listing API keys", "needs an API key whose owner is an organization admin — Ideogram answers 404 to a key owned by another member");
   }

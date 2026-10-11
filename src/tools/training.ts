@@ -20,7 +20,7 @@ import type { QueryValue } from "../wire.js";
 import type { ToolContext, ToolDefinition } from "./context.js";
 import type { ToolArguments } from "./family.js";
 import { IdeogramApiError } from "../errors.js";
-import { apiErrorResult, errorText, operation, rawLines, readOperation, resultText, sendOperation } from "./reads.js";
+import { apiErrorResult, errorText, listingResult, operation, rawLines, readOperation, resultText, sendOperation } from "./reads.js";
 import type { Sent, SideEffect } from "./reads.js";
 import { textResult } from "./results.js";
 
@@ -61,13 +61,13 @@ async function runDatasets(ctx: ToolContext, args: ToolArguments): Promise<CallT
       if (!one.ok) return one.result;
       const d = one.data;
       const files = d.files.map((f) => `  ${f.file_name}${f.file_size_bytes === undefined ? "" : ` (${f.file_size_bytes} bytes)`}${f.caption ? ` — ${f.caption.length > 120 ? `${f.caption.slice(0, 120)}…` : f.caption}` : ""}`);
-      return textResult([`Dataset ${d.dataset.name} (${d.dataset.dataset_id}): ${d.file_count} file(s), ${d.custom_model_ids.length} model(s) trained from it${d.custom_model_ids.length > 0 ? `: ${d.custom_model_ids.join(", ")}` : ""}.`, ...files, ...(await rawLines(ctx, "As Ideogram sent it", `dataset-${input.data.dataset_id}`, one.raw))].join("\n"));
+      return listingResult([`Dataset ${d.dataset.name} (${d.dataset.dataset_id}): ${d.file_count} file(s), ${d.custom_model_ids.length} model(s) trained from it${d.custom_model_ids.length > 0 ? `: ${d.custom_model_ids.join(", ")}` : ""}.`, ...files], await rawLines(ctx, "As Ideogram sent it", `dataset-${input.data.dataset_id}`, one.raw));
     }
     const query: Record<string, QueryValue> = input.data.search === undefined ? {} : { search: input.data.search };
     const list = await readOperation(ctx, { op: LIST_DATASETS, query }, zListDatasetsResponse);
     if (!list.ok) return list.result;
     const rows = list.data.datasets.map((d) => `  ${d.name} (${d.dataset_id}), created ${d.creation_time}`);
-    return textResult([`${rows.length} dataset(s), most recently updated first.`, ...rows, ...(await rawLines(ctx, "As Ideogram sent them", `datasets-${ctx.clock.now()}`, list.raw))].join("\n"));
+    return listingResult([`${rows.length} dataset(s), most recently updated first.`, ...rows], await rawLines(ctx, "As Ideogram sent them", `datasets-${ctx.clock.now()}`, list.raw));
   } catch (error) {
     return apiErrorResult(error, "ideogram_datasets", input.data.dataset_id === undefined ? LISTING : OWNER);
   }
@@ -148,7 +148,7 @@ async function uploadAssets(ctx: ToolContext, datasetId: string, uploads: Awaite
     const failed = a.failed_assets.map((f) => `  ${f.file_name ?? "(unnamed)"}: ${f.failure_reason}`);
     const head = `${a.success_count} of ${a.total_count} asset(s) uploaded to dataset ${datasetId}${a.failure_count > 0 ? `, ${a.failure_count} failed:` : "."}`;
     const kept = await rawLines(ctx, "As Ideogram sent it", `dataset-upload-${datasetId}-${ctx.clock.now()}`, sent.read.raw);
-    return { text: [head, ...failed, ...kept].join("\n"), isError: a.success_count === 0 };
+    return { text: [head, ...failed, ...kept.lines].join("\n"), isError: a.success_count === 0 };
   }
   const said = failureText(sent, "ideogram_dataset_upload", OWNER);
   if (sent.kind === "unknown") return { text: `${said}\n${mayBeIn}`, isError: true };
@@ -191,7 +191,7 @@ async function runTrain(ctx: ToolContext, args: ToolArguments): Promise<CallTool
     if (!sent.read.ok) return textResult(`${resultText(sent.read.result)}\nThe API answered 200: ${mayRun}`, true);
     const t = sent.read.data;
     const kept = await rawLines(ctx, "As Ideogram sent it", `train-${t.model_id}`, sent.read.raw); // best-effort: the training runs whatever this disk does
-    return textResult([`Training started: model ${t.model_name} (${t.model_id}) from dataset ${t.dataset_id}, status ${t.training_status}.`, `Follow it with ideogram_models {"model_id": "${t.model_id}"}; when it is COMPLETED, generate with its custom_model_uri (ideogram_generate, model ${model}-custom-model).`, ...kept].join("\n"));
+    return textResult([`Training started: model ${t.model_name} (${t.model_id}) from dataset ${t.dataset_id}, status ${t.training_status}.`, `Follow it with ideogram_models {"model_id": "${t.model_id}"}; when it is COMPLETED, generate with its custom_model_uri (ideogram_generate, model ${model}-custom-model).`, ...kept.lines].join("\n"));
   }
   // a refusal (4xx) and a request that never left started nothing; anything else may have
   const said = failureText(sent, "ideogram_train", "the dataset is not yours, does not exist, or this key cannot train");
@@ -218,14 +218,14 @@ async function runModels(ctx: ToolContext, args: ToolArguments): Promise<CallToo
     if (input.data.model_id !== undefined) {
       const one = await readOperation(ctx, { op: GET_MODEL, path: { model_id: input.data.model_id } }, zGetCustomModelResponse);
       if (!one.ok) return one.result;
-      return textResult([`Model:`, modelLine(one.data.model), `Training runs: ${one.data.model.training_runs?.length ?? 0}`, ...(await rawLines(ctx, "As Ideogram sent it", `model-${input.data.model_id}`, one.raw))].join("\n"));
+      return listingResult([`Model:`, modelLine(one.data.model), `Training runs: ${one.data.model.training_runs?.length ?? 0}`], await rawLines(ctx, "As Ideogram sent it", `model-${input.data.model_id}`, one.raw));
     }
     const query: Record<string, QueryValue> = {};
     if (input.data.scope !== undefined) query.scope = input.data.scope;
     if (input.data.status !== undefined) query.status = input.data.status;
     const list = await readOperation(ctx, { op: LIST_MODELS, query }, zListCustomModelsResponse);
     if (!list.ok) return list.result;
-    return textResult([`${list.data.models.length} custom model(s).`, ...list.data.models.map(modelLine), ...(await rawLines(ctx, "As Ideogram sent them", `models-${ctx.clock.now()}`, list.raw))].join("\n"));
+    return listingResult([`${list.data.models.length} custom model(s).`, ...list.data.models.map(modelLine)], await rawLines(ctx, "As Ideogram sent them", `models-${ctx.clock.now()}`, list.raw));
   } catch (error) {
     return apiErrorResult(error, "ideogram_models", "the model is not yours, not shared with your organization, or does not exist");
   }

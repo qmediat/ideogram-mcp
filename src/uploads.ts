@@ -49,19 +49,20 @@ const TYPE_ALIASES: Readonly<Record<string, string>> = { "application/x-zip-comp
 
 /** The part's file name: `<field>.<ext>` (nothing local leaves the machine), or the asset's own name for a training
  * upload (the directory never, the name yes — the API pairs a caption with its image by it): a URL's last segment
- * without its query, a local path's basename; a quote, a control character or a backslash in it becomes `_`. */
+ * without its query, percent-decoded and then cut at its last slash or backslash (`..%2F..%2Fx.png` is `x.png`), a
+ * local path's basename; a quote, a control character, a slash or a backslash left in it becomes `_`. */
 function partName(op: Operation, field: string, source: string, ext: string): string {
   if (!DATASET_UPLOAD_OPERATIONS.has(op.id)) return `${field}${ext}`;
   const segment = isRemoteInput(source) ? (new URL(source).pathname.split("/").pop() ?? "") : basename(source);
   let raw = segment;
   if (isRemoteInput(source)) {
     try {
-      raw = decodeURIComponent(segment); // "red%20door.png" is the file "red door.png": the pairing is by the decoded name
+      raw = decodeURIComponent(segment).split(/[\\/]/).pop() ?? ""; // "red%20door.png" is the file "red door.png": the pairing is by the decoded name; a decoded separator never names a directory
     } catch {
       raw = segment;
     }
   }
-  const name = raw.replace(/["\\\u0000-\u001f\u007f]/g, "_");
+  const name = raw.replace(/["\\/\u0000-\u001f\u007f]/g, "_");
   return name === "" ? `${field}${ext}` : name;
 }
 
