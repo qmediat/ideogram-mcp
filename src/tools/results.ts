@@ -7,8 +7,7 @@
  */
 import { readFile } from "node:fs/promises";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { MAX_VIDEO_DOWNLOAD_BYTES } from "../client.js";
-import type { SavedFile } from "../client.js";
+import type { MediaKind, SavedFile } from "../client.js";
 import { COUNTERS } from "../counters.js";
 import { INLINE_MAX_BYTES, INLINE_MAX_TOTAL_BYTES, mbText } from "../spec/overlay.js";
 import { IdeogramApiError } from "../errors.js";
@@ -25,7 +24,7 @@ export function jsonText(value: unknown): string {
 function imageLine(path: string, item: ImageItem): string {
   const lines = [`Saved: ${path}`, `  Resolution: ${item.resolution ?? "unknown"}`];
   if (item.seed !== null) lines.push(`  Seed: ${item.seed}`);
-  if (item.assetId !== null) lines.push(`  Asset: ${item.assetId} (for an *_asset_identifier input of a later call)`);
+  if (item.assetId !== null) lines.push(`  Asset: ${JSON.stringify({ asset_type: "RESPONSE", asset_id: item.assetId })} (an *_asset_identifier input of a later call)`);
   if (item.prompt !== null) lines.push(`  Prompt used: ${item.prompt}`);
   return lines.join("\n");
 }
@@ -40,8 +39,8 @@ type Download = { readonly ok: true; readonly file: SavedFile } | { readonly ok:
 
 /** Every result file downloaded at once, each outcome typed: the one loop of images, base images and videos. A failure
  * is counted and said beside its URL; one the call's budget cut names the re-collect path (the id is above). */
-async function downloadAll(ctx: ToolContext, urls: readonly string[], maxBytes?: number): Promise<Download[]> {
-  const results = await Promise.allSettled(urls.map((url) => ctx.client.download(url, ctx.outputDir, ctx.budget, maxBytes)));
+async function downloadAll(ctx: ToolContext, urls: readonly string[], kind: MediaKind): Promise<Download[]> {
+  const results = await Promise.allSettled(urls.map((url) => ctx.client.download(url, ctx.outputDir, ctx.budget, kind)));
   return results.map((result, i) => {
     if (result.status === "fulfilled") return { ok: true, file: result.value };
     COUNTERS.downloadFailures += 1;
@@ -55,7 +54,7 @@ async function downloadAll(ctx: ToolContext, urls: readonly string[], maxBytes?:
  * has none; one that carries both is still withheld, never fetched). */
 async function saveImages(ctx: ToolContext, items: readonly ImageItem[]): Promise<Saved> {
   const safe = items.filter((item) => item.url !== null && item.isImageSafe);
-  const downloads = await downloadAll(ctx, safe.map((item) => item.url as string));
+  const downloads = await downloadAll(ctx, safe.map((item) => item.url as string), "image");
   const files = downloads.flatMap((d) => (d.ok ? [d.file] : []));
   const lines = downloads.map((d, i) => (d.ok ? imageLine(d.file.path, safe[i]) : d.line));
   const unsafe = items.length - safe.length;
@@ -139,12 +138,11 @@ async function layeredResult(ctx: ToolContext, items: readonly LayeredItem[]): P
   return { lines: [head, ...images.lines, ...items.flatMap(designLines)], isError: !usable, files: images.files };
 }
 
-/** Generated videos: each saved as mp4 under the video cap (never inline — said when inline_images was asked), its
- * measured length, resolution and size said. */
+/** Generated videos: each saved as mp4 under the video cap (a link that answers an image is refused, never counted;
+ * never inline — said when inline_images was asked), its measured length, resolution and size said. */
 async function videosResult(ctx: ToolContext, items: readonly VideoItem[], inlineAsked: boolean): Promise<Shaped> {
-  if (items.length === 0) return { lines: ["Ideogram listed no video for this generation (nothing to save)."], isError: true };
   const withUrl = items.filter((item) => item.url !== null);
-  const downloads = await downloadAll(ctx, withUrl.map((item) => item.url as string), MAX_VIDEO_DOWNLOAD_BYTES);
+  const downloads = await downloadAll(ctx, withUrl.map((item) => item.url as string), "video");
   const lines: string[] = [];
   let saved = 0;
   downloads.forEach((d, i) => {

@@ -15,7 +15,7 @@ import { outcomeResult, textResult } from "./results.js";
 export function quoteText(q: Quote): string {
   const bound = q.upperBoundUsd === null ? "" : ` (an estimate: at most ${q.upperBoundUsd} USD)`;
   return [
-    `Quote for ${q.operation}${q.model === null ? "" : ` (model ${q.model})`}: ${q.usd} USD ${q.qualifier}${bound}.`,
+    `Quote for ${q.operation}${q.model === null ? "" : ` (model ${q.model})`}: ${q.usd} USD ${q.qualifier}${bound}${q.caveat === null ? "" : `; ${q.caveat}`}.`,
     `Credits: ${q.credits} at your account's own credit rate. Billing identifier: ${q.billingIdentifier}; quantity: ${q.quantity}.`,
     "Nothing was generated or billed.",
   ].join("\n");

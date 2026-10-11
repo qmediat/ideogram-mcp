@@ -4,6 +4,7 @@
  * source material only. A field without an entry here is advertised with its type alone.
  */
 
+import { isVideoFamily } from "../lifecycle.js";
 import { INLINE_MAX_BYTES, INLINE_MAX_TOTAL_BYTES, mbText } from "../spec/overlay.js";
 
 /** The fields a curated tool sets itself or leaves to `ideogram_api`: never part of a curated tool's input. */
@@ -62,7 +63,7 @@ export const FIELD_TEXT: Readonly<Record<string, string>> = {
   custom_model_uri: "A custom model you trained or were given access to",
   enable_copyright_detection: "Run Ideogram's copyright detection on the result (adds latency)",
   upscale_factor: "x2, x4 or x8",
-  duration: "Length of the video in seconds (Seedance 2.5: 4-30, Seedance 2: 4-15, Kling: 3-15, MiniMax: 5-15). Omitted: Kling and MiniMax make 5 s; Seedance picks the length for the prompt and is QUOTED at its maximum (30 s on 2.5 = 6.93 USD at 720p) — give it to know the price",
+  duration: "Length of the video in seconds (Seedance 2.5: 4-30, Seedance 2: 4-15, Kling: 3-15, MiniMax: 5-15). Omitted: Kling and MiniMax make 5 s; Seedance picks the length for the prompt and is QUOTED at its maximum length (30 s on 2.5, 15 s on 2) — give it, and ideogram_quote tells the price",
   generate_audio: "Also generate an audio track (about double the price per Ideogram — the dry-run quote does not include it; stricter moderation)",
   shot_type: "How the prompt is staged: customize follows it as written, intelligent lets the model split it into its own shots",
   cfg_scale: "How closely the video follows the prompt, 0-1 (default 0.5); lower leaves the model more freedom",
@@ -80,6 +81,7 @@ export const FIELD_TEXT: Readonly<Record<string, string>> = {
  * (`fieldTextsFor`), never a per-tool copy. */
 export const VIDEO_FIELD_TEXT: Readonly<Record<string, string>> = {
   prompt: "What the video shows, in natural language",
+  negative_prompt: "What to keep out of the video",
   aspect_ratio: "The video's aspect ratio such as 16x9 (auto on Seedance lets the model choose from the prompt); with resolution where the model takes both",
   resolution: "The resolution tier: 480p, 720p (default) or 1080p on Seedance 2.5 (480p/720p on Seedance 2), 480P, 768P, 2K (default) or 4K on MiniMax (2K and 4K are upscaled from 768P); higher costs more",
   image: "Local image file (or public https URL) the video starts from; not with image_asset_identifier",
@@ -92,7 +94,7 @@ export const VIDEO_FIELD_TEXT: Readonly<Record<string, string>> = {
 
 /** The field sentences a family's tool advertises: the video families read their own sentences over the shared ones. */
 export function fieldTextsFor(family: string | null): Readonly<Record<string, string>> {
-  return family !== null && family.startsWith("video") ? { ...FIELD_TEXT, ...VIDEO_FIELD_TEXT } : FIELD_TEXT;
+  return isVideoFamily(family) ? { ...FIELD_TEXT, ...VIDEO_FIELD_TEXT } : FIELD_TEXT;
 }
 
 export const VIDEO_INLINE_NOTE = "A video is saved, never returned inline: inline_images has no effect here.";

@@ -23,7 +23,7 @@ MCP server for the [Ideogram](https://developer.ideogram.ai) platform through it
 - **Private by default** — every curated tool whose model takes `private` sends it as `true` unless you set it (on remove background, replace background and the `auto` models the API's own default is your plan's setting); a model without the field (reframe with Ideogram 3.0, remove object) follows the API's own behaviour, and `ideogram_api` sends what you give it
 - **Never billed twice** — a job is returned the moment Ideogram accepts it; the tool waits up to `wait_s` and otherwise hands back the `generation_id` for `ideogram_generation`. A request is resent only when it never left the machine or got a 429
 - **Everything else, validated** — `ideogram_operations` lists what the API offers; `ideogram_api` calls any served operation by id, checked against its own schema first
-- **Guarded I/O** — per-operation upload limits checked before any file is read, streamed downloads with a 50 MB cap from allow-listed HTTPS hosts, typed 402/429 errors that say what to do ([details](https://github.com/qmediat/ideogram-mcp/blob/main/SECURITY.md))
+- **Guarded I/O** — per-operation upload limits checked before any file is read, streamed downloads with a 50 MB cap (512 MB for a video) from allow-listed HTTPS hosts, typed 402/429 errors that say what to do ([details](https://github.com/qmediat/ideogram-mcp/blob/main/SECURITY.md))
 - **2 runtime dependencies** — `@modelcontextprotocol/sdk` + `zod`; native `fetch`
 
 ## Quick Start
@@ -206,7 +206,7 @@ A defensive, minimal-dependency design:
 - **SSRF protection** — downloads over HTTPS only, from allow-listed hosts, redirects blocked; a URL given as an input is fetched from a public host only (no IP literal, no local name, no private or special-purpose address after resolution, no redirect), under the call's budget, over a connection pinned to the address that was judged (a DNS rebinding reaches nothing)
 - **Symlink rejection** — `lstat()` rejects a symlinked input file before reading (a symlinked parent directory is resolved)
 - **Upload limits per operation** — each file checked with `stat()` against its field's limit before any is read; the local file name is never sent (a file goes as `<field>.<ext>`) — except a training asset's own name (never its directory), which the API pairs captions by
-- **Streamed, capped downloads** — written to disk with a byte counter, stopped at 50 MB (512 MB for a video), the partial file removed; `image/*` or `video/mp4` required
+- **Streamed, capped downloads** — written to disk with a byte counter, stopped at 50 MB (512 MB for a video), the partial file removed; a video that cannot download within the call's budget (55 s) is "Not saved" with its link, for you to fetch before it expires; `image/*` or `video/mp4` required
 - **Schema validation** — inputs against each model's generated schema before any request; a success response the specification's schema rejects is reported as a contract mismatch, never as a success
 - **Input paths** — the model may name any readable image file on the machine for upload; run the server as a user whose readable images you are willing to send to Ideogram
 

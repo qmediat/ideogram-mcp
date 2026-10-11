@@ -85,6 +85,12 @@ Step 4: video — from a prompt, from an image, from references.
 - `ideogram_generation` lost its `video` input: the poll gaps within a 50 s wait (2, 3, 4.5, 6.75, 10.1, 15.2 s)
   never reach either cap, so the knob had no effect; one cap for images and video. An empty result list says "no
   image or video". A download the budget cuts names the re-collect path for videos as for images (one download loop).
+- A download is checked against the kind its result promised: a video link that answers an image (a placeholder behind
+  a 200) is "Not saved: Expected a video", never counted as a saved video; an image link that answers a video likewise.
+  A saved image's `Asset:` line is the whole identifier (`{"asset_type": "RESPONSE", "asset_id": …}`), ready for an
+  `*_asset_identifier` input. `ideogram_quote` (and `ideogram_api` with `dry_run`) says when the dry run leaves
+  `generate_audio` out of the price (measured: the same quote with and without it; Ideogram: about double). A video
+  entry that carries a `duration` but no `object_type` is a video (the specification leaves the type optional).
 - `get_asset_reference_usage` (spec-only) is served by `ideogram_api` behind `allow_undocumented`: a spec-only
   operation of a curated family is raw, as the undocumented reframe models are. Support: curated 47 · raw 5 ·
   planned 75. tools/list: 19 tools.

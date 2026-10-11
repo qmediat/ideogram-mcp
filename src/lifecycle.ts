@@ -275,12 +275,14 @@ export async function fetchGeneration(client: IdeogramClient, generationId: stri
   return generationOutcome(generationId, result.status, result.body);
 }
 
-/** The specification states in prose what its discriminator does not: "entries without an object_type are images". */
+/** The specification states in prose what its discriminator does not: "entries without an object_type are images" —
+ * except an entry carrying `duration`, a VideoObject's required integer that no image object has (the specification
+ * leaves VideoObject.object_type optional): that one is a video. */
 export function withImageKind(body: unknown): unknown {
   const parsed = BodyShape.safeParse(body);
   if (!parsed.success || parsed.data.data === undefined) return body;
   const data = parsed.data.data.map((item) =>
-    item !== null && typeof item === "object" && !("object_type" in item) ? { ...item, object_type: "image.generation" } : item,
+    item !== null && typeof item === "object" && !("object_type" in item) ? { ...item, object_type: "duration" in item ? "video.generation" : "image.generation" } : item,
   );
   return { ...(body as Record<string, unknown>), data };
 }

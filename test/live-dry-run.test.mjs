@@ -81,7 +81,8 @@ function minimalArguments(spec, variant) {
 
 function minimumDuration(variant) {
   const duration = z.toJSONSchema(variant.schema, { io: "input", unrepresentable: "any" }).properties?.duration;
-  return typeof duration?.minimum === "number" ? duration.minimum : 5;
+  assert.equal(typeof duration?.minimum, "number", `${variant.model}: the schema states no minimum duration — the smallest request cannot be named`);
+  return duration.minimum;
 }
 
 function quotableCases() {

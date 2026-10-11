@@ -165,6 +165,10 @@ test("ideogram_quote prices exactly the tool's call with dry_run and refuses des
   assert.deepEqual(sentJson(requests), { prompt: "x", rendering_speed: "turbo", private: true, async: true }, "exactly the request the tool would send");
   assert.match(text(result), /0\.030000 USD exact/);
   assert.match(text(result), /Nothing was generated or billed/);
+  const audio = await call("ideogram_quote", { tool: "ideogram_video_text", arguments: { prompt: "x", duration: 4, generate_audio: true } }, () => ({ json: { ...priceQuote, usd_micros: 924000, credit_millis: 924 } }));
+  assert.match(text(audio.result), /0\.924000 USD exact; the dry run does not price generate_audio \(Ideogram: an audio track roughly doubles the cost\)\./, "a quote with audio asked says what the dry run leaves out");
+  const silent = await call("ideogram_quote", { tool: "ideogram_video_text", arguments: { prompt: "x", duration: 4 } }, () => ({ json: { ...priceQuote, usd_micros: 924000, credit_millis: 924 } }));
+  assert.doesNotMatch(text(silent.result), /generate_audio/, "no caveat when no audio was asked");
   const describe = await call("ideogram_quote", { tool: "ideogram_describe", arguments: { image: png } });
   assert.equal(describe.result.isError, true);
   assert.match(text(describe.result), /does not declare dry_run/);
@@ -617,6 +621,15 @@ test("an inline read failure is an omission with its reason, never the loss of t
   }
 });
 
+test("a saved image's Asset line is the whole identifier a later *_asset_identifier input takes; an image link that answers a video is refused", async () => {
+  const created = "2026-10-07T00:00:00Z";
+  const handler = (req, _n, api) => (req.url === "/i/a.png" ? { status: 200, headers: { "content-type": "image/png" }, body: PNG } : req.url === "/i/v.png" ? { status: 200, headers: { "content-type": "video/mp4" }, body: PNG } : req.method === "POST" ? accepted("g9") : { json: { generation_id: "g9", status: "completed", created, data: [{ object_type: "image.generation", url: `${api.base}/i/a.png`, prompt: "p", resolution: "1024x1024", seed: 7, is_image_safe: true, asset_id: "AAAAAAAAAAAAAAAAAAAAAA" }, { object_type: "image.generation", url: `${api.base}/i/v.png`, prompt: "p", resolution: "1024x1024", seed: 8, is_image_safe: true }] } });
+  const { result } = await call("ideogram_generate", { prompt: "p" }, handler);
+  assert.match(text(result), /Saved: .*\.png\n  Resolution: 1024x1024\n  Seed: 7\n  Asset: \{"asset_type":"RESPONSE","asset_id":"AAAAAAAAAAAAAAAAAAAAAA"\} \(an \*_asset_identifier input of a later call\)/);
+  assert.match(text(result), /Not saved: .*v\.png — Expected an image, got: video\/mp4/, "an image link that answers a video is refused");
+  assert.match(text(result), /^Generation g9 completed\.\n1 of 2 image\(s\) saved\./);
+});
+
 test("ideogram_video_text sends the model's JSON body async-only, a finished video is saved as mp4 with its measured length, never inlined", async () => {
   const mp4 = Buffer.from("0000001c667479706973366d", "hex");
   const handler = (req, _n, api) => {
@@ -635,6 +648,14 @@ test("ideogram_video_text sends the model's JSON body async-only, a finished vid
   assert.match(text(several.result), /^Generation v3 completed\.\n1 of 2 video\(s\) saved\.\nSaved: .*\.mp4\n  Duration: 5 s · Resolution: 720p · Aspect: 16:9 · Size: 0\.0 MB\n  Prompt used: two\n1 video\(s\) listed without a link \(nothing downloaded\)$/, "several videos: one without a link is counted, not fetched");
   assert.equal(several.result.isError, undefined, "one saved video is a success");
   const none = await call("ideogram_video_text", { prompt: "none", duration: 5 }, (req) => (req.method === "POST" ? { json: { generation_id: "v4", created: "2026-10-07T00:00:00Z" } } : { json: { generation_id: "v4", status: "completed", created: "2026-10-07T00:00:00Z", data: [] } }));
+  const bareVideo = await call("ideogram_video_text", { prompt: "bare", duration: 5 }, (req, _n, api) => (req.url === "/v/a.mp4" ? { status: 200, headers: { "content-type": "video/mp4" }, body: mp4 } : req.method === "POST" ? { json: { generation_id: "v5", created: "2026-10-07T00:00:00Z" } } : { json: { generation_id: "v5", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ url: `${api.base}/v/a.mp4`, prompt: "bare", resolution: "720p", aspect_ratio: "16:9", duration: 5 }] } }));
+  assert.match(text(bareVideo.result), /1 of 1 video\(s\) saved\.\nSaved: .*\.mp4\n  Duration: 5 s/, "an entry without object_type that carries a duration is a video, not an image (the spec leaves the type optional)");
+  const placeholder = await call("ideogram_video_text", { prompt: "ph", duration: 5 }, (req, _n, api) => (req.url === "/v/a.mp4" ? { status: 200, headers: { "content-type": "image/png" }, body: PNG } : req.method === "POST" ? { json: { generation_id: "v6", created: "2026-10-07T00:00:00Z" } } : { json: { generation_id: "v6", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "video.generation", url: `${api.base}/v/a.mp4`, prompt: "ph", resolution: "720p", aspect_ratio: "16:9", duration: 5 }] } }));
+  assert.match(text(placeholder.result), /0 of 1 video\(s\) saved\.\nNot saved: .*a\.mp4 — Expected a video \(video\/mp4\), got: image\/png/, "a video link that answers an image is refused, never counted as a saved video");
+  assert.equal(placeholder.result.isError, true);
+  const negative = z.toJSONSchema((await tool("ideogram_video_text")).inputSchema, { io: "input", unrepresentable: "any" }).properties.negative_prompt;
+  assert.match(negative.description, /out of the video/, "a shared field keeps the video wording on a video tool");
+  assert.doesNotMatch(z.toJSONSchema((await tool("ideogram_video_text")).inputSchema, { io: "input", unrepresentable: "any" }).properties.duration.description, /USD/, "no price in a tool text: the quote is the price");
   assert.match(text(none.result), /Ideogram listed no image or video for this generation \(nothing to save\)/);
   assert.equal(none.result.isError, true);
   const videoList = z.toJSONSchema((await tool("ideogram_video_text")).inputSchema, { io: "input", unrepresentable: "any" });

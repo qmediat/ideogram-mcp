@@ -50,8 +50,12 @@ export const DEFAULT_BASE_URL = "https://api.ideogram.ai";
 export const DEFAULT_DOWNLOAD_HOSTS: readonly string[] = ["ideogram.ai", "d2gu96o5zk2m7w.cloudfront.net"];
 export const MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;
 /** A video's cap: a 4K × 15 s MiniMax or a 1080p × 30 s Seedance mp4 is far above an image's 50 MiB (the sizes are
- * estimates from the bit rates — no real video was measured); the caller of a video download passes it. */
+ * estimates from the bit rates — no real video was measured). */
 export const MAX_VIDEO_DOWNLOAD_BYTES = 512 * 1024 * 1024;
+
+/** What a download is expected to be: the result's kind decides the accepted media types and the cap — a video link
+ * that answers an image (a placeholder behind a 200) is refused, never saved as the promised mp4. */
+export type MediaKind = "image" | "video";
 
 export function defaultClientOptions(apiKey: string): ClientOptions {
   return {
@@ -225,14 +229,15 @@ export class IdeogramClient {
   }
 
   /** Downloads one generated file into `outputDir`, streamed with a byte counter; nothing is left behind on failure. */
-  async download(url: string, outputDir: string, budget: CallBudget, maxBytes = this.options.maxDownloadBytes): Promise<SavedFile> {
+  async download(url: string, outputDir: string, budget: CallBudget, kind: MediaKind = "image"): Promise<SavedFile> {
     this.checkDownloadUrl(url);
+    const maxBytes = kind === "video" ? MAX_VIDEO_DOWNLOAD_BYTES : this.options.maxDownloadBytes;
     const response = await this.fetchDownload(url, budget);
     const contentType = (response.headers.get("Content-Type") ?? "").toLowerCase();
-    const extension = MEDIA_EXTENSIONS.find(([prefix]) => contentType.startsWith(prefix))?.[1];
+    const extension = MEDIA_EXTENSIONS.find(([prefix]) => contentType.startsWith(prefix) && prefix.startsWith(kind))?.[1];
     if (extension === undefined) {
       await response.body?.cancel();
-      throw new IdeogramApiError(response.status, "DOWNLOAD_INVALID_TYPE", `Expected an image or a video, got: ${contentType || "(missing)"}`);
+      throw new IdeogramApiError(response.status, "DOWNLOAD_INVALID_TYPE", `Expected ${kind === "video" ? "a video (video/mp4)" : "an image"}, got: ${contentType || "(missing)"}`);
     }
     const declared = Number.parseInt(response.headers.get("Content-Length") ?? "", 10);
     if (Number.isFinite(declared) && declared > maxBytes) {
