@@ -112,9 +112,7 @@ export function listEntries(text) {
  * @returns {Map<string, number>}
  */
 export function duplicateEntries(text) {
-  const lines = JSON.parse(text).duplicatedLines;
-  if (!Number.isInteger(lines) || lines < 0) throw new Error("duplicatedLines is not a count");
-  return new Map([["duplicated lines", lines]]);
+  return new Map([["duplicated lines", countOf(JSON.parse(text).duplicatedLines, "duplicatedLines")]]);
 }
 
 /**
@@ -225,7 +223,12 @@ function counts(tracked) {
  * @returns {{ base: string, duplicates: string | null, write: string | null, counts: boolean }}
  */
 export function parseArgs(argv) {
-  const value = (/** @type {string} */ flag) => (argv.includes(flag) ? (argv[argv.indexOf(flag) + 1] ?? "") : null);
+  const value = (/** @type {string} */ flag) => {
+    if (!argv.includes(flag)) return null;
+    const given = argv[argv.indexOf(flag) + 1];
+    if (given === undefined || given === "" || given.startsWith("--")) throw new Error(`${flag} needs a value`);
+    return given;
+  };
   const env = process.env["GITHUB_BASE_REF"];
   return {
     base: value("--base") ?? (env ? `origin/${env}` : "origin/main"),
@@ -242,7 +245,6 @@ function check(options) {
   } catch {
     throw new Error(`base ${options.base} not found — fetch it (CI: fetch-depth: 0)`);
   }
-  if (options.duplicates === "") throw new Error("--duplicates needs the path of jscpd's JSON report");
   const hold = options.duplicates === null ? [] : holdProblems(options.duplicates);
   const { problems, adoptions } = growth(options.base, trackedFiles());
   for (const note of adoptions) console.log(`baseline-ratchet: ${note}`);
@@ -252,8 +254,8 @@ function check(options) {
 
 /** @param {string[]} argv @returns {number} the exit code */
 export function main(argv) {
-  const options = parseArgs(argv);
   try {
+    const options = parseArgs(argv);
     if (options.write !== null) {
       writeFileSync(DUPLICATES, `${JSON.stringify({ duplicatedLines: measuredDuplicates(options.write) })}\n`);
       return 0;
