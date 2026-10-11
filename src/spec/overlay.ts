@@ -354,7 +354,7 @@ export const CONSTRAINTS: readonly Constraint[] = [
     operations: new Set(["train_model_v3", "train_model_v3_advanced", "train_model_v4", "train_model_v4_advanced"]),
     anchor: { field: "model_name", phrase: /5-30 characters, alphanumeric with spaces and hyphens allowed/ },
     text: "model_name must be 5-30 characters of letters, digits, spaces and hyphens",
-    violated: (f) => typeof f.model_name === "string" && !/^[A-Za-z0-9 -]{5,30}$/.test(f.model_name.trim()),
+    violated: (f) => typeof f.model_name === "string" && !/^[A-Za-z0-9 -]{5,30}$/.test(f.model_name), // the value as sent, never a trimmed copy
   },
   {
     id: "source-size-needs-images",

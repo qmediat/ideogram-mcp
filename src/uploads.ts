@@ -9,7 +9,7 @@
  * local file passed its checks.
  */
 import { lstat, readFile, realpath, stat } from "node:fs/promises";
-import { extname, resolve } from "node:path";
+import { basename, extname, resolve } from "node:path";
 import { DATASET_UPLOAD_OPERATIONS, fileLimitsOf, FONT_FILE_FIELDS, mbText, requestLimitOf } from "./spec/overlay.js";
 import type { FileLimit } from "./spec/overlay.js";
 import type { Operation } from "./spec/operations.js";
@@ -48,11 +48,23 @@ export const DATASET_TYPES: Readonly<Record<string, string>> = { ...UPLOAD_TYPES
 const TYPE_ALIASES: Readonly<Record<string, string>> = { "application/x-zip-compressed": "application/zip", "image/jpg": "image/jpeg", "text/json": "application/json" };
 
 /** The part's file name: `<field>.<ext>` (nothing local leaves the machine), or the asset's own name for a training
- * upload (the directory never, the name yes — the API pairs a caption with its image by it). */
+ * upload (the directory never, the name yes — the API pairs a caption with its image by it): a URL's last segment
+ * without its query, a local path's basename; a quote, a control character or a backslash in it becomes `_`. */
 function partName(op: Operation, field: string, source: string, ext: string): string {
   if (!DATASET_UPLOAD_OPERATIONS.has(op.id)) return `${field}${ext}`;
-  const name = source.replace(/[?#].*$/, "").split(/[\\/]/).pop() ?? "";
+  const raw = isRemoteInput(source) ? (new URL(source).pathname.split("/").pop() ?? "") : basename(source);
+  const name = raw.replace(/["\\\u0000-\u001f\u007f]/g, "_");
   return name === "" ? `${field}${ext}` : name;
+}
+
+/** Two assets of one upload under the same name would be one to the API (it pairs captions by name): refused. */
+function checkUniqueNames(op: Operation, parts: readonly UploadPart[]): void {
+  if (!DATASET_UPLOAD_OPERATIONS.has(op.id)) return;
+  const seen = new Set<string>();
+  for (const part of parts) {
+    if (seen.has(part.filename)) throw new Error(`${part.field}: two files would be sent as ${part.filename}; a dataset asset is known by its name — rename one`);
+    seen.add(part.filename);
+  }
 }
 
 /** The types a field's files may have: fonts for a font field, training assets for a dataset upload, images for every other. */
@@ -160,5 +172,6 @@ export async function loadUploads(op: Operation, files: readonly FileRef[], remo
     total += part.bytes.byteLength;
     parts.push(part);
   }
+  checkUniqueNames(op, parts);
   return parts;
 }

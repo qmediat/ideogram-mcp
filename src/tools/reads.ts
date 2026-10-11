@@ -30,11 +30,22 @@ export function operation(id: string): Operation {
 /** An answer exactly as received: written to a file in the output directory (named by what was asked, so two
  * reports never overwrite each other; readable by the owner only — an account's answers carry emails and key
  * prefixes), inline too when small. The one mechanism of every listing, the mismatch path included. */
+/** A file-name component from caller-controlled text: letters, digits and a few marks only, bounded — never a separator. */
+export function fileNameComponent(text: string): string {
+  return text.replace(/[^0-9A-Za-z,_.-]/g, "_").replace(/\.{2,}/g, "_").slice(0, 120) || "_";
+}
+
+/** An error as the text a tool answers with (the API's typed message, or the error's own). */
+export function errorText(error: unknown): string {
+  if (error instanceof IdeogramApiError) return error.toMcpError();
+  return error instanceof Error ? error.message : String(error);
+}
+
 export async function rawLines(ctx: ToolContext, what: string, name: string, value: unknown): Promise<string[]> {
   const text = JSON.stringify(value, null, 2) ?? "null";
   const bytes = Buffer.byteLength(text, "utf8");
   await mkdir(ctx.outputDir, { recursive: true });
-  const path = join(ctx.outputDir, `ideogram-${name}.json`);
+  const path = join(ctx.outputDir, `ideogram-${fileNameComponent(name)}.json`);
   await writeFile(path, text, { mode: 0o600 });
   const head = `${what}: ${path} (${bytes} bytes, owner-readable)`;
   return bytes <= INLINE_JSON_BYTES ? [head, text] : [`${head}; not printed here, over ${INLINE_JSON_BYTES} bytes`];

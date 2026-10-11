@@ -14,6 +14,7 @@ const png = join(dir, "a.png"); await writeFile(png, PNG);
 const caption = join(dir, "a.txt"); await writeFile(caption, "a red door, flat illustration");
 const zip = join(dir, "more.zip"); await writeFile(zip, Buffer.from("504b0506" + "00".repeat(18), "hex"));
 const ttf = join(dir, "f.ttf"); await writeFile(ttf, Buffer.from("00010000", "hex"));
+await (await import("node:fs/promises")).mkdir(join(dir, "sub")); await writeFile(join(dir, "sub", "a.png"), PNG);
 
 async function call(name, args, handler) {
   const api = await startFakeApi((req, n) => handler(req, n, api));
@@ -72,6 +73,12 @@ test("ideogram_dataset_upload creates the dataset from a name, then uploads imag
   const orphan = await call("ideogram_dataset_upload", { name: "brand refs", files: [png] }, (req) => (req.method === "POST" && req.url === "/datasets" ? { json: dataset } : { status: 404, json: { error: "gone" } }));
   assert.equal(orphan.result.isError, true);
   assert.match(text(orphan.result), /^Dataset brand refs created: ds1\.\nThe upload failed; upload again with dataset_id "ds1", not with name\./, "a failed upload after the create names the dataset first");
+  const cut = await call("ideogram_dataset_upload", { name: "brand refs", files: [png] }, (req) => (req.method === "POST" && req.url === "/datasets" ? { json: dataset } : { status: 503, json: { error: "down" } }));
+  assert.match(text(cut.result), /^Dataset brand refs created: ds1\.\nThe upload failed; upload again with dataset_id "ds1", not with name\./, "a 5xx after the create names the dataset too");
+  const traversal = await call("ideogram_datasets", { dataset_id: "../../escape" }, () => ({ json: { dataset: { ...dataset, dataset_id: "../../escape" }, file_count: 0, custom_model_ids: [], files: [] } }));
+  assert.match(text(traversal.result), /ideogram-dataset-____escape\.json/, "a caller's id is a sanitized file-name component");
+  const twin = await call("ideogram_dataset_upload", { dataset_id: "ds1", files: [png, join(dir, "sub", "a.png")] }, handler).catch((e) => e);
+  assert.match(twin.message, /two files would be sent as a\.png/);
   const both = await call("ideogram_dataset_upload", { name: "x", dataset_id: "ds1", files: [png] }, handler);
   assert.match(text(both.result), /give dataset_id .* or name .*, not both/);
   const font = await call("ideogram_dataset_upload", { dataset_id: "ds1", files: [ttf] }, handler).catch((e) => e);
@@ -90,6 +97,13 @@ test("ideogram_train routes to the plain operation, or the advanced one when a h
   const v3batch = await call("ideogram_train", { model: "ideogram-3", dataset_id: "ds1", model_name: "Planet Drip", batch_size: 8 }, () => ({ json: started }));
   assert.match(text(v3batch.result), /batch_size is not a parameter of ideogram-3's training \(train_model_v3_advanced\)/);
   assert.equal(v3batch.requests.length, 0);
+  const padded = await call("ideogram_train", { dataset_id: "ds1", model_name: "Planet Drip\n" }, () => ({ json: started }));
+  assert.match(text(padded.result), /model_name must be 5-30 characters/, "judged as sent, never trimmed");
+  const down = await call("ideogram_train", { dataset_id: "ds1", model_name: "Planet Drip" }, () => ({ status: 503, json: { error: "down" } }));
+  assert.match(text(down.result), /a training MAY have started and will be billed/, "a 5xx after the request left");
+  const refused = await call("ideogram_train", { dataset_id: "ds1", model_name: "Planet Drip" }, () => ({ status: 404, json: { error: "no" } }));
+  assert.match(text(refused.result), /the dataset is not yours, does not exist, or this key cannot train/);
+  assert.doesNotMatch(text(refused.result), /MAY have started/);
   const short = await call("ideogram_train", { dataset_id: "ds1", model_name: "abc" }, () => ({ json: started }));
   assert.match(text(short.result), /model_name must be 5-30 characters/);
   assert.equal(short.requests.length, 0);
