@@ -509,8 +509,6 @@ const SOURCE_FIELD_TEXT: Readonly<Record<string, string>> = {
   image_urls: "image_urls (URLs of Ideogram images)",
 };
 
-export const SOURCE_RULE_TEXT = "needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)";
-
 /** The source rule's sentence for the operation: only the source fields its body takes (snap mask takes no asset). */
 function imageSourceText(op: Operation): string {
   const body = op.schemas.body;
@@ -549,10 +547,6 @@ function sourceOf(op: Operation): { readonly fields: readonly string[]; readonly
 function needsImageSource(op: Operation): boolean {
   if (op.family === null || op.family === "generate") return false;
   return op.facts.fileFields.some((f) => f.name === "image" || f.name === "images");
-}
-
-export function needsSource(op: Operation): boolean {
-  return sourceOf(op) !== null;
 }
 
 export function sourceRefusal(op: Operation, fields: BodyFields): string | null {
