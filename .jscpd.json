@@ -1,0 +1,36 @@
+{
+  "minLines": 10,
+  "minTokens": 50,
+  "gitignore": true,
+  "absolute": false,
+  "reporters": [
+    "json"
+  ],
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/coverage/**",
+    "**/vendor/**",
+    "**/.next/**",
+    "**/*.min.js",
+    "**/*.lock",
+    "**/package-lock.json",
+    "**/eslint-suppressions.json",
+    "**/.jscpd-report/**",
+    "**/.claude/worktrees/**",
+    "src/generated/**",
+    "scripts/spec-gen/**"
+  ],
+  "output": ".jscpd-report",
+  "path": [
+    "."
+  ],
+  "pattern": "{src,test,scripts}/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+  "format": [
+    "typescript",
+    "tsx",
+    "javascript",
+    "jsx"
+  ]
+}

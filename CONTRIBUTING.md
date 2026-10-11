@@ -29,6 +29,9 @@ bundled TypeScript.
 - ES Modules (`"type": "module"`)
 - `as const` for literal types in MCP responses
 - Explicit error handling — no untyped `catch` blocks
+- `npm run lint` before a pull request: the structure rules (function length, complexity, nesting, a reason on every
+  disable directive, no bare `assert.throws(fn)`), repeated blocks and the baseline ratchet — `docs/SYSTEMIC.md` §1,
+  with the files new code follows
 
 ## Adding a New Tool
 

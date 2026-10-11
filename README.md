@@ -232,12 +232,14 @@ cd ideogram-mcp
 npm install
 npm run build
 npm run typecheck
+npm run lint        # structure rules, repeated blocks, the baseline ratchet (docs/SYSTEMIC.md §1)
 npm test            # builds, then every test against a fake API (no key, no network); with IDEOGRAM_API_KEY set, the live dry-run suite runs too (below)
 ```
 
 The specification snapshot drives the code: `npm ci --prefix scripts/spec-gen && npm run spec:generate` regenerates
 `src/generated/` (CI checks it with `npm run spec:check`), `npm run docs:api` the API reference, `npm run spec:pull`
-compares the live specification with the snapshot. These scripts need Node.js 22.18 or newer (type stripping).
+compares the live specification with the snapshot. These scripts need Node.js 22.18 or newer (type stripping), and so
+does `npm run lint` (its Babel 8 parser: 22.18+ or 24.11+).
 With `IDEOGRAM_API_KEY` set, `test/live-dry-run.test.mjs` quotes every curated model at no cost and writes the prices
 to `docs/PRICES-<date>.md`.
 

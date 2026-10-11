@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Development only: `npm run lint` checks the structure of the code with a shared preset (ESLint with Babel's
+  TypeScript parser — TypeScript 7 has no JavaScript API for typescript-eslint —, jscpd for repeated blocks, a ratchet
+  that keeps the recorded baselines from growing); CI runs it. Nothing in the published package changes.
+
 ## [2.5.0] - 2026-10-11
 
 One release for steps 1–5 of `docs/DESIGN-ideogram-v2.md`: the paragraphs below state each step's counts as they stood after that step; the release ends at 38 tools (tools/list 131 396 bytes, budget 136 KB), support curated 80 · raw 47 · planned 0 · unsupported 73, 178 tests. Nothing a 2.0.0 client used is removed (the `video` input of `ideogram_generation` existed only inside this series).
