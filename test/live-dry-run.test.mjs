@@ -136,7 +136,7 @@ test("live: every curated quotable operation returns a PriceQuote; the quotes go
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       // an account-level refusal (a feature flag, an operation this account is not authorized for) is a fact of the key, not a failure of the tool
-      if (error instanceof IdeogramApiError && error.status === 403 || /not authorized for this operation|feature flag/i.test(message)) {
+      if (error instanceof IdeogramApiError && (error.status === 403 || /not authorized for this operation|Required feature flag/i.test(message))) {
         rows.push(`| ${c.spec.name} | ${c.variant.model} | — | — | — | not available to this account: ${message.slice(0, 120)} |`);
         continue;
       }

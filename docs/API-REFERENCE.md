@@ -46,7 +46,7 @@ Fields of the operations this release serves (curated or raw) are listed below t
 | `ideogram_magic_prompt` | Rewrite a natural-language prompt into an Ideogram 4.0 structured JSON prompt (and the aspect ratio the model picks for it, or the one you pin). Nothing is generated; no price quote (the v1 operation offers no dry run). |
 | `ideogram_layerize_logos` | Detect reference logos and image elements in a flat design and remove them: the text-free base image is saved, the detected layers come back with the reference each matched (REF_0, REF_1, … in the order given). The design and the references as local files or public https URLs. No price quote (the v1 operation offers no dry run). |
 | `ideogram_provenance` | Check whether an image was created by Ideogram: the provenance record (provider, system version, generation id, creation time, validation state) as Ideogram answers it. The image as a local file or a public https URL. Free of charge; no price quote. |
-| `ideogram_snap_mask` | Snap a hand-drawn binary mask to the object it marks (white = the object): the snapped mask comes back as a PNG, saved to the output directory, ready for inpaint, remove object or the colorways masks. The image and the mask as local files or public https URLs. No price quote (the v1 operation offers no dry run). |
+| `ideogram_snap_mask` | Snap a hand-drawn binary mask to the object it marks: the snapped mask comes back as a PNG (white = the object), saved to the output directory. Use it as is where white marks the region to change (the colorways and material swap masks); invert it for ideogram_inpaint and ideogram_remove_object, whose masks take black as the region to change. The image and the mask as local files or public https URLs. No price quote (the v1 operation offers no dry run). |
 | `ideogram_edit` | Deprecated alias of ideogram_inpaint, kept through 2.x for 1.x callers: the same arguments and models (see ideogram_inpaint's schema). |
 | `ideogram_quote` | Ask Ideogram what a call would cost before making it: give the curated tool's name and the arguments you would pass it. Answers USD and credits from the API's own dry run (exact, or an estimate with its upper bound). Nothing is generated or billed. |
 | `ideogram_generation` | Collect the result of a generation by its generation_id (from a tool that answered 'still running', or from an earlier session): waits up to wait_s for it, then saves its images or videos. Reading a generation is free and never runs it again. |
@@ -290,6 +290,9 @@ Parameters: `webhook_url (query, required)`.
 | `seed` | one of several shapes |  |
 | `text_prompt` | string |  |
 
+Rules:
+- exactly one of text_prompt and json_prompt: give one of them
+
 #### post_generate_image_v4_cfg_distilled — `POST /v1/ideogram-v4-cfg-distilled/generate`
 
 Generate with the CFG-distilled Ideogram 4.0 model
@@ -304,6 +307,9 @@ Generate with the CFG-distilled Ideogram 4.0 model
 | `seed` | one of several shapes |  |
 | `text_prompt` | string |  |
 
+Rules:
+- exactly one of text_prompt and json_prompt: give one of them
+
 #### post_generate_image_v4_fp8 — `POST /v1/ideogram-v4-fp8/generate`
 
 Generate with the fp8-quantized Ideogram 4.0 model
@@ -317,6 +323,9 @@ Generate with the fp8-quantized Ideogram 4.0 model
 | `resolution` | one of 2048x2048, 1440x2880, 2880x1440, 1664x2496, 2496x1664, 1792x2240, 2240x1792, 1440x2560, 2560x1440, 1600x2560, 2560x1600, 1728x2304, … (38) |  |
 | `seed` | one of several shapes |  |
 | `text_prompt` | string |  |
+
+Rules:
+- exactly one of text_prompt and json_prompt: give one of them
 
 #### post_generate_design_v4_async — `POST /v1/ideogram-v4/async/generate-design`
 
@@ -372,6 +381,9 @@ Generate with Ideogram 4.0 (stable model)
 | `text_prompt` | string |  |
 | `version` | one of stable_may29 |  |
 
+Rules:
+- exactly one of text_prompt and json_prompt: give one of them
+
 #### post_generate_image_v45_async — `POST /v1/ideogram-v45/async/generate`
 
 Generate with Ideogram 4.5 asynchronously via webhook
@@ -389,6 +401,9 @@ Parameters: `webhook_url (query, required)`.
 | `seed` | one of several shapes |  |
 | `text_prompt` | string |  |
 
+Rules:
+- exactly one of text_prompt and json_prompt: give one of them
+
 #### post_generate_image_v45 — `POST /v1/ideogram-v45/generate`
 
 Generate with Ideogram 4.5
@@ -403,6 +418,9 @@ Generate with Ideogram 4.5
 | `resolution` | one of 2048x2048, 1440x2880, 2880x1440, 1664x2496, 2496x1664, 1792x2240, 2240x1792, 1440x2560, 2560x1440, 1600x2560, 2560x1600, 1728x2304, … (38) |  |
 | `seed` | one of several shapes |  |
 | `text_prompt` | string |  |
+
+Rules:
+- exactly one of text_prompt and json_prompt: give one of them
 
 #### post_generate_image_p_image_high — `POST /v1/p-image-ideogram/high/generate`
 
@@ -914,7 +932,7 @@ Edit images with a prompt
 File limits: `images` 25 MB × 10.
 
 Rules:
-- needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
+- needs a source image: images (local files or public https URLs) or image_urls (URLs of Ideogram images)
 - resolution and aspect_ratio cannot be combined; give one
 
 #### post_v1_edit_lite_image — `POST /v1/edit-lite`
@@ -936,7 +954,7 @@ Edit an image with a prompt at lower cost and latency
 File limits: `image` 25 MB; `reference_images` 25 MB × 9.
 
 Rules:
-- needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
+- needs a source image: image (a local file or a public https URL)
 
 #### ideogram-4-5 — `POST /v2/image/precise-edit/ideogram-4-5`
 
@@ -1123,7 +1141,7 @@ Parameters: `webhook_url (query, required)`.
 File limits: `additional_images` 25 MB × 4; `image` 25 MB.
 
 Rules:
-- needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
+- needs a source image: image (a local file or a public https URL)
 
 #### post_generate_image_v4_im2_im — `POST /v1/ideogram-v4/image-to-image`
 
@@ -1144,7 +1162,7 @@ Image-to-image with Ideogram 4.0
 File limits: `additional_images` 25 MB × 4; `image` 25 MB.
 
 Rules:
-- needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
+- needs a source image: image (a local file or a public https URL)
 
 #### auto — `POST /v2/image/remix/auto`
 
@@ -2159,7 +2177,7 @@ Snap a hand-drawn mask to the selected object
 File limits: `image` 25 MB; `mask` 50 MB (not stated; this server's cap).
 
 Rules:
-- needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
+- needs a source image: image (a local file or a public https URL)
 
 #### post_ad_localizer — `POST /v2/tool/ad-localizer`
 
@@ -2248,7 +2266,7 @@ File limits: `image` 25 MB; `masks` 25 MB × 4.
 Rules:
 - needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
 - image and image_asset_identifier are alternatives; give one
-- masks and mask_asset_identifiers are alternatives; give one
+- exactly one of masks and mask_asset_identifiers: give one of them
 - colors are paired by position with the masks: give as many colors as masks (or mask_asset_identifiers)
 
 #### post_ghost_mannequin — `POST /v2/tool/ghost-mannequin`
@@ -2286,6 +2304,7 @@ File limits: `back_image` 50 MB; `bottom_image` 50 MB; `front_image` 50 MB; `gar
 Rules:
 - needs at least one garment photo: a view (front_image, back_image, left_image, right_image, top_image, bottom_image — files or URLs — or its *_asset_identifier) or garment_images / garment_asset_identifiers
 - garment_images and garment_asset_identifiers are alternatives; give one
+- at most 15 garment photos in total: the six views (file or asset) and garment_images / garment_asset_identifiers together
 
 #### post_living_image — `POST /v2/tool/living-image`
 
@@ -2321,8 +2340,8 @@ File limits: `image` 25 MB; `masks` 25 MB × 4; `materials` 25 MB × 4.
 Rules:
 - needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
 - image and image_asset_identifier are alternatives; give one
-- masks and mask_asset_identifiers are alternatives; give one
-- materials and material_asset_identifiers are alternatives; give one
+- exactly one of masks and mask_asset_identifiers: give one of them
+- exactly one of materials and material_asset_identifiers: give one of them
 - materials are one for every mask, or exactly one per mask: give one material or as many as masks
 
 #### post_model_pose_variants — `POST /v2/tool/model-pose-variants`
@@ -2365,6 +2384,9 @@ Model Swap
 | `webhook_url` | string |  |
 
 File limits: `source_image` 50 MB.
+
+Rules:
+- needs the working image: source_image (a local file or a public https URL) or source_asset_identifier (an Ideogram asset)
 
 #### post_packshots — `POST /v2/tool/packshots`
 
@@ -2518,6 +2540,7 @@ File limits: `font_candidate_files` 5 MB × 5; `image` 50 MB.
 
 Rules:
 - needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
+- image and image_asset_identifier are alternatives; give one
 
 #### post_vectorizer — `POST /v2/tool/vectorizer`
 
@@ -2565,7 +2588,7 @@ Virtual Try-On with Ideogram 3.0
 File limits: `image` 25 MB; `product_reference_images` 50 MB (not stated; this server's cap) × 1.
 
 Rules:
-- needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
+- needs a source image: image (a local file or a public https URL)
 
 #### post_lookbook — `POST /v2/workflow/lookbook`
 
@@ -2602,6 +2625,9 @@ Edit an image, optionally using a mask
 
 File limits: `source_image` 50 MB.
 
+Rules:
+- needs the source: source_image (a local file or a public https URL) or source_asset_identifier (an Ideogram asset)
+
 #### post_virtual_try_on — `POST /v2/workflow/virtual-try-on`
 
 Dress a person in one or more garments
@@ -2618,6 +2644,11 @@ Dress a person in one or more garments
 | `webhook_url` | string |  |
 
 File limits: `garment_images` 25 MB × 7; `person_image` 25 MB.
+
+Rules:
+- needs the person: person_image (a local file or a public https URL) or person_asset_identifier (an Ideogram asset)
+- exactly one of person_image and person_asset_identifier: give one of them
+- exactly one of garment_images and garment_asset_identifiers: give one of them
 
 ### generation
 

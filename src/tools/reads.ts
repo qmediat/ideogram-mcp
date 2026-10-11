@@ -8,7 +8,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { z } from "zod/v4";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { ApiRequest } from "../client.js";
+import type { ApiRequest, MediaKind } from "../client.js";
 import type { BodyInput, QueryValue, Scalar } from "../wire.js";
 import { COUNTERS } from "../counters.js";
 import { mbText } from "../spec/overlay.js";
@@ -114,11 +114,12 @@ export async function sendOperation<T extends z.ZodType>(ctx: ToolContext, reque
 
 /** An operation whose 200 is a file (snap mask's image/png): the body saved as the result — the one path of the curated
  * tool and `ideogram_api` alike; a failure that may have run says so (the request is never resent). */
-export async function fileAnswer(what: string, ctx: ToolContext, req: ApiRequest, inlineImages: boolean): Promise<CallToolResult> {
+export async function fileAnswer(what: string, ctx: ToolContext, req: ApiRequest, inlineImages: boolean, notes: readonly string[] = []): Promise<CallToolResult> {
+  const kind: MediaKind = req.op.facts.responseMedia === "video" ? "video" : "image";
   try {
-    const saved = await ctx.client.callToFile(req, ctx.outputDir, ctx.budget, "image");
-    const inline = inlineImages ? await inlineContent([saved]) : { items: [], lines: [] };
-    return { content: [{ type: "text", text: [`Saved: ${saved.path} (${mbText(saved.bytes, 2)}, ${saved.contentType.split(";")[0]})`, ...inline.lines].join("\n") }, ...inline.items] };
+    const saved = await ctx.client.callToFile(req, ctx.outputDir, ctx.budget, kind);
+    const inline = inlineImages && kind === "image" ? await inlineContent([saved]) : { items: [], lines: [] };
+    return { content: [{ type: "text", text: [`Saved: ${saved.path} (${mbText(saved.bytes, 2)}, ${saved.contentType.split(";")[0]})`, ...inline.lines, ...notes].join("\n") }, ...inline.items] };
   } catch (error) {
     if (error instanceof IdeogramApiError && error.code === "ANSWER_NOT_SAVED") {
       return textResult(`${what}: ${error.message}\nThe operation ran and answered; the file is lost here. Sending it again runs it again.`, true);

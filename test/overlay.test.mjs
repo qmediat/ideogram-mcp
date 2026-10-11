@@ -28,6 +28,7 @@ function fieldDescription(operation, field) {
     if (!property) continue;
     const target = property.$ref ?? property.allOf?.[0]?.$ref;
     texts.push(`${property.description ?? ""} ${target ? (spec.components.schemas[target.split("/").pop()].description ?? "") : ""}`);
+    texts.push(spec.components.schemas[ref.split("/").pop()].description ?? ""); // the body's own prose (text layerizer, ghost mannequin state their rules there)
   }
   return texts.length === 0 ? null : texts.join(" ");
 }
@@ -111,8 +112,16 @@ test("the constraints refuse what the API refuses and pass what it takes", () =>
     ["post_edit_video_minimax_h3_reference_to_video", { prompt: "x", reference_images: Array(9).fill("a.png"), reference_video_asset_identifiers: Array(3).fill({ asset_type: "RESPONSE", asset_id: "a" }), reference_audios: ["a.wav"] }, /at most 12 references/],
     ["post_generate_video_kling_v3_standard_image_to_video", { prompt: "x", image: "a.png", image_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" } }, /image and image_asset_identifier are alternatives/],
     ["post_generate_video_kling_v3_standard_image_to_video", { prompt: "x", image: "a.png", end_image: "b.png", end_image_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" } }, /end_image and end_image_asset_identifier/],
-    ["post_colorways", { image: "a.png", colors: ["#B3202C"], masks: ["m.png"], mask_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "a" }] }, /masks and mask_asset_identifiers are alternatives/],
-    ["post_material_swap", { image: "a.png", masks: ["m.png"], materials: ["t.png"], material_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "a" }] }, /materials and material_asset_identifiers are alternatives/],
+    ["post_colorways", { image: "a.png", colors: ["#B3202C"], masks: ["m.png"], mask_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "a" }] }, /exactly one of masks and mask_asset_identifiers/],
+    ["post_colorways", { image: "a.png", colors: ["#B3202C"] }, /exactly one of masks and mask_asset_identifiers/],
+    ["post_material_swap", { image: "a.png", masks: ["m.png"], materials: ["t.png"], material_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "a" }] }, /exactly one of materials and material_asset_identifiers/],
+    ["post_material_swap", { image: "a.png", masks: ["m.png"] }, /exactly one of materials and material_asset_identifiers/],
+    ["post_ghost_mannequin", { view: "front", front_image: "f.png", garment_images: Array(15).fill("g.png") }, /at most 15 garment photos in total/],
+    ["post_virtual_try_on", { person_image: "p.png", person_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" }, garment_images: ["g.png"] }, /exactly one of person_image and person_asset_identifier/],
+    ["post_virtual_try_on", { person_image: "p.png" }, /exactly one of garment_images and garment_asset_identifiers/],
+    ["post_text_layerizer", { image: "a.png", image_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" } }, /image and image_asset_identifier are alternatives/],
+    ["post_generate_image_v45", { text_prompt: "x", json_prompt: { a: 1 } }, /exactly one of text_prompt and json_prompt/],
+    ["post_generate_image_v45", {}, /exactly one of text_prompt and json_prompt/],
     ["post_ghost_mannequin", { view: "front", garment_images: ["g.png"], garment_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "a" }] }, /garment_images and garment_asset_identifiers are alternatives/],
     ["post_colorways", { image: "a.png", colors: ["#B3202C", "#000000"], masks: ["m.png"] }, /as many colors as masks/],
     ["post_material_swap", { image: "a.png", masks: ["m.png", "n.png"], materials: ["t.png", "u.png", "v.png"] }, /one material or as many as masks/],
@@ -162,6 +171,10 @@ test("the constraints refuse what the API refuses and pass what it takes", () =>
     ["post_generate_video_kling_v3_standard_image_to_video", { prompt: "x", image: "a.png", end_image_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" } }],
     ["post_colorways", { image: "a.png", colors: ["#B3202C", "#000000"], masks: ["m.png", "n.png"] }],
     ["post_material_swap", { image: "a.png", masks: ["m.png", "n.png"], materials: ["t.png"] }],
+    ["post_material_swap", { image: "a.png", masks: ["m.png"], material_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "a" }] }],
+    ["post_ghost_mannequin", { view: "front", front_image: "f.png", garment_images: Array(14).fill("g.png") }],
+    ["post_virtual_try_on", { person_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" }, garment_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "b" }] }],
+    ["post_generate_image_v45", { json_prompt: { a: 1 } }],
     ["post_material_swap", { image: "a.png", masks: ["m.png", "n.png"], materials: ["t.png", "u.png"] }],
     ["post_layerize_logos", { design_image: "d.png", reference_images: Array(10).fill("l.png") }],
   ];
@@ -172,6 +185,15 @@ test("the constraints refuse what the API refuses and pass what it takes", () =>
   ]) assert.match(sourceRefusal(op(id), fields) ?? "", message, id);
   assert.equal(sourceRefusal(op("post_ghost_mannequin"), { view: "front", left_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" } }), null, "one view as an asset is a source");
   assert.equal(sourceRefusal(op("post_model_pose_variants"), { instruction: "x", source_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" } }), null);
+  assert.match(sourceRefusal(op("post_model_swap"), { model_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "a" }] }) ?? "", /needs the working image: source_image/);
+  assert.match(sourceRefusal(op("post_precise_masked_edit"), { instruction: "x" }) ?? "", /needs the source: source_image/);
+  assert.equal(sourceRefusal(op("post_virtual_try_on"), { garment_images: ["g.png"] }), null, "the person's exactly-one rule says it (coversSource), not the source rule");
+  assert.ok(constraintViolations(op("post_virtual_try_on"), { garment_images: ["g.png"] }).some((v) => /exactly one of person_image and person_asset_identifier/.test(v)));
+  assert.ok(rulesOf(op("post_virtual_try_on")).some((r) => /needs the person: person_image/.test(r)), "the source rule is still listed for the operation");
+  assert.equal(sourceRefusal(op("post_virtual_try_on"), { person_image: "p.png", person_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" } }), null, "both given: the exactly-one rule says it, not the source rule");
+  assert.equal(sourceRefusal(op("post_v1_edit_image"), { prompt: "x", image_urls: ["https://ideogram.ai/a.png"] }), null, "the v1 edit's Ideogram image URLs are a source");
+  assert.match(sourceRefusal(op("post_v1_edit_image"), { prompt: "x" }) ?? "", /needs a source image: images \(local files or public https URLs\) or image_urls \(URLs of Ideogram images\)$/, "the sentence names the fields the operation has");
+  assert.match(sourceRefusal(op("post_snap_mask"), {}) ?? "", /needs a source image: image \(a local file or a public https URL\)$/, "no asset form on snap mask: none named");
   assert.ok(rulesOf(op("post_ghost_mannequin")).some((r) => /garment photo/.test(r)), "the source rule is listed with the operation's rules");
   for (const [id, fields] of passing) assert.deepEqual(constraintViolations(op(id), fields), [], id);
 });

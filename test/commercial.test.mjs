@@ -67,7 +67,9 @@ test("a commercial tool runs its one operation with its own fields: no model inp
   const noPhoto = await call("ideogram_ghost_mannequin", { view: "front" }).catch((e) => e);
   assert.match(noPhoto.message, /ideogram_ghost_mannequin needs at least one garment photo/, "the source rule, in the tool's name");
   const bothMasks = await call("ideogram_colorways", { image: png, colors: ["#B3202C"], masks: [png], mask_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "AAAAAAAAAAAAAAAAAAAAAA" }] }).catch((e) => e);
-  assert.match(bothMasks.message, /masks and mask_asset_identifiers are alternatives/);
+  assert.match(bothMasks.message, /exactly one of masks and mask_asset_identifiers/);
+  const noMask = await call("ideogram_colorways", { image: png, colors: ["#B3202C"] }).catch((e) => e);
+  assert.match(noMask.message, /exactly one of masks and mask_asset_identifiers/, "neither is refused too: the API would bill an invalid request otherwise");
   const unpaired = await call("ideogram_colorways", { image: png, colors: ["#B3202C", "#000000"], masks: [png] }).catch((e) => e);
   assert.match(unpaired.message, /as many colors as masks/);
   const speed = await call("ideogram_ad_resizer", { image: png, resolution: "1080x1920", rendering_speed: "TURBO" }).catch((e) => e);
@@ -107,6 +109,12 @@ test("ideogram_snap_mask saves the PNG the operation answers with; an answer of 
   assert.equal(inline.result.content[1].mimeType, "image/png");
   const snapSchema = z.toJSONSchema((await tool("ideogram_snap_mask")).inputSchema, { io: "input", unrepresentable: "any" });
   assert.equal(snapSchema.properties.wait_s, undefined, "a synchronous file answer takes no wait");
+  assert.doesNotMatch(snapSchema.properties.image.description, /asset/, "snap mask's image sentence names no asset form");
+  for (const n of ["ideogram_magic_prompt", "ideogram_provenance", "ideogram_layerize_logos"]) assert.equal(z.toJSONSchema((await tool(n)).inputSchema, { io: "input", unrepresentable: "any" }).properties.wait_s, undefined, `${n} answers within the call: no wait_s`);
+  assert.ok(z.toJSONSchema((await tool("ideogram_ad_resizer")).inputSchema, { io: "input", unrepresentable: "any" }).properties.wait_s, "a job keeps its wait");
+  const magicSchema = z.toJSONSchema((await tool("ideogram_magic_prompt")).inputSchema, { io: "input", unrepresentable: "any" });
+  assert.match(magicSchema.properties.aspect_ratio.description, /AUTO .* with an x/, "magic prompt's own aspect sentence, not the tool family's colon");
+  assert.match((await tool("ideogram_snap_mask")).description, /invert it for ideogram_inpaint and ideogram_remove_object/);
   assert.ok(snapSchema.properties.inline_images, "but it can be returned inline");
   let n429 = 0;
   const retried = await call("ideogram_snap_mask", { image: png, mask: png }, () => (n429++ === 0 ? { status: 429, headers: { "retry-after": "0" }, json: { error: "slow down" } } : { status: 200, headers: { "content-type": "image/png" }, body: PNG }));

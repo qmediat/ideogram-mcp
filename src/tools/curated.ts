@@ -4,6 +4,7 @@
  */
 import { z } from "zod/v4";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { answersWithFile } from "../spec/operations.js";
 import { COMMERCIAL_TOOLS } from "./commercial.js";
 import { executeTold, fileAnswer } from "./reads.js";
 import type { ToolContext, ToolDefinition } from "./context.js";
@@ -121,7 +122,7 @@ export const FAMILY_TOOLS: readonly FamilyToolSpec[] = [
 
 async function runFamilyTool(spec: FamilyToolSpec, ctx: ToolContext, args: ToolArguments): Promise<CallToolResult> {
   const call = await prepare(spec, args, ctx.remote);
-  if (call.req.op.facts.responseMedia === "image") return fileAnswer(spec.name, ctx, call.req, args.inline_images === true); // the answer IS the file (snap mask's PNG)
+  if (answersWithFile(call.req.op)) return fileAnswer(spec.name, ctx, call.req, args.inline_images === true, call.notes); // the answer IS the file (snap mask's PNG)
   const run = await executeTold(ctx, call.req, call.waitS);
   if (run.kind === "result") return run.result;
   return outcomeResult(ctx, run.outcome, call.notes, { inlineImages: args.inline_images === true });

@@ -239,6 +239,11 @@ export function operationById(id: string): Operation | null {
   return BY_ID.get(id) ?? null;
 }
 
+/** The operation's 200 is a file (an image or a video), not JSON: the answer is saved, never parsed. */
+export function answersWithFile(op: Operation): boolean {
+  return op.facts.responseMedia === "image" || op.facts.responseMedia === "video";
+}
+
 export function isExposable(op: Operation): boolean {
   return EXPOSABLE_CLASSES.has(op.class);
 }

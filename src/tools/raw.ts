@@ -14,7 +14,7 @@ import { quoteText } from "./quote.js";
 import { WAIT_DEFAULT_S, WAIT_MAX_S } from "../lifecycle.js";
 import type { OperationClass } from "../spec/classify.js";
 import { constraintViolations, sourceRefusal } from "../spec/overlay.js";
-import { bodySchemaFor, operationById } from "../spec/operations.js";
+import { answersWithFile, bodySchemaFor, operationById } from "../spec/operations.js";
 import type { Operation } from "../spec/operations.js";
 import { servedByRawCall, supportOf } from "../spec/support.js";
 import type { RemoteFetcher } from "../remote-input.js";
@@ -139,7 +139,7 @@ async function runRaw(ctx: ToolContext, input: ToolArguments): Promise<CallToolR
     if (priced.kind !== "quote") return outcomeResult(ctx, priced, notes);
     return textResult([quoteText(priced.quote), ...notes].join("\n"));
   }
-  if (op.facts.responseMedia === "image") return fileAnswer("ideogram_api", ctx, req, args.inline_images === true); // the answer IS the file (snap mask's PNG), through the raw call too
+  if (answersWithFile(op)) return fileAnswer("ideogram_api", ctx, req, args.inline_images === true, notes); // the answer IS the file (snap mask's PNG), through the raw call too
   const run = await executeTold(ctx, req, args.wait_s ?? WAIT_DEFAULT_S);
   if (run.kind === "result") return run.result;
   return outcomeResult(ctx, run.outcome, notes, { inlineImages: args.inline_images === true });

@@ -119,7 +119,8 @@ function operationFacts(spec, method, path, op) {
   const content200 = op.responses?.["200"]?.content ?? {};
   const responseRef = content200["application/json"]?.schema;
   const response = resolveSchema(spec, responseRef);
-  const responseMedia = responseRef !== undefined ? "json" : Object.keys(content200).some((t) => t.startsWith("image/")) ? "image" : "none";
+  const types200 = Object.keys(content200);
+  const responseMedia = responseRef !== undefined ? "json" : types200.some((t) => t.startsWith("image/")) ? "image" : types200.some((t) => t.startsWith("video/")) ? "video" : "none";
   const { parameters, dryRun } = parameterFacts(spec, op);
   return {
     id: op.operationId,

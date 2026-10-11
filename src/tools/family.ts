@@ -36,6 +36,9 @@ export interface FamilyToolSpec {
   readonly description: string;
   /** Inputs a 1.x caller may still send that are not request fields (deprecated, mapped by the adapter). */
   readonly legacyInputs?: Readonly<Record<string, ZodType>>;
+  /** This tool's own sentences for fields the family's sentences describe differently (magic prompt's aspect ratios
+   * take an x, snap mask's image takes no asset): read over the family's by `fieldTextsFor`. */
+  readonly fieldTexts?: Readonly<Record<string, string>>;
 }
 
 export interface ModelVariant {
@@ -74,9 +77,9 @@ function singleVariant(spec: FamilyToolSpec): readonly ModelVariant[] | null {
   return [variantFromOperation(operationById(spec.operation), spec.name, spec.operation)];
 }
 
-/** A single-operation tool whose 200 is a file answers within the call: it takes no wait_s. */
+/** A single-operation tool whose operation is no job (a file answer, a prompt, a record) answers within the call: no wait_s. */
 function answersSynchronously(spec: FamilyToolSpec): boolean {
-  return isSingleOperation(spec) && variantsOf(spec)[0].op.facts.responseMedia === "image";
+  return isSingleOperation(spec) && variantsOf(spec)[0].op.async === "none";
 }
 
 const VARIANTS = new Map<string, readonly ModelVariant[]>();
@@ -177,7 +180,7 @@ function variantJsonSchemas(spec: FamilyToolSpec): { oneOf: unknown[]; definitio
 export function advertisedSchema(spec: FamilyToolSpec): z.ZodObject {
   const models = variantsOf(spec).map((v) => v.model);
   const used = new Set(variantsOf(spec).flatMap((v) => [...v.fields]));
-  const described = Object.entries(fieldTextsFor(spec.family)).filter(([name]) => used.has(name));
+  const described = Object.entries({ ...fieldTextsFor(spec.family), ...spec.fieldTexts }).filter(([name]) => used.has(name));
   const inline = isVideoFamily(spec.family) ? {} : { inline_images: z.boolean().optional().describe(INLINE_TEXT) }; // a video is never inline
   const model = isSingleOperation(spec)
     ? {}

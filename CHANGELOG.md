@@ -122,7 +122,15 @@ Step 5: the commercial tools and the v1 utilities, each one operation; nothing o
   offers a dry run; magic prompt says the aspect ratio the model picked; logo layers are listed as layers; the snap
   mask answer can be returned inline and takes no wait; a file answer whose write fails is "the operation ran and
   answered; the file is lost here", never "may have run"; the file answer goes through call()'s send loop (a 429 is
-  retried as everywhere).
+  retried as everywhere). The rules the raw-served operations state in their prose are enforced before any request:
+  exactly one of masks / mask_asset_identifiers and of materials / material_asset_identifiers (both AND neither
+  refused), the person and the garments of virtual try-on, exactly one of text_prompt / json_prompt on the six v1
+  Ideogram 4 generations, image / image_asset_identifier on the text layerizer, at most 15 garment photos on ghost
+  mannequin; the one source rule names model swap's and precise masked edit's source and the v1 edit's `image_urls`,
+  and says only the fields the operation has (snap mask takes no asset). A tool may carry its own field sentences
+  (`FamilyToolSpec.fieldTexts`: magic prompt's aspect ratios take an x, snap mask's image takes no asset); a tool whose
+  operation is no job (magic prompt, provenance, logos, snap mask) takes no `wait_s`; snap mask's answer is said as
+  what it is (white = the object; invert it for inpaint and remove object). `responseMedia` knows `video` too.
 
 - `ideogram_precise_edit` (Ideogram 4.5: the image, an optional mask, up to four `reference_images` or
   `reference_image_asset_identifiers`, `context_window`), `ideogram_remove_background` and `ideogram_remove_object`
