@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-10-11
+
 Step 1 of `docs/DESIGN-ideogram-v2.md`: every image family of Ideogram's documentation index has its own tool.
 Step 2: the account — usage and spend, invoices, API keys — and the webhook signature helper.
 Step 3: custom-model training — datasets, their assets, the training of an Ideogram 4.0 or 3.0 model, the models.
