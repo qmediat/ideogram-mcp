@@ -8,16 +8,17 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { z } from "zod/v4";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { ApiRequest } from "../client.js";
+import type { ApiRequest, MediaKind } from "../client.js";
 import type { BodyInput, QueryValue, Scalar } from "../wire.js";
 import { COUNTERS } from "../counters.js";
+import { mbText } from "../spec/overlay.js";
 import { contractMismatch, execute } from "../lifecycle.js";
 import type { Outcome } from "../lifecycle.js";
 import { IdeogramApiError } from "../errors.js";
 import { operationById } from "../spec/operations.js";
 import type { Operation } from "../spec/operations.js";
 import type { ToolContext } from "./context.js";
-import { outcomeResult, textResult } from "./results.js";
+import { inlineContent, outcomeResult, textResult } from "./results.js";
 
 /** An answer's JSON is printed inline up to this size; above it the file in the output directory is the answer. */
 export const INLINE_JSON_BYTES = 64 * 1024;
@@ -108,6 +109,26 @@ export async function sendOperation<T extends z.ZodType>(ctx: ToolContext, reque
     return { kind: "answer", read: await readOperation(ctx, request, schema) };
   } catch (error) {
     return { kind: sideEffectOf(error), error };
+  }
+}
+
+/** An operation whose 200 is a file (snap mask's image/png): the body saved as the result — the one path of the curated
+ * tool and `ideogram_api` alike; a failure that may have run says so (the request is never resent). */
+export async function fileAnswer(what: string, ctx: ToolContext, req: ApiRequest, inlineImages: boolean, notes: readonly string[] = []): Promise<CallToolResult> {
+  const kind: MediaKind = req.op.facts.responseMedia === "video" ? "video" : "image";
+  try {
+    const saved = await ctx.client.callToFile(req, ctx.outputDir, ctx.budget, kind);
+    const inline = inlineImages && kind === "image" ? await inlineContent([saved]) : { items: [], lines: [] };
+    return { content: [{ type: "text", text: [`Saved: ${saved.path} (${mbText(saved.bytes, 2)}, ${saved.contentType.split(";")[0]})`, ...inline.lines, ...notes].join("\n") }, ...inline.items] };
+  } catch (error) {
+    if (error instanceof IdeogramApiError && error.code === "ANSWER_NOT_SAVED") {
+      return textResult(`${what}: ${error.message}\nThe operation ran and answered; the file is lost here. Sending it again runs it again.`, true);
+    }
+    if (error instanceof IdeogramApiError && error.status >= 200 && error.status < 300) {
+      return textResult(`${what}: ${error.message}\nThe operation ran and answered, with no file this server keeps.`, true); // not a file of the kind, or over the cap
+    }
+    const note = req.op.method !== "GET" && sideEffectOf(error) === "unknown" ? `\nThe request had left this machine: ${req.op.id} MAY have run — send it again only if the answer is not in the output directory.` : "";
+    return textResult(`${what}: ${errorText(error)}${note}`, true);
   }
 }
 

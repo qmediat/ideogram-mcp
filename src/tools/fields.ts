@@ -74,6 +74,33 @@ export const FIELD_TEXT: Readonly<Record<string, string>> = {
   prompt_expansion_mode: "How much the model may rewrite the prompt: disabled, fast, balanced (default) or quality",
   video_asset_identifier: "The video to edit, as an Ideogram asset",
   resolution_tier: "The output resolution tier",
+  // the single-operation tools' own fields
+  language: "The target language of the copy (one request per language; Arabic is rendered right-to-left)",
+  exact_copy: "Pre-approved wordings, one `original => replacement` per line; each names the text element showing original and sets it to replacement",
+  platform: "The ad platform whose published safe zone the ad stays inside (google, meta, meta_reels, meta_stories, snapchat, tiktok)",
+  variation_type: "The axis to vary: people, setting, group_size or scene",
+  colors: "One target colour per mask as a six-digit hex code (#B3202C), paired by position with masks (at most 4)",
+  masks: "Local mask files (or public https URLs) marking the regions to change, paired by position (at most 4, the product photo's pixel size)",
+  mask_asset_identifiers: "Ideogram assets as the masks, paired by position (at most 4)",
+  materials: "Local material reference images (or public https URLs) whose colour, texture, pattern scale and orientation are applied, paired by position with masks (at most 4)",
+  material_asset_identifiers: "Ideogram assets as the material references, paired by position (at most 4)",
+  instruction: "Plain-language direction: the pose or camera for a pose variant, the materials and construction for a render, the reconstruction guidance for a ghost mannequin",
+  metadata: "A JSON object serialized as a string with factual product context (title, brand, category, colour, material, item code)",
+  view: "The camera view of the output garment: front, three_quarter or back",
+  garment_images: "More photos of the same garment, local files or public https URLs (at most 15; several angles let obscured construction be reconstructed)",
+  garment_asset_identifiers: "Ideogram assets as more photos of the same garment, in order (at most 15)",
+  front_image: "The front-view garment photo (local file or public https URL); front_asset_identifier for an Ideogram asset",
+  back_image: "The back-view garment photo (local file or public https URL); back_asset_identifier for an Ideogram asset",
+  left_image: "The left-view garment photo (local file or public https URL); left_asset_identifier for an Ideogram asset",
+  right_image: "The right-view garment photo (local file or public https URL); right_asset_identifier for an Ideogram asset",
+  top_image: "The top-view garment photo (local file or public https URL); top_asset_identifier for an Ideogram asset",
+  bottom_image: "The bottom-view garment photo (local file or public https URL); bottom_asset_identifier for an Ideogram asset",
+  source_image: "The fashion image to edit, a local file or a public https URL; source_asset_identifier for an Ideogram asset",
+  pose_reference_asset_identifier: "An Ideogram asset whose pose the model takes",
+  sketch_image: "The fashion sketch to render, a local file or a public https URL; sketch_asset_identifier for an Ideogram asset",
+  text_prompt: "The natural-language prompt to rewrite into an Ideogram 4.0 JSON prompt",
+  design_image: "The flat design to analyze for logos, a local file or a public https URL",
+  content: "The image whose provenance is checked, a local file or a public https URL",
 };
 
 /** The sentences the video families show in place of the image families' for the fields they share: a video's
@@ -92,9 +119,21 @@ export const VIDEO_FIELD_TEXT: Readonly<Record<string, string>> = {
   private: FIELD_TEXT_PRIVATE,
 };
 
-/** The field sentences a family's tool advertises: the video families read their own sentences over the shared ones. */
+/** The sentences the single-operation tools (the tool family) show in place of the image families' for the fields they
+ * share: their aspect ratios take a colon, their quality has three tiers, their reference images are logos to match. */
+export const TOOL_FIELD_TEXT: Readonly<Record<string, string>> = {
+  aspect_ratio: "Output aspect ratio with a colon — 1:1, 3:4, 4:3, 16:9 or 9:16 where the operation lists them (colorways and material swap default to the photo's ratio, ghost mannequin and sketch to render to 1:1, pose variants to the nearest supported); magic prompt: the ratio to pin, or omitted for the model's pick",
+  quality: "low, medium or high: higher may improve detail and takes longer",
+  reference_images: "Local image files (or public https URLs) of the logos to match in the design, REF_0, REF_1, … in the order given (at most 10)",
+  image: "The source photo or ad to work on: a local image file or a public https URL (image_asset_identifier for an Ideogram asset)",
+  num_images: "How many outputs to make (each is billed)",
+  seed: "Random seed for a repeatable result",
+};
+
+/** The field sentences a family's tool advertises: the video and tool families read their own sentences over the shared ones. */
 export function fieldTextsFor(family: string | null): Readonly<Record<string, string>> {
-  return isVideoFamily(family) ? { ...FIELD_TEXT, ...VIDEO_FIELD_TEXT } : FIELD_TEXT;
+  if (isVideoFamily(family)) return { ...FIELD_TEXT, ...VIDEO_FIELD_TEXT };
+  return family === "tool" ? { ...FIELD_TEXT, ...TOOL_FIELD_TEXT } : FIELD_TEXT;
 }
 
 export const VIDEO_INLINE_NOTE = "A video is saved, never returned inline: inline_images has no effect here.";

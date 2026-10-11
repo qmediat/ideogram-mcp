@@ -28,6 +28,7 @@ const EXAMPLES_CONTRADICTING_THEIR_SCHEMA = {
   GetModelResponse: "model.status and training_runs[].status are null in the example, enums in the schema",
   ListModelsResponse: "models[].status and training_runs[].status as in GetModelResponse",
   UploadDatasetAssetsResponse: "failed_assets[].failure_reason is null and successful_assets[].asset_identifier a string in the example, an enum and an object in the schema",
+  LayeredImageGenerationResponseV3: "data[] lacks is_image_safe and prompt and names a resolution outside the enum in the example (the v1 layerize design operation, raw since 2.5.0)",
 };
 
 test("every served operation's response example parses with its generated schema, except the provider's own contradictions", () => {

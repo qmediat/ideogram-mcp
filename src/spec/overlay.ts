@@ -9,6 +9,7 @@
  *   of the specification that states it; test/overlay.test.mjs checks the anchor both ways, so a provider change of
  *   that prose fails the suite instead of leaving a stale rule.
  */
+import { z } from "zod/v4";
 import type { ZodType } from "zod/v4";
 import type { FileFieldFacts } from "./facts.js";
 import { isExposable } from "./operations.js";
@@ -191,8 +192,11 @@ export const CONSTRAINTS: readonly Constraint[] = [
       "post_remix_image_v2_ideogram_v3_character",
       "post_remix_image_v2_ideogram_v3_custom_model",
       "post_remix_image_v2_ideogram_v4",
+      "post_colorways",
+      "post_material_swap",
+      "post_text_layerizer",
     ]),
-    anchor: { field: "image_asset_identifier", phrase: /never both/ },
+    anchor: { field: "image_asset_identifier", phrase: /never both|Provide\s+exactly\s+one\s+of\s+`image_asset_identifier`\s+or\s+`image`|Provide\s+exactly\s+one\s+of\s+`image`\s+or\s+`image_asset_identifier`/ },
     text: "image and image_asset_identifier are alternatives; give one",
     violated: (f) => given(f, "image") && given(f, "image_asset_identifier"),
   },
@@ -389,6 +393,85 @@ export const CONSTRAINTS: readonly Constraint[] = [
     violated: (f) => countOf(f, ["reference_images", "reference_image_asset_identifiers", "reference_video_asset_identifiers", "reference_audios"]) > 12,
   },
   {
+    id: "masks-or-assets",
+    operations: new Set(["post_colorways", "post_material_swap"]),
+    anchor: { field: "mask_asset_identifiers", phrase: /Provide\s+exactly\s+one\s+of\s+`mask_asset_identifiers`\s+or\s+`masks`/ },
+    text: "exactly one of masks and mask_asset_identifiers: give one of them",
+    violated: (f) => given(f, "masks") === given(f, "mask_asset_identifiers"),
+  },
+  {
+    id: "materials-or-assets",
+    operations: new Set(["post_material_swap"]),
+    anchor: { field: "material_asset_identifiers", phrase: /Provide\s+exactly\s+one\s+of\s+`material_asset_identifiers`\s+or\s+`materials`/ },
+    text: "exactly one of materials and material_asset_identifiers: give one of them",
+    violated: (f) => given(f, "materials") === given(f, "material_asset_identifiers"),
+  },
+  {
+    id: "garments-or-assets",
+    operations: new Set(["post_ghost_mannequin"]),
+    anchor: { field: "garment_asset_identifiers", phrase: /Mutually\s+exclusive\s+with\s+`garment_images`/ },
+    text: "garment_images and garment_asset_identifiers are alternatives; give one",
+    violated: (f) => given(f, "garment_images") && given(f, "garment_asset_identifiers"),
+  },
+  {
+    id: "ghost-mannequin-at-most-15",
+    operations: new Set(["post_ghost_mannequin"]),
+    anchor: { field: "garment_images", phrase: /At most 15 garment images are accepted in total/ },
+    text: "at most 15 garment photos in total: the six views (file or asset) and garment_images / garment_asset_identifiers together",
+    violated: (f) => countOf(f, GHOST_MANNEQUIN_PHOTOS) > 15,
+  },
+  {
+    id: "try-on-person-or-asset",
+    operations: new Set(["post_virtual_try_on"]),
+    anchor: { field: "person_image", phrase: /Provide\s+exactly\s+one\s+of\s+`person_asset_identifier`\s+or\s+`person_image`/ },
+    text: "exactly one of person_image and person_asset_identifier: give one of them",
+    violated: (f) => given(f, "person_image") === given(f, "person_asset_identifier"),
+    coversSource: true,
+  },
+  {
+    id: "try-on-garments-or-assets",
+    operations: new Set(["post_virtual_try_on"]),
+    anchor: { field: "garment_images", phrase: /Provide\s+exactly\s+one\s+of\s+`garment_asset_identifiers`\s+or\s+`garment_images`/ },
+    text: "exactly one of garment_images and garment_asset_identifiers: give one of them",
+    violated: (f) => given(f, "garment_images") === given(f, "garment_asset_identifiers"),
+  },
+  {
+    // The v1 Ideogram 4.0 / 4.5 generations take a natural-language prompt or a structured one, never both, never none.
+    id: "prompt-choice",
+    operations: new Set(["post_generate_image_v4_cfg_distilled_async", "post_generate_image_v4_cfg_distilled", "post_generate_image_v4_fp8", "post_generate_image_v4_stable", "post_generate_image_v45_async", "post_generate_image_v45"]),
+    anchor: { field: "text_prompt", phrase: /Mutually\s+exclusive\s+with\s+`json_prompt`/ },
+    text: "exactly one of text_prompt and json_prompt: give one of them",
+    violated: (f) => given(f, "text_prompt") === given(f, "json_prompt"),
+  },
+  {
+    id: "colors-paired-with-masks",
+    operations: new Set(["post_colorways"]),
+    anchor: { field: "colors", phrase: /One target color per mask in `masks`[\s\S]*paired by position/ },
+    text: "colors are paired by position with the masks: give as many colors as masks (or mask_asset_identifiers)",
+    violated: (f) => {
+      const masks = Math.max(countOf(f, ["masks"]), countOf(f, ["mask_asset_identifiers"])); // one of the two is given (the alternatives rule says so otherwise)
+      return masks > 0 && countOf(f, ["colors"]) !== masks;
+    },
+  },
+  {
+    id: "materials-per-mask",
+    operations: new Set(["post_material_swap"]),
+    anchor: { field: "materials", phrase: /Send\s+one\s+material\s+for\s+every\s+mask,\s+or\s+exactly\s+one\s+per\s+mask,\s+paired\s+by\s+position/ },
+    text: "materials are one for every mask, or exactly one per mask: give one material or as many as masks",
+    violated: (f) => {
+      const materials = Math.max(countOf(f, ["materials"]), countOf(f, ["material_asset_identifiers"]));
+      const masks = Math.max(countOf(f, ["masks"]), countOf(f, ["mask_asset_identifiers"]));
+      return materials > 1 && masks > 0 && materials !== masks;
+    },
+  },
+  {
+    id: "logo-references-at-most-10",
+    operations: new Set(["post_layerize_logos"]),
+    anchor: { field: "reference_images", phrase: /maximum 10 images/ },
+    text: "reference_images takes at most 10 logo images",
+    violated: (f) => countOf(f, ["reference_images"]) > 10,
+  },
+  {
     // The start frame is one of a file and an asset ("in place of uploading `image`"), as remix's image-or-asset rule.
     id: "video-image-or-asset",
     operations: new Set(["post_generate_video_kling_v3_standard_image_to_video", "post_generate_video_minimax_h3_image_to_video", "post_generate_video_seed_dance25_image_to_video", "post_generate_video_seed_dance2_image_to_video"]),
@@ -413,28 +496,70 @@ export const CONSTRAINTS: readonly Constraint[] = [
   },
 ];
 
-/** The fields that carry an operation's source image: a local file (or a URL) or an Ideogram asset. */
-export const SOURCE_FIELDS: readonly string[] = ["image", "images", "image_asset_identifier", "image_asset_identifiers"];
+/** The fields that carry an operation's source image: a local file (or a URL), an Ideogram asset, or the v1 edit's
+ * Ideogram image URLs. */
+export const SOURCE_FIELDS: readonly string[] = ["image", "images", "image_asset_identifier", "image_asset_identifiers", "image_urls"];
 
-export const SOURCE_RULE_TEXT = "needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)";
+/** How each source field is said in the rule's sentence. */
+const SOURCE_FIELD_TEXT: Readonly<Record<string, string>> = {
+  image: "image (a local file or a public https URL)",
+  images: "images (local files or public https URLs)",
+  image_asset_identifier: "image_asset_identifier (an Ideogram asset)",
+  image_asset_identifiers: "image_asset_identifiers (Ideogram assets)",
+  image_urls: "image_urls (URLs of Ideogram images)",
+};
+
+/** The source rule's sentence for the operation: only the source fields its body takes (snap mask takes no asset). */
+function imageSourceText(op: Operation): string {
+  const body = op.schemas.body;
+  const present = body instanceof z.ZodObject ? SOURCE_FIELDS.filter((f) => f in body.shape) : SOURCE_FIELDS;
+  return `needs a source image: ${present.map((f) => SOURCE_FIELD_TEXT[f]).join(" or ")}`;
+}
+
+const GHOST_MANNEQUIN_PHOTOS: readonly string[] = ["front_image", "back_image", "left_image", "right_image", "top_image", "bottom_image", "front_asset_identifier", "back_asset_identifier", "left_asset_identifier", "right_asset_identifier", "top_asset_identifier", "bottom_asset_identifier", "garment_images", "garment_asset_identifiers"];
+
+/** The operations whose source is not `image`: the fields that carry it (a file or an asset) and the rule's sentence.
+ * The specification leaves them optional because the asset is the alternative (ghost mannequin: "Supply at least one
+ * garment image"); the one source rule says so before any request. */
+const SOURCE_IMAGE_TEXT = "source_image (a local file or a public https URL) or source_asset_identifier (an Ideogram asset)";
+
+const SOURCE_BY_OPERATION: Readonly<Record<string, { readonly fields: readonly string[]; readonly text: string }>> = {
+  post_model_pose_variants: { fields: ["source_image", "source_asset_identifier"], text: `needs the fashion image: ${SOURCE_IMAGE_TEXT}` },
+  post_model_swap: { fields: ["source_image", "source_asset_identifier"], text: `needs the working image: ${SOURCE_IMAGE_TEXT}` },
+  post_precise_masked_edit: { fields: ["source_image", "source_asset_identifier"], text: `needs the source: ${SOURCE_IMAGE_TEXT}` },
+  post_virtual_try_on: { fields: ["person_image", "person_asset_identifier"], text: "needs the person: person_image (a local file or a public https URL) or person_asset_identifier (an Ideogram asset)" },
+  post_sketch_to_render: { fields: ["sketch_image", "sketch_asset_identifier"], text: "needs the sketch: sketch_image (a local file or a public https URL) or sketch_asset_identifier (an Ideogram asset)" },
+  post_ghost_mannequin: {
+    fields: GHOST_MANNEQUIN_PHOTOS,
+    text: "needs at least one garment photo: a view (front_image, back_image, left_image, right_image, top_image, bottom_image — files or URLs — or its *_asset_identifier) or garment_images / garment_asset_identifiers",
+  },
+};
+
+function sourceOf(op: Operation): { readonly fields: readonly string[]; readonly text: string } | null {
+  const own = SOURCE_BY_OPERATION[op.id];
+  if (own !== undefined) return own;
+  return needsImageSource(op) ? { fields: SOURCE_FIELDS, text: imageSourceText(op) } : null;
+}
 
 /** Every operation that works on a source image — one of a family other than generate with an `image` / `images`
  * file field — needs one: the schemas leave the file optional because the asset is the alternative. The rule is
  * listed with the constraints (discovery, the API reference) and enforced for the curated tools and `ideogram_api` alike. */
-export function needsSource(op: Operation): boolean {
+function needsImageSource(op: Operation): boolean {
   if (op.family === null || op.family === "generate") return false;
   return op.facts.fileFields.some((f) => f.name === "image" || f.name === "images");
 }
 
 export function sourceRefusal(op: Operation, fields: BodyFields): string | null {
-  if (!needsSource(op) || anyGiven(fields, SOURCE_FIELDS)) return null;
+  const source = sourceOf(op);
+  if (source === null || anyGiven(fields, source.fields)) return null;
   if (CONSTRAINTS.some((c) => c.coversSource === true && c.operations.has(op.id) && c.violated(fields))) return null; // said by that rule
-  return `${op.id} ${SOURCE_RULE_TEXT}`;
+  return `${op.id} ${source.text}`;
 }
 
 /** Every rule the server enforces for the operation beyond its schema, as sentences: the source rule, then the constraints. */
 export function rulesOf(op: Operation): string[] {
-  return [...(needsSource(op) ? [SOURCE_RULE_TEXT] : []), ...CONSTRAINTS.filter((c) => c.operations.has(op.id)).map((c) => c.text)];
+  const source = sourceOf(op);
+  return [...(source === null ? [] : [source.text]), ...CONSTRAINTS.filter((c) => c.operations.has(op.id)).map((c) => c.text)];
 }
 
 /** The sentences of every constraint the fields break for the operation; empty when none. */

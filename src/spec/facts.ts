@@ -40,6 +40,9 @@ export interface SpecOperationFacts {
   /** The component per media type: they differ for an operation whose multipart and JSON bodies differ. */
   readonly requestSchemas: { readonly multipart: string | null; readonly json: string | null };
   readonly responseSchema: string | null;
+  /** What the 200 carries: a JSON body (the rule), an image (`image/*` — snap mask answers the mask as a PNG), a video
+   * (`video/*`; none in the snapshot), or nothing declared. */
+  readonly responseMedia: "json" | "image" | "video" | "none";
   /** The top-level property names of the 200 response schema. */
   readonly responseProperties: readonly string[];
   /** The operation declares the `dry_run` query parameter. */

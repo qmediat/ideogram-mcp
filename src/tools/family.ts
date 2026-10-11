@@ -12,7 +12,7 @@ import type { ApiRequest } from "../client.js";
 import { isVideoFamily, WAIT_DEFAULT_S, WAIT_MAX_S } from "../lifecycle.js";
 import { documentedModelsOf } from "../registry.js";
 import { constraintViolations, sourceRefusal } from "../spec/overlay.js";
-import { bodySchemaFor, modelOperation } from "../spec/operations.js";
+import { bodySchemaFor, modelOperation, operationById } from "../spec/operations.js";
 import type { Family, Operation } from "../spec/operations.js";
 import { loadUploads } from "../uploads.js";
 import type { FileRef } from "../uploads.js";
@@ -26,11 +26,19 @@ export type ToolArguments = Readonly<Record<string, unknown>>;
 export interface FamilyToolSpec {
   readonly name: string;
   readonly family: Family;
+  /** The model chosen when the caller names none; for a single-operation tool, the tool's own name (its one label). */
   readonly defaultModel: string;
+  /** A single-operation tool (a commercial tool, a v1 utility — step 5): the one operation it runs. Such a tool has
+   * no `model` input and its one variant is labelled by the tool's name; everything else (the fields' check, the
+   * source rule, the private default, the request) is the family mechanism. */
+  readonly operation?: string;
   readonly title: string;
   readonly description: string;
   /** Inputs a 1.x caller may still send that are not request fields (deprecated, mapped by the adapter). */
   readonly legacyInputs?: Readonly<Record<string, ZodType>>;
+  /** This tool's own sentences for fields the family's sentences describe differently (magic prompt's aspect ratios
+   * take an x, snap mask's image takes no asset): read over the family's by `fieldTextsFor`. */
+  readonly fieldTexts?: Readonly<Record<string, string>>;
 }
 
 export interface ModelVariant {
@@ -48,11 +56,30 @@ export interface PreparedCall {
 }
 
 function variantOf(family: Family, model: string): ModelVariant {
-  const op = modelOperation(family, model);
+  return variantFromOperation(modelOperation(family, model), model, `${family}/${model}`);
+}
+
+/** One variant of a tool: the operation's generated body without the reserved fields, under its label. */
+function variantFromOperation(op: Operation | null, label: string, what: string): ModelVariant {
   const body = op?.schemas.body;
-  if (op === null || !(body instanceof z.ZodObject)) throw new Error(`${family}/${model} has no generated object body`);
+  if (op === null || !(body instanceof z.ZodObject)) throw new Error(`${what} has no generated object body`);
   const shape = Object.fromEntries(Object.entries(body.shape).filter(([name]) => !RESERVED_FIELDS.has(name)));
-  return { model, op, fields: new Set(Object.keys(shape)), schema: z.object(shape) };
+  return { model: label, op, fields: new Set(Object.keys(shape)), schema: z.object(shape) };
+}
+
+/** A single-operation tool: its variant is its one operation, labelled by the tool's name. */
+export function isSingleOperation(spec: FamilyToolSpec): boolean {
+  return spec.operation !== undefined;
+}
+
+function singleVariant(spec: FamilyToolSpec): readonly ModelVariant[] | null {
+  if (spec.operation === undefined) return null;
+  return [variantFromOperation(operationById(spec.operation), spec.name, spec.operation)];
+}
+
+/** A single-operation tool whose operation is no job (a file answer, a prompt, a record) answers within the call: no wait_s. */
+function answersSynchronously(spec: FamilyToolSpec): boolean {
+  return isSingleOperation(spec) && variantsOf(spec)[0].op.async === "none";
 }
 
 const VARIANTS = new Map<string, readonly ModelVariant[]>();
@@ -61,7 +88,7 @@ const VARIANTS = new Map<string, readonly ModelVariant[]>();
 export function variantsOf(spec: FamilyToolSpec): readonly ModelVariant[] {
   const cached = VARIANTS.get(spec.name);
   if (cached !== undefined) return cached;
-  const variants = documentedModelsOf(spec.family).map((model) => variantOf(spec.family, model));
+  const variants = singleVariant(spec) ?? documentedModelsOf(spec.family).map((model) => variantOf(spec.family, model));
   if (!variants.some((v) => v.model === spec.defaultModel)) throw new Error(`${spec.name}: no model ${spec.defaultModel}`);
   VARIANTS.set(spec.name, variants);
   return variants;
@@ -126,14 +153,17 @@ export function inlineSmallDefinitions(json: JsonObject): void {
 }
 
 function variantJsonSchemas(spec: FamilyToolSpec): { oneOf: unknown[]; definitions: unknown } {
+  const single = isSingleOperation(spec);
   const variants = variantsOf(spec).map((v) => {
     const model = v.model === spec.defaultModel ? z.literal(v.model).optional() : z.literal(v.model);
-    return z.object({ model, ...v.schema.shape });
+    return single ? v.schema : z.object({ model, ...v.schema.shape }); // a single-operation tool has no model to tell its one variant by
   });
-  const json = z.toJSONSchema(z.union(variants), { io: "input", reused: "ref", target: "draft-7", unrepresentable: "any" }) as {
+  const json = z.toJSONSchema(single ? variants[0] : z.union(variants), { io: "input", reused: "ref", target: "draft-7", unrepresentable: "any" }) as {
     anyOf?: JsonObject[];
     definitions?: JsonObject;
+    properties?: JsonObject;
   };
+  if (single) json.anyOf = [{ ...json, $schema: undefined, definitions: undefined }]; // the one variant, without the root's own keys
   const definitions = json.definitions ?? {};
   if (!Array.isArray(json.anyOf)) throw new Error(`${spec.name}: the variants did not render as a union (${variants.length} model(s))`);
   for (const v of json.anyOf) {
@@ -150,15 +180,20 @@ function variantJsonSchemas(spec: FamilyToolSpec): { oneOf: unknown[]; definitio
 export function advertisedSchema(spec: FamilyToolSpec): z.ZodObject {
   const models = variantsOf(spec).map((v) => v.model);
   const used = new Set(variantsOf(spec).flatMap((v) => [...v.fields]));
-  const described = Object.entries(fieldTextsFor(spec.family)).filter(([name]) => used.has(name));
+  const described = Object.entries({ ...fieldTextsFor(spec.family), ...spec.fieldTexts }).filter(([name]) => used.has(name));
   const inline = isVideoFamily(spec.family) ? {} : { inline_images: z.boolean().optional().describe(INLINE_TEXT) }; // a video is never inline
+  const model = isSingleOperation(spec)
+    ? {}
+    : {
+        model: z
+          .string()
+          .optional()
+          .meta({ enum: models, description: `The model (default ${spec.defaultModel}); each takes the fields of its variant below` }),
+      };
   return z
     .looseObject({
-      model: z
-        .string()
-        .optional()
-        .meta({ enum: models, description: `The model (default ${spec.defaultModel}); each takes the fields of its variant below` }),
-      wait_s: z.number().int().min(0).max(WAIT_MAX_S).optional().describe(WAIT_TEXT),
+      ...model,
+      ...(answersSynchronously(spec) ? {} : { wait_s: z.number().int().min(0).max(WAIT_MAX_S).optional().describe(WAIT_TEXT) }),
       ...inline,
       ...Object.fromEntries(described.map(([name, text]) => [name, z.unknown().optional().describe(text)])),
       ...spec.legacyInputs,
@@ -170,6 +205,7 @@ function refusalFor(spec: FamilyToolSpec, variant: ModelVariant, field: string):
   if (RESERVED_FIELDS.has(field)) {
     return field === "async" ? "`async` is managed by this tool: use wait_s" : `\`${field}\` is available through ideogram_api only`;
   }
+  if (isSingleOperation(spec)) return `\`${field}\` is not a parameter of ${spec.name} (${variant.op.id})`;
   const takers = variantsOf(spec).filter((v) => v.fields.has(field)).map((v) => v.model);
   const who = takers.length === 0 ? `no ${spec.name} model takes it` : `the models that take it: ${takers.join(", ")}`;
   return `\`${field}\` is not a parameter of ${variant.model}; ${who}`;
@@ -241,7 +277,8 @@ function withPrivateDefault(variant: ModelVariant, fields: Record<string, unknow
 /** Turns a curated tool's arguments into one checked request of the chosen model. */
 /** `remote` is the call's URL fetcher; a caller without a call passes `undefined` on purpose (a URL input is then refused). */
 export async function prepare(spec: FamilyToolSpec, args: ToolArguments, remote: RemoteFetcher | undefined): Promise<PreparedCall> {
-  const resolved = resolveModel(spec.family, args, spec.defaultModel);
+  if (isSingleOperation(spec) && args.model !== undefined) throw new Error(`${spec.name} runs one operation (${spec.operation}); it takes no model`);
+  const resolved = isSingleOperation(spec) ? { model: spec.name, notes: [] } : resolveModel(spec.family, args, spec.defaultModel);
   const variant = variantsOf(spec).find((v) => v.model === resolved.model);
   if (variant === undefined) {
     throw new Error(`${spec.name} has no model ${resolved.model}; one of: ${variantsOf(spec).map((v) => v.model).join(", ")}`);
@@ -250,7 +287,7 @@ export async function prepare(spec: FamilyToolSpec, args: ToolArguments, remote:
   if (!wait.success) throw new Error(`wait_s must be a whole number of seconds from 0 to ${WAIT_MAX_S}`);
   const legacy = new Set(Object.keys(spec.legacyInputs ?? {})); // a legacy input of ANOTHER tool is a foreign field, refused by name
   const requestFields = Object.fromEntries(Object.entries(args).filter(([name]) => !CONTROL_FIELDS.has(name) && !legacy.has(name)));
-  const adapted = adaptFields(requestFields, variant.fields);
+  const adapted = isSingleOperation(spec) ? { fields: requestFields, notes: [] } : adaptFields(requestFields, variant.fields); // the 1.x adapter knows the 1.x families, not these
   checkSource(spec, variant, adapted.fields);
   const fields = withPrivateDefault(variant, adapted.fields);
   checkFields(spec, variant, fields);

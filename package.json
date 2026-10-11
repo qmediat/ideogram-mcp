@@ -9,7 +9,7 @@
     "CHANGELOG.md",
     "SECURITY.md"
   ],
-  "description": "MCP server for the Ideogram platform (api.ideogram.ai v2): every image and video model the platform sells through one API key — Ideogram 4.5/4.0/3.0, GPT Image, Nano Banana, Z-Image, P-Image, Topaz upscalers, Seedance/Kling/MiniMax video — with price quotes (dry_run), async generations you can resume, account usage, custom-model training, a discovery tool and a validated raw call; native fetch, two runtime dependencies",
+  "description": "MCP server for the Ideogram platform (api.ideogram.ai v2): every image and video model the platform sells through one API key — Ideogram 4.5/4.0/3.0, GPT Image, Nano Banana, Z-Image, P-Image, Topaz upscalers, Seedance/Kling/MiniMax video — the commercial tools (ad localizer/resizer/variations, colorways, ghost mannequin, material swap, pose variants, sketch to render) and the utilities (magic prompt, layerize logos, provenance, snap mask), with price quotes (dry_run), async generations you can resume, account usage, custom-model training, a discovery tool and a validated raw call; native fetch, two runtime dependencies",
   "type": "module",
   "main": "dist/index.js",
   "bin": {

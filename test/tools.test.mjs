@@ -179,7 +179,7 @@ test("ideogram_api refuses by class, by the support table and undocumented opera
     [{ operation: "post_generate_image" }, /legacy path/],
     [{ operation: "post_batch" }, /provider's own/],
     [{ operation: "get_usage_info" }, /web-app session/],
-    [{ operation: "post_ad_resizer" }, /planned for a later release/],
+    [{ operation: "post_lookbook" }, /set allow_undocumented: true/],
     [{ operation: "post_reframe_image_auto" }, /set allow_undocumented: true/],
     [{ operation: "nope" }, /No operation nope/],
   ];

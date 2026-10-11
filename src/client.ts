@@ -53,6 +53,9 @@ export const MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;
  * estimates from the bit rates — no real video was measured). */
 export const MAX_VIDEO_DOWNLOAD_BYTES = 512 * 1024 * 1024;
 
+/** The two ways a 2xx body is refused by the save itself (never a loss): not a file of the kind, or over the cap. */
+const SAVE_REFUSALS: ReadonlySet<string> = new Set(["DOWNLOAD_INVALID_TYPE", "DOWNLOAD_TOO_LARGE"]);
+
 /** What a download is expected to be: the result's kind decides the accepted media types and the cap — a video link
  * that answers an image (a placeholder behind a 200) is refused, never saved as the promised mp4. */
 export type MediaKind = "image" | "video";
@@ -204,18 +207,43 @@ export class IdeogramClient {
 
   /** Sends one request inside the call's budget; resolves with the parsed 2xx body, rejects with a typed IdeogramApiError. */
   async call(req: ApiRequest, budget: CallBudget): Promise<ApiResult> {
+    const response = await this.send(req, budget, "application/json");
+    return { status: response.status, body: await parseJson(response, req) };
+  }
+
+  /** Sends one request whose 200 is a file, not JSON (snap mask answers the mask as image/png): the same send as
+   * call() — the body's cap, the 429 and never-sent retries, the typed errors — then the body streamed into `outputDir`
+   * under the kind's cap and types, exactly as a download is. A 200 that is not a file of the kind, or over the cap, keeps
+   * the save's own code (DOWNLOAD_INVALID_TYPE, DOWNLOAD_TOO_LARGE) with the status it came with; a 200 whose file cannot
+   * be written is ANSWER_NOT_SAVED: the operation ran, its answer is lost here (never "may have run"). */
+  async callToFile(req: ApiRequest, outputDir: string, budget: CallBudget, kind: MediaKind): Promise<SavedFile> {
+    const response = await this.send(req, budget, kind === "video" ? "video/mp4" : "image/*");
+    try {
+      return await this.saveResponse(response, outputDir, budget, kind);
+    } catch (error) {
+      // the save's own refusals (not a file of the kind, over the cap) say what the answer was; anything else — a failed
+      // write, a cut connection, the budget's end mid-body — is the answer lost
+      if (error instanceof IdeogramApiError && SAVE_REFUSALS.has(error.code)) throw new IdeogramApiError(response.status, error.code, `${req.op.id} answered ${response.status}: ${error.message}`, { sent: true });
+      throw new IdeogramApiError(response.status, "ANSWER_NOT_SAVED", `${req.op.id} answered ${response.status}; its answer could not be saved: ${error instanceof IdeogramApiError ? error.message : networkErrorText(error)}`, { sent: true });
+    }
+  }
+
+  /** The one send loop: the encoded body's cap, every attempt within the budget, a retry on 429 or on a request that
+   * never left (a POST that may have reached Ideogram is never resent), the typed error of a failure — and the ok
+   * response for the caller to read as JSON or as a file. */
+  private async send(req: ApiRequest, budget: CallBudget, accept: string): Promise<Response> {
     const { url, body } = this.encode(req);
     if (body !== null && req.body?.files.length) {
       const refusal = requestBytesRefusal(req.op, body.bytes.byteLength);
       if (refusal !== null) throw new Error(refusal);
     }
-    const headers: Record<string, string> = { ...req.headers, "Api-Key": this.options.apiKey, Accept: "application/json" };
+    const headers: Record<string, string> = { ...req.headers, "Api-Key": this.options.apiKey, Accept: accept };
     if (body !== null) headers["Content-Type"] = body.contentType;
     const idempotent = req.op.method === "GET";
     for (let attempt = 0; ; attempt++) {
       const begun = budget.clock.now();
       const result = await this.attempt(req.op.method, url, headers, body?.bytes ?? null, budget);
-      if (result.kind === "response" && result.response.ok) return { status: result.response.status, body: await parseJson(result.response, req) };
+      if (result.kind === "response" && result.response.ok) return result.response;
       const wait = backoffMs(attempt, result.kind === "response" ? result.response : undefined);
       const reserve = idempotent ? 0 : budget.clock.now() - begun; // a POST is resent only with time for an attempt as long as this one
       if (attempt < this.options.maxRetries && this.fits(budget, wait, reserve) && this.retryable(idempotent, result)) {
@@ -231,8 +259,13 @@ export class IdeogramClient {
   /** Downloads one generated file into `outputDir`, streamed with a byte counter; nothing is left behind on failure. */
   async download(url: string, outputDir: string, budget: CallBudget, kind: MediaKind = "image"): Promise<SavedFile> {
     this.checkDownloadUrl(url);
-    const maxBytes = kind === "video" ? MAX_VIDEO_DOWNLOAD_BYTES : this.options.maxDownloadBytes;
     const response = await this.fetchDownload(url, budget);
+    return this.saveResponse(response, outputDir, budget, kind);
+  }
+
+  /** A 2xx response's body as a file of the expected kind: the type and the cap checked, the bytes streamed. */
+  private async saveResponse(response: Response, outputDir: string, budget: CallBudget, kind: MediaKind): Promise<SavedFile> {
+    const maxBytes = kind === "video" ? MAX_VIDEO_DOWNLOAD_BYTES : this.options.maxDownloadBytes;
     const contentType = (response.headers.get("Content-Type") ?? "").toLowerCase();
     const extension = MEDIA_EXTENSIONS.find(([prefix]) => contentType.startsWith(prefix) && prefix.startsWith(kind))?.[1];
     if (extension === undefined) {

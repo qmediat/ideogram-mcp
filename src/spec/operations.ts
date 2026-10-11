@@ -151,14 +151,17 @@ function familyOf(facts: SpecOperationFacts, cls: OperationClass): FamilyMatch |
   return match;
 }
 
-const PAYLOAD_KEYS: readonly string[] = ["data", "descriptions", "json_prompt", "api_keys", "invoices", "buckets", "assets"];
-
+/** `optional`: the body takes `async`; `only`: the 200 is an acknowledgement — a generation id with at most the job's
+ * own facts (time, status, seed, the size a reframe will make), no payload; an answer that NAMES a generation beside
+ * facts of its own (provenance verify) is no job; `none`: anything else. test/overlay.test.mjs pins the kinds. */
 function asyncKindOf(facts: SpecOperationFacts): AsyncKind {
   if (facts.asyncField) return "optional";
   const props = facts.responseProperties;
-  const acknowledgement = props.includes("generation_id") && !props.some((p) => PAYLOAD_KEYS.includes(p));
+  const acknowledgement = props.includes("generation_id") && props.every((p) => ACKNOWLEDGEMENT_PROPERTIES.has(p));
   return acknowledgement ? "only" : "none";
 }
+
+const ACKNOWLEDGEMENT_PROPERTIES: ReadonlySet<string> = new Set(["generation_id", "created", "status", "seed", "width", "height"]);
 
 /** The generated schemas by lower-cased export name (the generator's names are a case transform of operationId). */
 const GENERATED_BY_NAME: ReadonlyMap<string, ZodType> = new Map(
@@ -234,6 +237,11 @@ const BY_ID: ReadonlyMap<string, Operation> = new Map(OPERATIONS.map((op) => [op
 
 export function operationById(id: string): Operation | null {
   return BY_ID.get(id) ?? null;
+}
+
+/** The operation's 200 is a file (an image or a video), not JSON: the answer is saved, never parsed. */
+export function answersWithFile(op: Operation): boolean {
+  return op.facts.responseMedia === "image" || op.facts.responseMedia === "video";
 }
 
 export function isExposable(op: Operation): boolean {

@@ -13,10 +13,11 @@ import { after, test } from "node:test";
 import { z } from "zod/v4";
 
 const { FAMILY_TOOLS } = await import("../dist/tools/curated.js");
-const { prepare, variantsOf } = await import("../dist/tools/family.js");
+const { isSingleOperation, prepare, variantsOf } = await import("../dist/tools/family.js");
 const { quoteAllowed } = await import("../dist/spec/overlay.js");
 const { quote } = await import("../dist/cost.js");
 const { IdeogramClient, defaultClientOptions } = await import("../dist/client.js");
+const { IdeogramApiError } = await import("../dist/errors.js");
 
 const dir = await mkdtemp(join(tmpdir(), "ideogram-live-"));
 after(() => rm(dir, { recursive: true, force: true }));
@@ -60,14 +61,29 @@ const MINIMAL = {
   character_reference_images: [image],
   resolution: "1024x1024",
   aspect_ratio: "16:9",
+  language: "de",
+  variation_type: "setting",
+  colors: ["#B3202C"],
+  view: "front",
+  instruction: "a front-facing catalog stance, matte cotton",
+};
+
+/** What one single-operation tool needs beyond the shared minimum (its enum values, its own file fields). */
+const MINIMAL_BY_TOOL = {
+  ideogram_ad_resizer: { resolution: "1080x1920", platform: "meta" }, // meta publishes a safe zone for 9:16 only (the API's answer, 2026-10-11)
+  ideogram_colorways: { masks: [mask] },
+  ideogram_material_swap: { masks: [mask], materials: [image] },
+  ideogram_ghost_mannequin: { front_image: image },
+  ideogram_model_pose_variants: { source_image: image },
+  ideogram_sketch_to_render: { sketch_image: image },
 };
 
 function minimalArguments(spec, variant) {
   const required = z.toJSONSchema(variant.schema, { io: "input", unrepresentable: "any" }).required ?? [];
   const missing = required.filter((field) => !(field in MINIMAL));
   if (missing.length > 0) return { skip: `needs ${missing.join(", ")}` };
-  const args = { model: variant.model };
-  for (const field of required) args[field] = MINIMAL[field];
+  const args = isSingleOperation(spec) ? { ...MINIMAL_BY_TOOL[spec.name] } : { model: variant.model };
+  for (const field of required) if (!(field in args)) args[field] = MINIMAL[field];
   if (variant.fields.has("prompt")) args.prompt = MINIMAL.prompt;
   const fileFields = new Set(variant.op.facts.fileFields.map((f) => f.name));
   const source = ["image", "images"].find((f) => fileFields.has(f));
@@ -118,8 +134,14 @@ test("live: every curated quotable operation returns a PriceQuote; the quotes go
     try {
       outcome = await quote(client, call.req, openBudget());
     } catch (error) {
-      failures.push(`${c.variant.op.id}: ${error instanceof Error ? error.message : String(error)}`);
-      rows.push(`| ${c.spec.name} | ${c.variant.model} | — | — | — | FAILED: ${(error instanceof Error ? error.message : String(error)).slice(0, 120)} |`);
+      const message = error instanceof Error ? error.message : String(error);
+      // an account-level refusal (a feature flag, an operation this account is not authorized for) is a fact of the key, not a failure of the tool
+      if (error instanceof IdeogramApiError && (error.status === 403 || /not authorized for this operation|Required feature flag/i.test(message))) {
+        rows.push(`| ${c.spec.name} | ${c.variant.model} | — | — | — | not available to this account: ${message.slice(0, 120)} |`);
+        continue;
+      }
+      failures.push(`${c.variant.op.id}: ${message}`);
+      rows.push(`| ${c.spec.name} | ${c.variant.model} | — | — | — | FAILED: ${message.slice(0, 120)} |`);
       continue;
     }
     if (outcome.kind !== "quote") {
@@ -146,4 +168,5 @@ test("live: every curated quotable operation returns a PriceQuote; the quotes go
   ].join("\n");
   await writeFile(new URL(`../docs/PRICES-${date}.md`, import.meta.url), doc);
   assert.deepEqual(failures, [], `every row is in docs/PRICES-${date}.md; these failed:\n${failures.join("\n")}`);
+  assert.ok(rows.filter((r) => / exact | estimate /.test(r)).length >= 30, "at least 30 quotes answered: a key-wide refusal is not a pass");
 });

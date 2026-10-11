@@ -38,7 +38,7 @@ We will acknowledge your report within 48 hours and aim to release a fix within 
 | **API key exfiltration** | Key sent only to `api.ideogram.ai` (hardcoded base URL), never logged |
 | **Request timeout** | One budget per tool call: 55 s (the MCP client's 60 s minus a margin), ended earlier by the caller's cancellation; every attempt (bounded by the budget's remainder; the 120 s attempt cap applies only to a caller whose budget leaves more than that — never inside a tool call), retry sleep, poll and download of the call is judged against what remains. A POST is sent again only when it never left the machine (DNS, a refused connect) or got a 429; a timeout, a reset or a 5xx after sending is reported, never repeated (one call never creates two billed jobs). A GET (a poll, a download) is retried on network failures, 429 and 5xx |
 | **Content-Type validation** | Downloads must be an image type or `video/mp4` — HTML/JSON error pages rejected |
-| **Download size limit** | Content-Length pre-check, then the body streamed to a partial file with a byte counter: stopped at 50 MB, the partial file removed |
+| **Download size limit** | Content-Length pre-check, then the body streamed to a partial file with a byte counter: stopped at 50 MB (512 MB for a video; the one operation whose 200 is a file — snap mask — is saved the same way), the partial file removed |
 
 ### Local File Security
 

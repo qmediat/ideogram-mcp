@@ -116,8 +116,11 @@ function parameterFacts(spec, op) {
 function operationFacts(spec, method, path, op) {
   const body = bodyFacts(spec, op);
   const request = resolveSchema(spec, body.schemaRef);
-  const responseRef = op.responses?.["200"]?.content?.["application/json"]?.schema;
+  const content200 = op.responses?.["200"]?.content ?? {};
+  const responseRef = content200["application/json"]?.schema;
   const response = resolveSchema(spec, responseRef);
+  const types200 = Object.keys(content200);
+  const responseMedia = responseRef !== undefined ? "json" : types200.some((t) => t.startsWith("image/")) ? "image" : types200.some((t) => t.startsWith("video/")) ? "video" : "none";
   const { parameters, dryRun } = parameterFacts(spec, op);
   return {
     id: op.operationId,
@@ -131,6 +134,7 @@ function operationFacts(spec, method, path, op) {
     requestSchema: refName(body.schemaRef),
     requestSchemas: body.requestSchemas,
     responseSchema: refName(responseRef),
+    responseMedia,
     responseProperties: Object.keys(response?.properties ?? {}),
     dryRun,
     asyncField: Boolean(request?.properties?.async),

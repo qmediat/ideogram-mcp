@@ -35,6 +35,18 @@ Fields of the operations this release serves (curated or raw) are listed below t
 | `ideogram_video_image` | A video that starts from an image (and optionally ends on another): Seedance 2.5 by default, Seedance 2, Kling 3 Standard, MiniMax H3. Takes local files, public https URLs or Ideogram assets. Saved as mp4; long jobs come back as a generation_id. ideogram_quote prices a call first. |
 | `ideogram_video_reference` | A video guided by reference images, audio clips (MP3/WAV: 2-30 s on Seedance 2.5, 2-15 s on Seedance 2 and MiniMax) and videos stored with Ideogram, in prompt order: Seedance 2.5 by default, Seedance 2, MiniMax H3; at least one reference image or video. Saved as mp4; long jobs come back as a generation_id. ideogram_quote prices a call first. |
 | `ideogram_layerize` | Turn a flat image into an editable design (Ideogram 3.0): the detected text comes back as positioned text blocks with matched fonts, sizes and colours, beside a text-free base image that is saved. Optional font files to match against; ideogram_quote prices a call first. |
+| `ideogram_ad_localizer` | Translate an ad's copy into one target language (one request per language; Arabic right-to-left), keeping its layout, logos, brand type and product; exact_copy pins pre-approved wordings line by line. Takes the ad as a local file, a public https URL or an Ideogram asset. Results are saved to the output directory; long jobs come back as a generation_id for ideogram_generation; ideogram_quote prices a call first. |
+| `ideogram_ad_resizer` | Reframe an ad to a platform's exact ad size (resolution WIDTHxHEIGHT from the list; platform picks the published safe zone), optionally editing while reframing. Takes the creative as a local file, a public https URL or an Ideogram asset. Results are saved to the output directory; long jobs come back as a generation_id for ideogram_generation; ideogram_quote prices a call first. |
+| `ideogram_ad_variations` | Vary an ad along one axis — people, setting, group_size or scene — keeping its aspect ratio and product. Takes the creative as a local file, a public https URL or an Ideogram asset. Results are saved to the output directory; long jobs come back as a generation_id for ideogram_generation; no price quote (the operation offers no dry run). |
+| `ideogram_colorways` | Recolor a product photo: up to 4 masks, each paired by position with a six-digit hex colour; everything outside the masks is preserved. Takes the photo and the masks as local files, public https URLs or Ideogram assets. Results are saved to the output directory; long jobs come back as a generation_id for ideogram_generation; ideogram_quote prices a call first. |
+| `ideogram_ghost_mannequin` | A garment on an invisible mannequin from its photos (front, back, left, right, top, bottom and more angles, as files, URLs or assets), in the view asked (front, three_quarter, back), on a clean white studio background; instruction and metadata add factual product context. Results are saved to the output directory; long jobs come back as a generation_id for ideogram_generation; ideogram_quote prices a call first. |
+| `ideogram_material_swap` | Apply the material of reference images — colour, texture, pattern scale, orientation — to the masked regions of a product photo (up to 4 masks and materials, paired by position). Files, public https URLs or Ideogram assets. Results are saved to the output directory; long jobs come back as a generation_id for ideogram_generation; ideogram_quote prices a call first. |
+| `ideogram_model_pose_variants` | Re-pose the model of a fashion image by a plain-language pose or camera instruction (an optional pose reference asset). The source as a local file, a public https URL or an Ideogram asset. Results are saved to the output directory; long jobs come back as a generation_id for ideogram_generation; no price quote (the operation offers no dry run). |
+| `ideogram_sketch_to_render` | Render a fashion sketch as a product photo, with material and rendering direction and the construction details the sketch does not show. The sketch as a local file, a public https URL or an Ideogram asset. Results are saved to the output directory; long jobs come back as a generation_id for ideogram_generation; no price quote (the operation offers no dry run). |
+| `ideogram_magic_prompt` | Rewrite a natural-language prompt into an Ideogram 4.0 structured JSON prompt (and the aspect ratio the model picks for it, or the one you pin). Nothing is generated; no price quote (the v1 operation offers no dry run). |
+| `ideogram_layerize_logos` | Detect reference logos and image elements in a flat design and remove them: the text-free base image is saved, the detected layers come back with the reference each matched (REF_0, REF_1, … in the order given). The design and the references as local files or public https URLs. No price quote (the v1 operation offers no dry run). |
+| `ideogram_provenance` | Check whether an image was created by Ideogram: the provenance record (provider, system version, generation id, creation time, validation state) as Ideogram answers it. The image as a local file or a public https URL. Free of charge; no price quote. |
+| `ideogram_snap_mask` | Snap a hand-drawn binary mask to the object it marks: the snapped mask comes back as a PNG (white = the object), saved to the output directory. Use it as is for ideogram_remove_object (white = the region to remove) and for the colorways and material swap masks (white = the region to change); invert it for ideogram_inpaint, whose mask takes black as the region to repaint. The image and the mask as local files or public https URLs. No price quote (the v1 operation offers no dry run). |
 | `ideogram_edit` | Deprecated alias of ideogram_inpaint, kept through 2.x for 1.x callers: the same arguments and models (see ideogram_inpaint's schema). |
 | `ideogram_quote` | Ask Ideogram what a call would cost before making it: give the curated tool's name and the arguments you would pass it. Answers USD and credits from the API's own dry run (exact, or an estimate with its upper bound). Nothing is generated or billed. |
 | `ideogram_generation` | Collect the result of a generation by its generation_id (from a tool that answered 'still running', or from an earlier session): waits up to wait_s for it, then saves its images or videos. Reading a generation is free and never runs it again. |
@@ -54,26 +66,26 @@ Fields of the operations this release serves (curated or raw) are listed below t
 
 | model | operation | path | class | support | quotable | async | body |
 |---|---|---|---|---|---|---|---|
-| — | `post_generate_image_ernie_async` | `POST /v1/ernie/async/generate` | v1_only | planned | no | only | multipart + json |
-| — | `post_generate_image_ernie` | `POST /v1/ernie/generate` | v1_only | planned | no | none | multipart + json |
-| — | `post_generate_image_flux2_klein_base_async` | `POST /v1/flux-2-klein-base/async/generate` | v1_only | planned | no | only | multipart + json |
-| — | `post_generate_image_flux2_klein_base` | `POST /v1/flux-2-klein-base/generate` | v1_only | planned | no | none | multipart + json |
-| — | `post_generate_image_flux2_klein_async` | `POST /v1/flux-2-klein/async/generate` | v1_only | planned | no | only | multipart + json |
-| — | `post_generate_image_flux2_klein` | `POST /v1/flux-2-klein/generate` | v1_only | planned | no | none | multipart + json |
-| — | `post_generate_design_v3` | `POST /v1/ideogram-v3/generate-design` | v1_only | planned | no | none | multipart + json |
-| — | `post_generate_graphic_v3` | `POST /v1/ideogram-v3/graphic` | v1_only | planned | no | none | multipart + json |
-| — | `post_generate_image_v4_cfg_distilled_async` | `POST /v1/ideogram-v4-cfg-distilled/async/generate` | v1_only | planned | no | only | multipart + json |
-| — | `post_generate_image_v4_cfg_distilled` | `POST /v1/ideogram-v4-cfg-distilled/generate` | v1_only | planned | no | none | multipart + json |
-| — | `post_generate_image_v4_fp8` | `POST /v1/ideogram-v4-fp8/generate` | v1_only | planned | no | none | multipart + json |
-| — | `post_generate_design_v4_async` | `POST /v1/ideogram-v4/async/generate-design` | v1_only | planned | no | only | multipart + json |
-| — | `post_generate_design_v4` | `POST /v1/ideogram-v4/generate-design` | v1_only | planned | no | none | multipart + json |
-| — | `post_generate_image_v4_stable` | `POST /v1/ideogram-v4/generate/stable` | v1_only | planned | no | none | multipart + json |
-| — | `post_generate_image_v45_async` | `POST /v1/ideogram-v45/async/generate` | v1_only | planned | no | only | multipart + json |
-| — | `post_generate_image_v45` | `POST /v1/ideogram-v45/generate` | v1_only | planned | no | none | multipart + json |
-| — | `post_generate_image_p_image_high` | `POST /v1/p-image-ideogram/high/generate` | v1_only | planned | no | none | multipart + json |
-| — | `post_generate_image_p_image_low` | `POST /v1/p-image-ideogram/low/generate` | v1_only | planned | no | none | multipart + json |
-| — | `post_generate_image_p_image_medium` | `POST /v1/p-image-ideogram/medium/generate` | v1_only | planned | no | none | multipart + json |
-| — | `post_generate_image_p_image_very_low` | `POST /v1/p-image-ideogram/very-low/generate` | v1_only | planned | no | none | multipart + json |
+| — | `post_generate_image_ernie_async` | `POST /v1/ernie/async/generate` | v1_only | raw | no | only | multipart + json |
+| — | `post_generate_image_ernie` | `POST /v1/ernie/generate` | v1_only | raw | no | none | multipart + json |
+| — | `post_generate_image_flux2_klein_base_async` | `POST /v1/flux-2-klein-base/async/generate` | v1_only | raw | no | only | multipart + json |
+| — | `post_generate_image_flux2_klein_base` | `POST /v1/flux-2-klein-base/generate` | v1_only | raw | no | none | multipart + json |
+| — | `post_generate_image_flux2_klein_async` | `POST /v1/flux-2-klein/async/generate` | v1_only | raw | no | only | multipart + json |
+| — | `post_generate_image_flux2_klein` | `POST /v1/flux-2-klein/generate` | v1_only | raw | no | none | multipart + json |
+| — | `post_generate_design_v3` | `POST /v1/ideogram-v3/generate-design` | v1_only | raw | no | none | multipart + json |
+| — | `post_generate_graphic_v3` | `POST /v1/ideogram-v3/graphic` | v1_only | raw | no | none | multipart + json |
+| — | `post_generate_image_v4_cfg_distilled_async` | `POST /v1/ideogram-v4-cfg-distilled/async/generate` | v1_only | raw | no | only | multipart + json |
+| — | `post_generate_image_v4_cfg_distilled` | `POST /v1/ideogram-v4-cfg-distilled/generate` | v1_only | raw | no | none | multipart + json |
+| — | `post_generate_image_v4_fp8` | `POST /v1/ideogram-v4-fp8/generate` | v1_only | raw | no | none | multipart + json |
+| — | `post_generate_design_v4_async` | `POST /v1/ideogram-v4/async/generate-design` | v1_only | raw | no | only | multipart + json |
+| — | `post_generate_design_v4` | `POST /v1/ideogram-v4/generate-design` | v1_only | raw | no | none | multipart + json |
+| — | `post_generate_image_v4_stable` | `POST /v1/ideogram-v4/generate/stable` | v1_only | raw | no | none | multipart + json |
+| — | `post_generate_image_v45_async` | `POST /v1/ideogram-v45/async/generate` | v1_only | raw | no | only | multipart + json |
+| — | `post_generate_image_v45` | `POST /v1/ideogram-v45/generate` | v1_only | raw | no | none | multipart + json |
+| — | `post_generate_image_p_image_high` | `POST /v1/p-image-ideogram/high/generate` | v1_only | raw | no | none | multipart + json |
+| — | `post_generate_image_p_image_low` | `POST /v1/p-image-ideogram/low/generate` | v1_only | raw | no | none | multipart + json |
+| — | `post_generate_image_p_image_medium` | `POST /v1/p-image-ideogram/medium/generate` | v1_only | raw | no | none | multipart + json |
+| — | `post_generate_image_p_image_very_low` | `POST /v1/p-image-ideogram/very-low/generate` | v1_only | raw | no | none | multipart + json |
 | auto | `post_generate_image_v2_auto` | `POST /v2/image/generate/auto` | documented | curated | yes | optional | multipart + json |
 | gpt-image-2 | `post_generate_image_v2_gpt_image2` | `POST /v2/image/generate/gpt-image-2` | documented | curated | yes | optional | multipart + json |
 | gpt-image-2-5-flare | `post_generate_image_v2_gpt_image25_flare` | `POST /v2/image/generate/gpt-image-2-5-flare` | documented | curated | yes | optional | multipart + json |
@@ -92,6 +104,375 @@ Fields of the operations this release serves (curated or raw) are listed below t
 | nano-banana-pro | `post_generate_image_v2_nano_banana_pro` | `POST /v2/image/generate/nano-banana-pro` | documented | curated | yes | optional | multipart + json |
 | p-image-ideogram | `post_generate_image_v2_p_image_ideogram` | `POST /v2/image/generate/p-image-ideogram` | documented | curated | yes | optional | json |
 | z-image | `post_generate_image_v2_z_image` | `POST /v2/image/generate/z-image` | documented | curated | yes | optional | json |
+
+#### post_generate_image_ernie_async — `POST /v1/ernie/async/generate`
+
+Generate with ERNIE-Image-Turbo asynchronously via webhook
+
+Parameters: `webhook_url (query, required)`.
+
+| field | kind | required |
+|---|---|---|
+| `custom_model_uri` | string \| null |  |
+| `height` | one of several shapes |  |
+| `num_images` | one of several shapes |  |
+| `num_inference_steps` | one of several shapes |  |
+| `prompt` | string | yes |
+| `seed` | one of several shapes |  |
+| `system_prompt` | one of several shapes |  |
+| `width` | one of several shapes |  |
+
+#### post_generate_image_ernie — `POST /v1/ernie/generate`
+
+Generate with ERNIE-Image-Turbo
+
+| field | kind | required |
+|---|---|---|
+| `custom_model_uri` | string \| null |  |
+| `height` | one of several shapes |  |
+| `num_images` | one of several shapes |  |
+| `num_inference_steps` | one of several shapes |  |
+| `prompt` | string | yes |
+| `seed` | one of several shapes |  |
+| `system_prompt` | one of several shapes |  |
+| `width` | one of several shapes |  |
+
+#### post_generate_image_flux2_klein_base_async — `POST /v1/flux-2-klein-base/async/generate`
+
+Generate with FLUX.2-Klein (undistilled base) asynchronously via webhook
+
+Parameters: `webhook_url (query, required)`.
+
+| field | kind | required |
+|---|---|---|
+| `custom_model_uri` | string \| null |  |
+| `height` | one of several shapes |  |
+| `num_images` | one of several shapes |  |
+| `num_inference_steps` | one of several shapes |  |
+| `prompt` | string | yes |
+| `seed` | one of several shapes |  |
+| `system_prompt` | one of several shapes |  |
+| `width` | one of several shapes |  |
+
+#### post_generate_image_flux2_klein_base — `POST /v1/flux-2-klein-base/generate`
+
+Generate with FLUX.2-Klein (undistilled base)
+
+| field | kind | required |
+|---|---|---|
+| `custom_model_uri` | string \| null |  |
+| `height` | one of several shapes |  |
+| `num_images` | one of several shapes |  |
+| `num_inference_steps` | one of several shapes |  |
+| `prompt` | string | yes |
+| `seed` | one of several shapes |  |
+| `system_prompt` | one of several shapes |  |
+| `width` | one of several shapes |  |
+
+#### post_generate_image_flux2_klein_async — `POST /v1/flux-2-klein/async/generate`
+
+Generate with FLUX.2-Klein asynchronously via webhook
+
+Parameters: `webhook_url (query, required)`.
+
+| field | kind | required |
+|---|---|---|
+| `custom_model_uri` | string \| null |  |
+| `height` | one of several shapes |  |
+| `num_images` | one of several shapes |  |
+| `num_inference_steps` | one of several shapes |  |
+| `prompt` | string | yes |
+| `seed` | one of several shapes |  |
+| `system_prompt` | one of several shapes |  |
+| `width` | one of several shapes |  |
+
+#### post_generate_image_flux2_klein — `POST /v1/flux-2-klein/generate`
+
+Generate with FLUX.2-Klein
+
+| field | kind | required |
+|---|---|---|
+| `custom_model_uri` | string \| null |  |
+| `height` | one of several shapes |  |
+| `num_images` | one of several shapes |  |
+| `num_inference_steps` | one of several shapes |  |
+| `prompt` | string | yes |
+| `seed` | one of several shapes |  |
+| `system_prompt` | one of several shapes |  |
+| `width` | one of several shapes |  |
+
+#### post_generate_design_v3 — `POST /v1/ideogram-v3/generate-design`
+
+Generate a design from a text prompt with text detection and correction
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | one of 1x3, 3x1, 1x2, 2x1, 9x16, 16x9, 10x16, 16x10, 2x3, 3x2, 3x4, 4x3, … (15) |  |
+| `color_palette` | one of several shapes |  |
+| `custom_model_uri` | string |  |
+| `font_file_body` | local file path or public https URL |  |
+| `font_file_h1` | local file path or public https URL |  |
+| `font_file_h2` | local file path or public https URL |  |
+| `font_file_small` | local file path or public https URL |  |
+| `font_name_body` | string |  |
+| `font_name_h1` | string |  |
+| `font_name_h2` | string |  |
+| `font_name_small` | string |  |
+| `magic_prompt` | one of AUTO, ON, OFF |  |
+| `magic_prompt_system_prompt_config_id` | string |  |
+| `negative_prompt` | string |  |
+| `num_images` | integer |  |
+| `prompt` | string | yes |
+| `reference_asset_images` | local file paths or public https URLs |  |
+| `rendering_speed` | one of FLASH, TURBO, BALANCED, DEFAULT, QUALITY |  |
+| `resolution` | one of 512x1536, 576x1408, 576x1472, 576x1536, 640x1344, 640x1408, 640x1472, 640x1536, 704x1152, 704x1216, 704x1280, 704x1344, … (69) |  |
+| `seed` | integer |  |
+| `style_codes` | array of string |  |
+| `style_preset` | one of 80S_ILLUSTRATION, 90S_NOSTALGIA, ABSTRACT_ORGANIC, ANALOG_NOSTALGIA, ART_BRUT, ART_DECO, ART_POSTER, AURA, AVANT_GARDE, BAUHAUS, BLUEPRINT, BLURRY_MOTION, … (62) |  |
+| `style_reference_images` | local file paths or public https URLs |  |
+| `style_type` | one of AUTO, GENERAL, REALISTIC, DESIGN, CUSTOM, FICTION, STYLIZED |  |
+
+File limits: `font_file_body` 5 MB; `font_file_h1` 5 MB; `font_file_h2` 5 MB; `font_file_small` 5 MB; `reference_asset_images` 50 MB (not stated; this server's cap); `style_reference_images` 25 MB.
+
+Rules:
+- resolution and aspect_ratio cannot be combined; give one
+
+#### post_generate_graphic_v3 — `POST /v1/ideogram-v3/graphic`
+
+Generate graphics with Ideogram 3.0 and text correction
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | one of 1x3, 3x1, 1x2, 2x1, 9x16, 16x9, 10x16, 16x10, 2x3, 3x2, 3x4, 4x3, … (15) |  |
+| `color_palette` | one of several shapes |  |
+| `custom_model_uri` | string |  |
+| `flat_graphic_image` | local file path or public https URL |  |
+| `font_file_body` | local file path or public https URL |  |
+| `font_file_h1` | local file path or public https URL |  |
+| `font_file_h2` | local file path or public https URL |  |
+| `font_file_small` | local file path or public https URL |  |
+| `font_name_body` | string |  |
+| `font_name_h1` | string |  |
+| `font_name_h2` | string |  |
+| `font_name_small` | string |  |
+| `magic_prompt` | one of AUTO, ON, OFF |  |
+| `magic_prompt_system_prompt_config_id` | string |  |
+| `negative_prompt` | string |  |
+| `num_images` | integer |  |
+| `prompt` | string |  |
+| `reference_asset_images` | local file paths or public https URLs |  |
+| `rendering_speed` | one of FLASH, TURBO, BALANCED, DEFAULT, QUALITY |  |
+| `resolution` | one of 512x1536, 576x1408, 576x1472, 576x1536, 640x1344, 640x1408, 640x1472, 640x1536, 704x1152, 704x1216, 704x1280, 704x1344, … (69) |  |
+| `seed` | integer |  |
+| `style_codes` | array of string |  |
+| `style_preset` | one of 80S_ILLUSTRATION, 90S_NOSTALGIA, ABSTRACT_ORGANIC, ANALOG_NOSTALGIA, ART_BRUT, ART_DECO, ART_POSTER, AURA, AVANT_GARDE, BAUHAUS, BLUEPRINT, BLURRY_MOTION, … (62) |  |
+| `style_reference_images` | local file paths or public https URLs |  |
+| `style_type` | one of AUTO, GENERAL, REALISTIC, DESIGN, CUSTOM, FICTION, STYLIZED |  |
+
+File limits: `flat_graphic_image` 25 MB; `font_file_body` 5 MB; `font_file_h1` 5 MB; `font_file_h2` 5 MB; `font_file_small` 5 MB; `reference_asset_images` 50 MB (not stated; this server's cap); `style_reference_images` 25 MB.
+
+Rules:
+- resolution and aspect_ratio cannot be combined; give one
+
+#### post_generate_image_v4_cfg_distilled_async — `POST /v1/ideogram-v4-cfg-distilled/async/generate`
+
+Generate with the CFG-distilled Ideogram 4.0 model asynchronously via webhook
+
+Parameters: `webhook_url (query, required)`.
+
+| field | kind | required |
+|---|---|---|
+| `enable_copyright_detection` | boolean \| null |  |
+| `json_prompt` | object |  |
+| `magic_prompt_system_prompt_config_id` | string |  |
+| `rendering_speed` | one of FLASH, TURBO, BALANCED, DEFAULT, QUALITY |  |
+| `resolution` | one of 2048x2048, 1440x2880, 2880x1440, 1664x2496, 2496x1664, 1792x2240, 2240x1792, 1440x2560, 2560x1440, 1600x2560, 2560x1600, 1728x2304, … (38) |  |
+| `seed` | one of several shapes |  |
+| `text_prompt` | string |  |
+
+Rules:
+- exactly one of text_prompt and json_prompt: give one of them
+
+#### post_generate_image_v4_cfg_distilled — `POST /v1/ideogram-v4-cfg-distilled/generate`
+
+Generate with the CFG-distilled Ideogram 4.0 model
+
+| field | kind | required |
+|---|---|---|
+| `enable_copyright_detection` | boolean \| null |  |
+| `json_prompt` | object |  |
+| `magic_prompt_system_prompt_config_id` | string |  |
+| `rendering_speed` | one of FLASH, TURBO, BALANCED, DEFAULT, QUALITY |  |
+| `resolution` | one of 2048x2048, 1440x2880, 2880x1440, 1664x2496, 2496x1664, 1792x2240, 2240x1792, 1440x2560, 2560x1440, 1600x2560, 2560x1600, 1728x2304, … (38) |  |
+| `seed` | one of several shapes |  |
+| `text_prompt` | string |  |
+
+Rules:
+- exactly one of text_prompt and json_prompt: give one of them
+
+#### post_generate_image_v4_fp8 — `POST /v1/ideogram-v4-fp8/generate`
+
+Generate with the fp8-quantized Ideogram 4.0 model
+
+| field | kind | required |
+|---|---|---|
+| `enable_copyright_detection` | boolean \| null |  |
+| `json_prompt` | object |  |
+| `magic_prompt_system_prompt_config_id` | string |  |
+| `rendering_speed` | one of FLASH, TURBO, BALANCED, DEFAULT, QUALITY |  |
+| `resolution` | one of 2048x2048, 1440x2880, 2880x1440, 1664x2496, 2496x1664, 1792x2240, 2240x1792, 1440x2560, 2560x1440, 1600x2560, 2560x1600, 1728x2304, … (38) |  |
+| `seed` | one of several shapes |  |
+| `text_prompt` | string |  |
+
+Rules:
+- exactly one of text_prompt and json_prompt: give one of them
+
+#### post_generate_design_v4_async — `POST /v1/ideogram-v4/async/generate-design`
+
+Generate an editable V4 HTML design asynchronously via webhook
+
+Parameters: `webhook_url (query, required)`.
+
+| field | kind | required |
+|---|---|---|
+| `artifact_generation_model` | one of claude-sonnet-4-6, claude-opus-4-6, claude-opus-4-7 |  |
+| `inspiration_reference_images` | local file paths or public https URLs |  |
+| `inspiration_reference_model` | one of claude-sonnet-4-6, claude-opus-4-6, claude-opus-4-7 |  |
+| `layout2image_variant` | one of opus_4_7, separate_image_layer, bbox_aware |  |
+| `magic_prompt_option` | one of AUTO, ON, OFF |  |
+| `magic_prompt_system_prompt_config_id` | string |  |
+| `prompt` | string | yes |
+| `rendering_speed` | one of FLASH, TURBO, BALANCED, DEFAULT, QUALITY |  |
+| `resolution` | one of 1024x1024, 896x1120, 1120x896, 864x1152, 1152x864, 832x1248, 1248x832, 800x1280, 1280x800, 720x1280, 1280x720, 720x1440, … (13) |  |
+| `response_type` | one of layered, url, binary, html |  |
+| `seed` | one of several shapes |  |
+
+File limits: `inspiration_reference_images` 25 MB × 4.
+
+#### post_generate_design_v4 — `POST /v1/ideogram-v4/generate-design`
+
+Generate an editable design with Ideogram 4.0 HTML
+
+| field | kind | required |
+|---|---|---|
+| `artifact_generation_model` | one of claude-sonnet-4-6, claude-opus-4-6, claude-opus-4-7 |  |
+| `inspiration_reference_images` | local file paths or public https URLs |  |
+| `inspiration_reference_model` | one of claude-sonnet-4-6, claude-opus-4-6, claude-opus-4-7 |  |
+| `layout2image_variant` | one of opus_4_7, separate_image_layer, bbox_aware |  |
+| `magic_prompt_option` | one of AUTO, ON, OFF |  |
+| `magic_prompt_system_prompt_config_id` | string |  |
+| `prompt` | string | yes |
+| `rendering_speed` | one of FLASH, TURBO, BALANCED, DEFAULT, QUALITY |  |
+| `resolution` | one of 1024x1024, 896x1120, 1120x896, 864x1152, 1152x864, 832x1248, 1248x832, 800x1280, 1280x800, 720x1280, 1280x720, 720x1440, … (13) |  |
+| `response_type` | one of layered, url, binary, html |  |
+| `seed` | one of several shapes |  |
+
+File limits: `inspiration_reference_images` 25 MB × 4.
+
+#### post_generate_image_v4_stable — `POST /v1/ideogram-v4/generate/stable`
+
+Generate with Ideogram 4.0 (stable model)
+
+| field | kind | required |
+|---|---|---|
+| `json_prompt` | object |  |
+| `resolution` | one of 2048x2048, 1440x2880, 2880x1440, 1664x2496, 2496x1664, 1792x2240, 2240x1792, 1440x2560, 2560x1440, 1600x2560, 2560x1600, 1728x2304, … (38) |  |
+| `seed` | one of several shapes |  |
+| `text_prompt` | string |  |
+| `version` | one of stable_may29 |  |
+
+Rules:
+- exactly one of text_prompt and json_prompt: give one of them
+
+#### post_generate_image_v45_async — `POST /v1/ideogram-v45/async/generate`
+
+Generate with Ideogram 4.5 asynchronously via webhook
+
+Parameters: `webhook_url (query, required)`.
+
+| field | kind | required |
+|---|---|---|
+| `custom_model_uri` | string |  |
+| `enable_copyright_detection` | boolean \| null |  |
+| `json_prompt` | object |  |
+| `magic_prompt_system_prompt_config_id` | string |  |
+| `rendering_speed` | one of FLASH, TURBO, BALANCED, DEFAULT, QUALITY |  |
+| `resolution` | one of 2048x2048, 1440x2880, 2880x1440, 1664x2496, 2496x1664, 1792x2240, 2240x1792, 1440x2560, 2560x1440, 1600x2560, 2560x1600, 1728x2304, … (38) |  |
+| `seed` | one of several shapes |  |
+| `text_prompt` | string |  |
+
+Rules:
+- exactly one of text_prompt and json_prompt: give one of them
+
+#### post_generate_image_v45 — `POST /v1/ideogram-v45/generate`
+
+Generate with Ideogram 4.5
+
+| field | kind | required |
+|---|---|---|
+| `custom_model_uri` | string |  |
+| `enable_copyright_detection` | boolean \| null |  |
+| `json_prompt` | object |  |
+| `magic_prompt_system_prompt_config_id` | string |  |
+| `rendering_speed` | one of FLASH, TURBO, BALANCED, DEFAULT, QUALITY |  |
+| `resolution` | one of 2048x2048, 1440x2880, 2880x1440, 1664x2496, 2496x1664, 1792x2240, 2240x1792, 1440x2560, 2560x1440, 1600x2560, 2560x1600, 1728x2304, … (38) |  |
+| `seed` | one of several shapes |  |
+| `text_prompt` | string |  |
+
+Rules:
+- exactly one of text_prompt and json_prompt: give one of them
+
+#### post_generate_image_p_image_high — `POST /v1/p-image-ideogram/high/generate`
+
+Generate with the distilled few-step Ideogram model (high speed tier)
+
+| field | kind | required |
+|---|---|---|
+| `enable_copyright_detection` | boolean \| null |  |
+| `magic_prompt_system_prompt_config_id` | string |  |
+| `prompt` | string | yes |
+| `prompt_upsampling` | one of AUTO, ON, OFF |  |
+| `resolution` | one of 2048x2048, 1440x2880, 2880x1440, 1664x2496, 2496x1664, 1792x2240, 2240x1792, 1440x2560, 2560x1440, 1600x2560, 2560x1600, 1728x2304, … (38) |  |
+| `seed` | one of several shapes |  |
+
+#### post_generate_image_p_image_low — `POST /v1/p-image-ideogram/low/generate`
+
+Generate with the distilled few-step Ideogram model (low speed tier)
+
+| field | kind | required |
+|---|---|---|
+| `enable_copyright_detection` | boolean \| null |  |
+| `magic_prompt_system_prompt_config_id` | string |  |
+| `prompt` | string | yes |
+| `prompt_upsampling` | one of AUTO, ON, OFF |  |
+| `resolution` | one of 2048x2048, 1440x2880, 2880x1440, 1664x2496, 2496x1664, 1792x2240, 2240x1792, 1440x2560, 2560x1440, 1600x2560, 2560x1600, 1728x2304, … (38) |  |
+| `seed` | one of several shapes |  |
+
+#### post_generate_image_p_image_medium — `POST /v1/p-image-ideogram/medium/generate`
+
+Generate with the distilled few-step Ideogram model (medium speed tier)
+
+| field | kind | required |
+|---|---|---|
+| `enable_copyright_detection` | boolean \| null |  |
+| `magic_prompt_system_prompt_config_id` | string |  |
+| `prompt` | string | yes |
+| `prompt_upsampling` | one of AUTO, ON, OFF |  |
+| `resolution` | one of 2048x2048, 1440x2880, 2880x1440, 1664x2496, 2496x1664, 1792x2240, 2240x1792, 1440x2560, 2560x1440, 1600x2560, 2560x1600, 1728x2304, … (38) |  |
+| `seed` | one of several shapes |  |
+
+#### post_generate_image_p_image_very_low — `POST /v1/p-image-ideogram/very-low/generate`
+
+Generate with the distilled few-step Ideogram model (very-low speed tier)
+
+| field | kind | required |
+|---|---|---|
+| `enable_copyright_detection` | boolean \| null |  |
+| `magic_prompt_system_prompt_config_id` | string |  |
+| `prompt` | string | yes |
+| `prompt_upsampling` | one of AUTO, ON, OFF |  |
+| `resolution` | one of 2048x2048, 1440x2880, 2880x1440, 1664x2496, 2496x1664, 1792x2240, 2240x1792, 1440x2560, 2560x1440, 1600x2560, 2560x1600, 1728x2304, … (38) |  |
+| `seed` | one of several shapes |  |
 
 #### auto — `POST /v2/image/generate/auto`
 
@@ -527,9 +908,53 @@ Generate with Z-Image
 
 | model | operation | path | class | support | quotable | async | body |
 |---|---|---|---|---|---|---|---|
-| — | `post_v1_edit_image` | `POST /v1/edit` | v1_only | planned | no | none | multipart |
-| — | `post_v1_edit_lite_image` | `POST /v1/edit-lite` | v1_only | planned | no | none | multipart |
+| — | `post_v1_edit_image` | `POST /v1/edit` | v1_only | raw | no | none | multipart |
+| — | `post_v1_edit_lite_image` | `POST /v1/edit-lite` | v1_only | raw | no | none | multipart |
 | ideogram-4-5 | `post_precise_edit_image_v2_ideogram45` | `POST /v2/image/precise-edit/ideogram-4-5` | documented | curated | yes | optional | multipart + json |
+
+#### post_v1_edit_image — `POST /v1/edit`
+
+Edit images with a prompt
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | one of 1x3, 3x1, 1x2, 2x1, 9x16, 16x9, 10x16, 16x10, 2x3, 3x2, 3x4, 4x3, … (15) |  |
+| `image_urls` | array of string |  |
+| `images` | local file paths or public https URLs |  |
+| `magic_prompt` | one of AUTO, ON, OFF |  |
+| `magic_prompt_system_prompt_config_id` | string |  |
+| `num_images` | integer |  |
+| `prompt` | string | yes |
+| `resolution` | one of 512x1536, 576x1408, 576x1472, 576x1536, 640x1344, 640x1408, 640x1472, 640x1536, 704x1152, 704x1216, 704x1280, 704x1344, … (69) |  |
+| `seed` | integer |  |
+| `transparent_background` | boolean |  |
+
+File limits: `images` 25 MB × 10.
+
+Rules:
+- needs a source image: images (local files or public https URLs) or image_urls (URLs of Ideogram images)
+- resolution and aspect_ratio cannot be combined; give one
+
+#### post_v1_edit_lite_image — `POST /v1/edit-lite`
+
+Edit an image with a prompt at lower cost and latency
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | one of 1x1, 2x3, 3x2, 3x4, 4x3, 4x5, 5x4, 9x16, 16x9, 21x9 |  |
+| `image` | local file path or public https URL | yes |
+| `magic_prompt` | one of AUTO, ON, OFF |  |
+| `magic_prompt_system_prompt_config_id` | string |  |
+| `num_images` | integer |  |
+| `prompt` | string | yes |
+| `reference_images` | local file paths or public https URLs |  |
+| `seed` | integer |  |
+| `transparency` | one of AUTO, TRANSPARENT, OPAQUE |  |
+
+File limits: `image` 25 MB; `reference_images` 25 MB × 9.
+
+Rules:
+- needs a source image: image (a local file or a public https URL)
 
 #### ideogram-4-5 — `POST /v2/image/precise-edit/ideogram-4-5`
 
@@ -687,13 +1112,57 @@ Rules:
 
 | model | operation | path | class | support | quotable | async | body |
 |---|---|---|---|---|---|---|---|
-| — | `post_generate_image_v4_im2_im_async` | `POST /v1/ideogram-v4/async/image-to-image` | v1_only | planned | no | only | multipart |
-| — | `post_generate_image_v4_im2_im` | `POST /v1/ideogram-v4/image-to-image` | v1_only | planned | no | none | multipart |
+| — | `post_generate_image_v4_im2_im_async` | `POST /v1/ideogram-v4/async/image-to-image` | v1_only | raw | no | only | multipart |
+| — | `post_generate_image_v4_im2_im` | `POST /v1/ideogram-v4/image-to-image` | v1_only | raw | no | none | multipart |
 | auto | `post_tool_remix` | `POST /v2/image/remix/auto` | documented | curated | yes | optional | multipart + json |
 | ideogram-3 | `post_remix_image_v2_ideogram_v3` | `POST /v2/image/remix/ideogram-3` | documented | curated | yes | optional | multipart + json |
 | ideogram-3-character | `post_remix_image_v2_ideogram_v3_character` | `POST /v2/image/remix/ideogram-3-character` | documented | curated | yes | optional | multipart + json |
 | ideogram-3-custom-model | `post_remix_image_v2_ideogram_v3_custom_model` | `POST /v2/image/remix/ideogram-3-custom-model` | documented | curated | yes | optional | multipart + json |
 | ideogram-4 | `post_remix_image_v2_ideogram_v4` | `POST /v2/image/remix/ideogram-4` | documented | curated | yes | optional | multipart + json |
+
+#### post_generate_image_v4_im2_im_async — `POST /v1/ideogram-v4/async/image-to-image`
+
+Image-to-image with Ideogram 4.0 asynchronously via webhook
+
+Parameters: `webhook_url (query, required)`.
+
+| field | kind | required |
+|---|---|---|
+| `additional_images` | local file paths or public https URLs |  |
+| `enable_copyright_detection` | boolean \| null |  |
+| `image` | local file path or public https URL | yes |
+| `magic_prompt_option` | one of AUTO, ON, OFF |  |
+| `magic_prompt_system_prompt_config_id` | string |  |
+| `prompt` | string |  |
+| `rendering_speed` | one of FLASH, TURBO, BALANCED, DEFAULT, QUALITY |  |
+| `resolution` | one of 2048x2048, 1440x2880, 2880x1440, 1664x2496, 2496x1664, 1792x2240, 2240x1792, 1440x2560, 2560x1440, 1600x2560, 2560x1600, 1728x2304, … (39) |  |
+| `seed` | integer |  |
+
+File limits: `additional_images` 25 MB × 4; `image` 25 MB.
+
+Rules:
+- needs a source image: image (a local file or a public https URL)
+
+#### post_generate_image_v4_im2_im — `POST /v1/ideogram-v4/image-to-image`
+
+Image-to-image with Ideogram 4.0
+
+| field | kind | required |
+|---|---|---|
+| `additional_images` | local file paths or public https URLs |  |
+| `enable_copyright_detection` | boolean \| null |  |
+| `image` | local file path or public https URL | yes |
+| `magic_prompt_option` | one of AUTO, ON, OFF |  |
+| `magic_prompt_system_prompt_config_id` | string |  |
+| `prompt` | string |  |
+| `rendering_speed` | one of FLASH, TURBO, BALANCED, DEFAULT, QUALITY |  |
+| `resolution` | one of 2048x2048, 1440x2880, 2880x1440, 1664x2496, 2496x1664, 1792x2240, 2240x1792, 1440x2560, 2560x1440, 1600x2560, 2560x1600, 1728x2304, … (39) |  |
+| `seed` | integer |  |
+
+File limits: `additional_images` 25 MB × 4; `image` 25 MB.
+
+Rules:
+- needs a source image: image (a local file or a public https URL)
 
 #### auto — `POST /v2/image/remix/auto`
 
@@ -1321,8 +1790,22 @@ Rules:
 
 | model | operation | path | class | support | quotable | async | body |
 |---|---|---|---|---|---|---|---|
-| — | `post_layerize_logos` | `POST /v1/layerize-logos` | v1_only | planned | no | none | multipart |
+| — | `post_layerize_logos` | `POST /v1/layerize-logos` | v1_only | curated | no | none | multipart |
 | ideogram-3 | `post_layerize_design_ideogram_v3` | `POST /v2/design/layerize/ideogram-3` | documented | curated | yes | optional | multipart + json |
+
+#### post_layerize_logos — `POST /v1/layerize-logos`
+
+Detect and remove reference logos from an image
+
+| field | kind | required |
+|---|---|---|
+| `design_image` | local file path or public https URL | yes |
+| `reference_images` | local file paths or public https URLs | yes |
+
+File limits: `design_image` 25 MB; `reference_images` 50 MB (not stated; this server's cap).
+
+Rules:
+- reference_images takes at most 10 logo images
 
 #### ideogram-3 — `POST /v2/design/layerize/ideogram-3`
 
@@ -1640,37 +2123,532 @@ Edit video with Seedance 2.0
 
 | model | operation | path | class | support | quotable | async | body |
 |---|---|---|---|---|---|---|---|
-| — | `post_magic_prompt_v4` | `POST /v1/ideogram-v4/magic-prompt` | v1_only | planned | no | none | json |
-| — | `post_provenance_verify` | `POST /v1/provenance/verify` | v1_only | planned | no | only | multipart |
-| — | `post_snap_mask` | `POST /v1/snap-mask` | v1_only | planned | no | none | multipart |
-| — | `post_ad_localizer` | `POST /v2/tool/ad-localizer` | documented | planned | yes | only | multipart + json |
-| — | `post_ad_resizer` | `POST /v2/tool/ad-resizer` | documented | planned | yes | only | multipart + json |
-| — | `post_ad_variations` | `POST /v2/tool/ad-variations` | documented | planned | no | only | multipart + json |
-| — | `post_colorways` | `POST /v2/tool/colorways` | documented | planned | yes | only | multipart + json |
-| — | `post_ghost_mannequin` | `POST /v2/tool/ghost-mannequin` | documented | planned | yes | only | multipart + json |
-| — | `post_living_image` | `POST /v2/tool/living-image` | spec_only | planned | yes | only | json |
-| — | `post_material_swap` | `POST /v2/tool/material-swap` | documented | planned | yes | only | multipart + json |
-| — | `post_model_pose_variants` | `POST /v2/tool/model-pose-variants` | documented | planned | no | only | multipart + json |
-| — | `post_model_swap` | `POST /v2/tool/model-swap` | spec_only | planned | no | only | multipart + json |
-| — | `post_packshots` | `POST /v2/tool/packshots` | spec_only | planned | no | only | json |
-| — | `post_product360_video` | `POST /v2/tool/product-360-video` | spec_only | planned | yes | only | json |
-| — | `post_skechers_style_edit` | `POST /v2/tool/skechers-style-editor` | spec_only | planned | no | only | json |
-| — | `post_sketch_to_render` | `POST /v2/tool/sketch-to-render` | documented | planned | no | only | multipart + json |
-| — | `post_sole_swap` | `POST /v2/tool/sole-swap` | spec_only | planned | no | only | json |
-| — | `post_swan_s_logo_design` | `POST /v2/tool/swan-s-logo-design` | spec_only | planned | no | only | json |
-| — | `post_swan_s_logo_install` | `POST /v2/tool/swan-s-logo-install` | spec_only | planned | no | only | json |
-| — | `post_swap_product` | `POST /v2/tool/swap-product` | spec_only | planned | no | only | json |
-| — | `post_text_layerizer` | `POST /v2/tool/text-layerizer` | spec_only | planned | yes | only | multipart + json |
-| — | `post_vectorizer` | `POST /v2/tool/vectorizer` | spec_only | planned | yes | only | multipart + json |
+| — | `post_magic_prompt_v4` | `POST /v1/ideogram-v4/magic-prompt` | v1_only | curated | no | none | json |
+| — | `post_provenance_verify` | `POST /v1/provenance/verify` | v1_only | curated | no | none | multipart |
+| — | `post_snap_mask` | `POST /v1/snap-mask` | v1_only | curated | no | none | multipart |
+| — | `post_ad_localizer` | `POST /v2/tool/ad-localizer` | documented | curated | yes | only | multipart + json |
+| — | `post_ad_resizer` | `POST /v2/tool/ad-resizer` | documented | curated | yes | only | multipart + json |
+| — | `post_ad_variations` | `POST /v2/tool/ad-variations` | documented | curated | no | only | multipart + json |
+| — | `post_colorways` | `POST /v2/tool/colorways` | documented | curated | yes | only | multipart + json |
+| — | `post_ghost_mannequin` | `POST /v2/tool/ghost-mannequin` | documented | curated | yes | only | multipart + json |
+| — | `post_living_image` | `POST /v2/tool/living-image` | spec_only | raw | yes | only | json |
+| — | `post_material_swap` | `POST /v2/tool/material-swap` | documented | curated | yes | only | multipart + json |
+| — | `post_model_pose_variants` | `POST /v2/tool/model-pose-variants` | documented | curated | no | only | multipart + json |
+| — | `post_model_swap` | `POST /v2/tool/model-swap` | spec_only | raw | no | only | multipart + json |
+| — | `post_packshots` | `POST /v2/tool/packshots` | spec_only | raw | no | only | json |
+| — | `post_product360_video` | `POST /v2/tool/product-360-video` | spec_only | raw | yes | only | json |
+| — | `post_skechers_style_edit` | `POST /v2/tool/skechers-style-editor` | spec_only | raw | no | only | json |
+| — | `post_sketch_to_render` | `POST /v2/tool/sketch-to-render` | documented | curated | no | only | multipart + json |
+| — | `post_sole_swap` | `POST /v2/tool/sole-swap` | spec_only | raw | no | only | json |
+| — | `post_swan_s_logo_design` | `POST /v2/tool/swan-s-logo-design` | spec_only | raw | no | only | json |
+| — | `post_swan_s_logo_install` | `POST /v2/tool/swan-s-logo-install` | spec_only | raw | no | only | json |
+| — | `post_swap_product` | `POST /v2/tool/swap-product` | spec_only | raw | no | only | json |
+| — | `post_text_layerizer` | `POST /v2/tool/text-layerizer` | spec_only | raw | yes | only | multipart + json |
+| — | `post_vectorizer` | `POST /v2/tool/vectorizer` | spec_only | raw | yes | only | multipart + json |
+
+#### post_magic_prompt_v4 — `POST /v1/ideogram-v4/magic-prompt`
+
+Generate a Magic Prompt with Ideogram 4.0
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | one of AUTO, 1x4, 1x3, 1x2, 9x16, 10x16, 2x3, 3x4, 4x5, 1x1, 5x4, 4x3, … (18) |  |
+| `text_prompt` | string | yes |
+
+#### post_provenance_verify — `POST /v1/provenance/verify`
+
+Check whether content was created by Ideogram
+
+| field | kind | required |
+|---|---|---|
+| `content` | local file path or public https URL | yes |
+
+File limits: `content` 50 MB (not stated; this server's cap).
+
+#### post_snap_mask — `POST /v1/snap-mask`
+
+Snap a hand-drawn mask to the selected object
+
+| field | kind | required |
+|---|---|---|
+| `image` | local file path or public https URL | yes |
+| `mask` | local file path or public https URL | yes |
+
+File limits: `image` 25 MB; `mask` 50 MB (not stated; this server's cap).
+
+Rules:
+- needs a source image: image (a local file or a public https URL)
+
+#### post_ad_localizer — `POST /v2/tool/ad-localizer`
+
+Ad Localizer
+
+| field | kind | required |
+|---|---|---|
+| `exact_copy` | string |  |
+| `image` | local file path or public https URL |  |
+| `image_asset_identifier` | object |  |
+| `language` | one of ar, cs, da, de, en, es, fi, fr, fr-ca, hu, it, ja, … (17) | yes |
+| `num_images` | integer |  |
+| `private` | boolean |  |
+| `prompt` | string |  |
+| `quality` | one of low, medium, high |  |
+| `seed` | integer |  |
+| `target_collection_id` | string |  |
+| `webhook_url` | string |  |
+
+File limits: `image` 25 MB.
+
+Rules:
+- needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
+
+#### post_ad_resizer — `POST /v2/tool/ad-resizer`
+
+Ad Resizer
+
+| field | kind | required |
+|---|---|---|
+| `image` | local file path or public https URL |  |
+| `image_asset_identifier` | object |  |
+| `num_images` | integer |  |
+| `platform` | one of google, meta, meta_reels, meta_stories, snapchat, tiktok |  |
+| `private` | boolean |  |
+| `prompt` | string |  |
+| `quality` | one of low, medium, high |  |
+| `resolution` | one of 300x250, 336x280, 300x600, 1080x1080, 1080x1350, 1080x1920, 1920x1080, 728x90, 160x600, 970x250, 320x50, 300x50, … (31) | yes |
+| `target_collection_id` | string |  |
+| `webhook_url` | string |  |
+
+File limits: `image` 25 MB.
+
+Rules:
+- needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
+
+#### post_ad_variations — `POST /v2/tool/ad-variations`
+
+Ad Variations
+
+| field | kind | required |
+|---|---|---|
+| `image` | local file path or public https URL |  |
+| `image_asset_identifier` | object |  |
+| `num_images` | integer |  |
+| `private` | boolean |  |
+| `prompt` | string |  |
+| `quality` | one of low, medium, high |  |
+| `variation_type` | one of people, setting, group_size, scene | yes |
+| `webhook_url` | string |  |
+
+File limits: `image` 25 MB.
+
+Rules:
+- needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
+
+#### post_colorways — `POST /v2/tool/colorways`
+
+Colorways
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | string |  |
+| `colors` | array of string | yes |
+| `image` | local file path or public https URL |  |
+| `image_asset_identifier` | object |  |
+| `mask_asset_identifiers` | array of object |  |
+| `masks` | local file paths or public https URLs |  |
+| `private` | boolean |  |
+| `quality` | one of low, medium, high |  |
+| `target_collection_id` | string |  |
+| `webhook_url` | string |  |
+
+File limits: `image` 25 MB; `masks` 25 MB × 4.
+
+Rules:
+- needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
+- image and image_asset_identifier are alternatives; give one
+- exactly one of masks and mask_asset_identifiers: give one of them
+- colors are paired by position with the masks: give as many colors as masks (or mask_asset_identifiers)
+
+#### post_ghost_mannequin — `POST /v2/tool/ghost-mannequin`
+
+Ghost Mannequin
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | string |  |
+| `back_asset_identifier` | object |  |
+| `back_image` | local file path or public https URL |  |
+| `bottom_asset_identifier` | object |  |
+| `bottom_image` | local file path or public https URL |  |
+| `front_asset_identifier` | object |  |
+| `front_image` | local file path or public https URL |  |
+| `garment_asset_identifiers` | array of object |  |
+| `garment_images` | local file paths or public https URLs |  |
+| `instruction` | string |  |
+| `left_asset_identifier` | object |  |
+| `left_image` | local file path or public https URL |  |
+| `metadata` | string |  |
+| `private` | boolean |  |
+| `quality` | one of low, medium, high |  |
+| `right_asset_identifier` | object |  |
+| `right_image` | local file path or public https URL |  |
+| `seed` | integer |  |
+| `target_collection_id` | string |  |
+| `top_asset_identifier` | object |  |
+| `top_image` | local file path or public https URL |  |
+| `view` | one of front, three_quarter, back | yes |
+| `webhook_url` | string |  |
+
+File limits: `back_image` 50 MB; `bottom_image` 50 MB; `front_image` 50 MB; `garment_images` 50 MB × 15; `left_image` 50 MB; `right_image` 50 MB; `top_image` 50 MB.
+
+Rules:
+- needs at least one garment photo: a view (front_image, back_image, left_image, right_image, top_image, bottom_image — files or URLs — or its *_asset_identifier) or garment_images / garment_asset_identifiers
+- garment_images and garment_asset_identifiers are alternatives; give one
+- at most 15 garment photos in total: the six views (file or asset) and garment_images / garment_asset_identifiers together
+
+#### post_living_image — `POST /v2/tool/living-image`
+
+Turn a still image into a subtle looping video
+
+| field | kind | required |
+|---|---|---|
+| `duration` | integer |  |
+| `image_asset_identifier` | object | yes |
+| `quality` | one of standard, high |  |
+| `target_collection_id` | string |  |
+
+#### post_material_swap — `POST /v2/tool/material-swap`
+
+Material Swap
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | string |  |
+| `image` | local file path or public https URL |  |
+| `image_asset_identifier` | object |  |
+| `mask_asset_identifiers` | array of object |  |
+| `masks` | local file paths or public https URLs |  |
+| `material_asset_identifiers` | array of object |  |
+| `materials` | local file paths or public https URLs |  |
+| `private` | boolean |  |
+| `quality` | one of low, medium, high |  |
+| `target_collection_id` | string |  |
+| `webhook_url` | string |  |
+
+File limits: `image` 25 MB; `masks` 25 MB × 4; `materials` 25 MB × 4.
+
+Rules:
+- needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
+- image and image_asset_identifier are alternatives; give one
+- exactly one of masks and mask_asset_identifiers: give one of them
+- exactly one of materials and material_asset_identifiers: give one of them
+- materials are one for every mask, or exactly one per mask: give one material or as many as masks
+
+#### post_model_pose_variants — `POST /v2/tool/model-pose-variants`
+
+Model Pose Variants
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | string |  |
+| `instruction` | string | yes |
+| `num_images` | integer |  |
+| `pose_reference_asset_identifier` | object |  |
+| `private` | boolean |  |
+| `quality` | one of low, medium, high |  |
+| `seed` | integer |  |
+| `source_asset_identifier` | object |  |
+| `source_image` | local file path or public https URL |  |
+| `webhook_url` | string |  |
+
+File limits: `source_image` 50 MB.
+
+Rules:
+- needs the fashion image: source_image (a local file or a public https URL) or source_asset_identifier (an Ideogram asset)
+
+#### post_model_swap — `POST /v2/tool/model-swap`
+
+Model Swap
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | string |  |
+| `instruction` | string |  |
+| `model_asset_identifiers` | array of object | yes |
+| `num_images` | integer |  |
+| `private` | boolean |  |
+| `quality` | one of low, medium, high |  |
+| `seed` | integer |  |
+| `source_asset_identifier` | object |  |
+| `source_image` | local file path or public https URL |  |
+| `webhook_url` | string |  |
+
+File limits: `source_image` 50 MB.
+
+Rules:
+- needs the working image: source_image (a local file or a public https URL) or source_asset_identifier (an Ideogram asset)
+
+#### post_packshots — `POST /v2/tool/packshots`
+
+Packshots
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | string |  |
+| `instruction` | string |  |
+| `private` | boolean |  |
+| `product_asset_identifiers` | array of object | yes |
+| `quality` | one of low, medium, high |  |
+| `style_reference_asset_identifier` | object |  |
+| `view` | one of detail, three_quarter, front, back | yes |
+| `webhook_url` | string |  |
+
+#### post_product360_video — `POST /v2/tool/product-360-video`
+
+Product 360 Video
+
+| field | kind | required |
+|---|---|---|
+| `direction` | one of clockwise, counter-clockwise | yes |
+| `duration` | integer |  |
+| `image_asset_identifier` | object | yes |
+| `product_description` | string |  |
+| `resolution` | one of 480p, 720p, 1080p |  |
+| `target_collection_id` | string |  |
+
+#### post_skechers_style_edit — `POST /v2/tool/skechers-style-editor`
+
+Edit a product image using an instruction and ordered references
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | one of 1:1, 4:3, 16:9, 3:4, 9:16 |  |
+| `base_asset_identifier` | object | yes |
+| `base_description` | string |  |
+| `base_generation_size` | one of 1k, 2k, 4k |  |
+| `num_images` | one of several shapes |  |
+| `private` | boolean |  |
+| `quality` | one of low, medium, high |  |
+| `reference_asset_identifiers` | array of object |  |
+| `reference_descriptions` | array of string |  |
+| `resolved_instruction` | string | yes |
+| `webhook_url` | string |  |
+
+#### post_sketch_to_render — `POST /v2/tool/sketch-to-render`
+
+Sketch to Render
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | string |  |
+| `instruction` | string | yes |
+| `num_images` | integer |  |
+| `private` | boolean |  |
+| `quality` | one of low, medium, high |  |
+| `seed` | integer |  |
+| `sketch_asset_identifier` | object |  |
+| `sketch_image` | local file path or public https URL |  |
+| `webhook_url` | string |  |
+
+File limits: `sketch_image` 50 MB.
+
+Rules:
+- needs the sketch: sketch_image (a local file or a public https URL) or sketch_asset_identifier (an Ideogram asset)
+
+#### post_sole_swap — `POST /v2/tool/sole-swap`
+
+Sole Swap
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | string |  |
+| `base_asset_identifier` | object | yes |
+| `base_generation_size` | one of 1k, 2k, 4k |  |
+| `instruction` | string |  |
+| `num_images` | one of several shapes |  |
+| `private` | boolean |  |
+| `quality` | one of low, medium, high |  |
+| `seed` | integer |  |
+| `upper_asset_identifiers` | array of object | yes |
+| `webhook_url` | string |  |
+
+#### post_swan_s_logo_design — `POST /v2/tool/swan-s-logo-design`
+
+Design one Swan S logo candidate
+
+| field | kind | required |
+|---|---|---|
+| `design_variant` | one of split_coverage, full_coverage |  |
+| `flat_silhouette_asset_identifier` | object |  |
+| `geometry_hero_asset_identifier` | object |  |
+| `logo_specification_asset_identifier` | object |  |
+| `logo_style` | one of 3d, flat | yes |
+| `private` | boolean |  |
+| `quality` | one of low, medium, high |  |
+| `source_mode` | one of shoe_swatch, user_reference | yes |
+| `style_source_asset_identifier` | object | yes |
+| `webhook_url` | string |  |
+
+#### post_swan_s_logo_install — `POST /v2/tool/swan-s-logo-install`
+
+Install a Swan S logo on a shoe
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | string | yes |
+| `logo_asset_identifier` | object | yes |
+| `logo_specification_asset_identifier` | object |  |
+| `logo_style` | one of 3d, flat | yes |
+| `num_images` | one of several shapes |  |
+| `private` | boolean |  |
+| `quality` | one of low, medium, high |  |
+| `shoe_asset_identifiers` | array of object | yes |
+| `webhook_url` | string |  |
+
+#### post_swap_product — `POST /v2/tool/swap-product`
+
+Swap Product
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | string |  |
+| `instruction` | string |  |
+| `mode` | one of replace, recolor | yes |
+| `num_images` | one of several shapes |  |
+| `private` | boolean |  |
+| `product_asset_identifiers` | array of object | yes |
+| `quality` | one of low, medium, high |  |
+| `source_asset_identifier` | object | yes |
+| `webhook_url` | string |  |
+
+#### post_text_layerizer — `POST /v2/tool/text-layerizer`
+
+Text Layerizer
+
+| field | kind | required |
+|---|---|---|
+| `font_candidate_files` | local file paths or public https URLs |  |
+| `image` | local file path or public https URL |  |
+| `image_asset_identifier` | object |  |
+| `private` | boolean |  |
+| `prompt` | one of several shapes |  |
+| `seed` | integer |  |
+| `target_collection_id` | string |  |
+| `webhook_url` | string |  |
+
+File limits: `font_candidate_files` 5 MB × 5; `image` 50 MB.
+
+Rules:
+- needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
+- image and image_asset_identifier are alternatives; give one
+
+#### post_vectorizer — `POST /v2/tool/vectorizer`
+
+Vectorizer
+
+| field | kind | required |
+|---|---|---|
+| `image` | local file path or public https URL |  |
+| `image_asset_identifier` | object |  |
+| `private` | boolean |  |
+| `target_collection_id` | string |  |
+| `webhook_url` | string |  |
+
+File limits: `image` 50 MB.
+
+Rules:
+- needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
 
 ### workflow
 
 | model | operation | path | class | support | quotable | async | body |
 |---|---|---|---|---|---|---|---|
-| — | `post_try_on_v3` | `POST /v1/ideogram-v3/try-on` | v1_only | planned | no | none | multipart |
-| — | `post_lookbook` | `POST /v2/workflow/lookbook` | spec_only | planned | no | only | json |
-| — | `post_precise_masked_edit` | `POST /v2/workflow/precise-masked-edit` | spec_only | planned | no | only | multipart + json |
-| — | `post_virtual_try_on` | `POST /v2/workflow/virtual-try-on` | spec_only | planned | no | only | multipart + json |
+| — | `post_try_on_v3` | `POST /v1/ideogram-v3/try-on` | v1_only | raw | no | none | multipart |
+| — | `post_lookbook` | `POST /v2/workflow/lookbook` | spec_only | raw | no | only | json |
+| — | `post_precise_masked_edit` | `POST /v2/workflow/precise-masked-edit` | spec_only | raw | no | only | multipart + json |
+| — | `post_virtual_try_on` | `POST /v2/workflow/virtual-try-on` | spec_only | raw | no | only | multipart + json |
+
+#### post_try_on_v3 — `POST /v1/ideogram-v3/try-on`
+
+Virtual Try-On with Ideogram 3.0
+
+| field | kind | required |
+|---|---|---|
+| `image` | local file path or public https URL | yes |
+| `magic_prompt` | one of AUTO, ON, OFF |  |
+| `magic_prompt_system_prompt_config_id` | string |  |
+| `num_images` | integer |  |
+| `product_reference_images` | local file paths or public https URLs | yes |
+| `prompt` | string |  |
+| `rendering_speed` | one of FLASH, TURBO, BALANCED, DEFAULT, QUALITY |  |
+| `seed` | integer |  |
+| `style_preset` | one of 80S_ILLUSTRATION, 90S_NOSTALGIA, ABSTRACT_ORGANIC, ANALOG_NOSTALGIA, ART_BRUT, ART_DECO, ART_POSTER, AURA, AVANT_GARDE, BAUHAUS, BLUEPRINT, BLURRY_MOTION, … (62) |  |
+| `style_type` | one of AUTO, GENERAL, REALISTIC, DESIGN, CUSTOM, FICTION, STYLIZED |  |
+
+File limits: `image` 25 MB; `product_reference_images` 50 MB (not stated; this server's cap) × 1.
+
+Rules:
+- needs a source image: image (a local file or a public https URL)
+
+#### post_lookbook — `POST /v2/workflow/lookbook`
+
+Create a fashion lookbook
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | string |  |
+| `category` | one of dresses, jeans, pants, tops | yes |
+| `num_shoots` | integer |  |
+| `private` | boolean |  |
+| `product_asset_identifiers` | array of object | yes |
+| `webhook_url` | string |  |
+
+#### post_precise_masked_edit — `POST /v2/workflow/precise-masked-edit`
+
+Edit an image, optionally using a mask
+
+| field | kind | required |
+|---|---|---|
+| `instruction` | string | yes |
+| `mask_asset_identifier` | object |  |
+| `model` | one of gpt-image-2, ideogram-4-5 |  |
+| `num_images` | integer |  |
+| `preserve_unmasked_pixels` | boolean |  |
+| `private` | boolean |  |
+| `quality` | one of low, medium, high |  |
+| `reference_asset_identifiers` | array of object |  |
+| `seed` | integer |  |
+| `source_asset_identifier` | object |  |
+| `source_image` | local file path or public https URL |  |
+| `target_collection_id` | string |  |
+| `webhook_url` | string |  |
+
+File limits: `source_image` 50 MB.
+
+Rules:
+- needs the source: source_image (a local file or a public https URL) or source_asset_identifier (an Ideogram asset)
+
+#### post_virtual_try_on — `POST /v2/workflow/virtual-try-on`
+
+Dress a person in one or more garments
+
+| field | kind | required |
+|---|---|---|
+| `aspect_ratio` | string |  |
+| `garment_asset_identifiers` | array of object |  |
+| `garment_images` | local file paths or public https URLs |  |
+| `instruction` | string |  |
+| `person_asset_identifier` | object |  |
+| `person_image` | local file path or public https URL |  |
+| `private` | boolean |  |
+| `webhook_url` | string |  |
+
+File limits: `garment_images` 25 MB × 7; `person_image` 25 MB.
+
+Rules:
+- needs the person: person_image (a local file or a public https URL) or person_asset_identifier (an Ideogram asset)
+- exactly one of person_image and person_asset_identifier: give one of them
+- exactly one of garment_images and garment_asset_identifiers: give one of them
 
 ### generation
 
@@ -1690,11 +2668,17 @@ No body.
 
 | model | operation | path | class | support | quotable | async | body |
 |---|---|---|---|---|---|---|---|
-| — | `get_webhook_signing_jwks` | `GET /v1/.well-known/jwks.json` | v1_only | planned | no | none | none |
+| — | `get_webhook_signing_jwks` | `GET /v1/.well-known/jwks.json` | v1_only | raw | no | none | none |
 | — | `get_account_api_keys` | `GET /v2/account/api-keys` | documented | curated | no | none | none |
 | — | `get_account_invoices` | `GET /v2/account/invoices` | documented | curated | no | none | none |
 | — | `get_account_usage` | `GET /v2/account/usage` | documented | curated | no | none | none |
 | — | `get_asset_reference_usage` | `GET /v2/assets/reference-usage` | spec_only | raw | no | none | none |
+
+#### get_webhook_signing_jwks — `GET /v1/.well-known/jwks.json`
+
+Get the public keys used to verify webhook signatures
+
+No body.
 
 #### get_account_api_keys — `GET /v2/account/api-keys`
 

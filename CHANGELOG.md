@@ -11,6 +11,7 @@ Step 1 of `docs/DESIGN-ideogram-v2.md`: every image family of Ideogram's documen
 Step 2: the account — usage and spend, invoices, API keys — and the webhook signature helper.
 Step 3: custom-model training — datasets, their assets, the training of an Ideogram 4.0 or 3.0 model, the models.
 Step 4: video — from a prompt, from an image, from references.
+Step 5: the commercial tools and the v1 utilities, each one operation; nothing of the specification is planned any more.
 
 ### Added
 
@@ -94,6 +95,47 @@ Step 4: video — from a prompt, from an image, from references.
 - `get_asset_reference_usage` (spec-only) is served by `ideogram_api` behind `allow_undocumented`: a spec-only
   operation of a curated family is raw, as the undocumented reframe models are. Support: curated 47 · raw 5 ·
   planned 75. tools/list: 19 tools.
+- Twelve single-operation tools (`src/tools/commercial.ts`) on the family mechanism — a `FamilyToolSpec` may name one
+  operation: no `model` input, the operation's own fields, the same checks (schema, the shared rules, `private`
+  defaulting to true), the same request and result shaping. The documented commercial tools `ideogram_ad_localizer`,
+  `ideogram_ad_resizer`, `ideogram_ad_variations`, `ideogram_colorways`, `ideogram_ghost_mannequin`,
+  `ideogram_material_swap`, `ideogram_model_pose_variants`, `ideogram_sketch_to_render` (generations: accepted, waited
+  for, saved; `ideogram_quote` prices the five that offer a dry run — measured 2026-10-11: ad resizer 0.1025 USD,
+  colorways 0.0717, material swap 0.0798; ad localizer and ghost mannequin answered "not available to this account"
+  on the test key), and the v1 utilities `ideogram_magic_prompt` (the JSON prompt printed), `ideogram_layerize_logos`
+  (the base image saved, the detected layers listed with the reference each matched), `ideogram_provenance` (the
+  record printed) and `ideogram_snap_mask` (the operation answers the mask as image/png: saved as any image is, under
+  the image cap and types — `callToFile`; a 5xx says the request MAY have run, never resent). The `image` /
+  `image_asset_identifier` rule reaches colorways and material swap (their prose: "Provide exactly one of").
+  Support: curated 80 · raw 47 · planned 0 · unsupported 73 — a v1-only operation of a curated family (the v1 model
+  variants, the webhook JWKS) and every spec-only or customer-specific tool and workflow run through `ideogram_api`
+  (`allow_undocumented` where unlisted). tools/list: 38 tools, 132 254 bytes (the budget is 136 KB from this step;
+  the twelve tools with their field sentences cost 34 KB). An operation's `async` kind is read from its answer: a
+  200 that is a generation id with at most the job's own facts (time, status, seed, the size a reframe will make) is a
+  job; one that NAMES a generation beside facts of its own (provenance verify) is an answer, never polled — the kinds
+  of every exposable operation are pinned by a test. The facts carry `responseMedia` (json · image · none). The tool
+  family shows its own sentences for the shared fields (aspect ratios with a colon, three quality tiers, logo
+  references); the rules anchored to its prose: masks / mask_asset_identifiers, materials / material_asset_identifiers
+  and garment_images / garment_asset_identifiers are alternatives, colors are paired with the masks, materials are one
+  or one per mask, at most 10 logo references; pose variants, sketch to render and ghost mannequin need their source
+  (the one source rule, named per operation). A single-operation tool describes a quote only where the operation
+  offers a dry run; magic prompt says the aspect ratio the model picked; logo layers are listed as layers; the snap
+  mask answer can be returned inline and takes no wait; a file answer whose write fails is "the operation ran and
+  answered; the file is lost here", never "may have run"; the file answer goes through call()'s send loop (a 429 is
+  retried as everywhere). The rules the raw-served operations state in their prose are enforced before any request:
+  exactly one of masks / mask_asset_identifiers and of materials / material_asset_identifiers (both AND neither
+  refused), the person and the garments of virtual try-on, exactly one of text_prompt / json_prompt on the six v1
+  Ideogram 4 generations, image / image_asset_identifier on the text layerizer, at most 15 garment photos on ghost
+  mannequin; the one source rule names model swap's and precise masked edit's source and the v1 edit's `image_urls`,
+  and says only the fields the operation has (snap mask takes no asset). A tool may carry its own field sentences
+  (`FamilyToolSpec.fieldTexts`: magic prompt's aspect ratios take an x, snap mask's image takes no asset); a tool whose
+  operation is no job (magic prompt, provenance, logos, snap mask) takes no `wait_s`; snap mask's answer is said as
+  what it is (white = the object: as is for remove object, whose mask takes white as the region to remove, inverted for
+  inpaint, whose mask takes black). A 2xx that is no file of the kind, or over the cap, keeps the save's own typed
+  error ("the operation ran and answered, with no file this server keeps"); anything else — a failed write, a cut
+  connection, the budget's end mid-body — is a lost answer ("sending it again runs it again"). The
+  body probe reads its optional top-level fields as unknown, so a body of another shape is never turned into a
+  record. `responseMedia` knows `video` too.
 
 - `ideogram_precise_edit` (Ideogram 4.5: the image, an optional mask, up to four `reference_images` or
   `reference_image_asset_identifiers`, `context_window`), `ideogram_remove_background` and `ideogram_remove_object`

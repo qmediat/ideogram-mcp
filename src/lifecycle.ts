@@ -48,7 +48,9 @@ export interface LayeredItem {
   readonly resolution: string | null;
   readonly seed: number | null;
   readonly isImageSafe: boolean;
+  /** The detected blocks as the API lists them: the text blocks of a layerized design, the matched layers of layerize logos. */
   readonly textBlocks: readonly unknown[];
+  readonly blocksKind: "text blocks" | "layers";
 }
 
 /** One generated video (the specification's `VideoObject`): the link expires like an image's; saved as mp4. */
@@ -64,7 +66,7 @@ export type Payload =
   | { readonly kind: "images"; readonly items: readonly ImageItem[] }
   | { readonly kind: "videos"; readonly items: readonly VideoItem[] }
   | { readonly kind: "layered"; readonly items: readonly LayeredItem[] }
-  | { readonly kind: "description"; readonly descriptionId: string; readonly texts: readonly string[]; readonly jsonPrompt: unknown }
+  | { readonly kind: "description"; readonly descriptionId: string; readonly texts: readonly string[]; readonly jsonPrompt: unknown; readonly aspectRatio: string | null }
   | { readonly kind: "record"; readonly body: unknown };
 
 export interface ContractMismatch {
@@ -126,6 +128,9 @@ const BodyShape = z.looseObject({
   description_id: z.string().optional(),
   descriptions: z.array(z.looseObject({ text: z.string() })).optional(),
   json_prompt: z.unknown().optional(),
+  base_image_url: z.unknown().optional(), // read as unknown: the probe must never reject a body for a field another kind spells differently
+  layers: z.unknown().optional(),
+  aspect_ratio: z.unknown().optional(),
 });
 
 /** The generation id a body carries, read without trusting the rest of it. */
@@ -177,6 +182,7 @@ function layeredItems(data: readonly unknown[]): LayeredItem[] | null {
       seed: d.seed ?? null,
       isImageSafe: d.is_image_safe ?? (d.base_image_url != null || d.url != null || d.html_url != null || (d.text_blocks ?? []).length > 0), // the flag is required by the schema; absent, anything listed counts as safe
       textBlocks: d.text_blocks ?? [],
+      blocksKind: "text blocks",
     });
   }
   return items;
@@ -189,7 +195,11 @@ export function payloadOf(body: unknown): Payload | null {
   const b = parsed.data;
   if (b.descriptions !== undefined || b.json_prompt !== undefined) {
     const texts = (b.descriptions ?? []).map((d) => d.text);
-    return { kind: "description", descriptionId: b.description_id ?? "", texts, jsonPrompt: b.json_prompt ?? null };
+    return { kind: "description", descriptionId: b.description_id ?? "", texts, jsonPrompt: b.json_prompt ?? null, aspectRatio: typeof b.aspect_ratio === "string" ? b.aspect_ratio : null }; // a magic prompt names the ratio the model picked
+  }
+  if (Array.isArray(b.layers)) {
+    // layerize logos (v1): one design — the text-free base image and the detected layers, each naming the reference it matched
+    return { kind: "layered", items: [{ baseImageUrl: typeof b.base_image_url === "string" ? b.base_image_url : null, url: null, htmlUrl: null, resolution: null, seed: null, isImageSafe: true, textBlocks: b.layers, blocksKind: "layers" }] };
   }
   if (b.data === undefined) return b.generation_id === undefined ? { kind: "record", body } : null;
   const items = imageItems(b.data);
@@ -234,6 +244,9 @@ export async function execute(client: IdeogramClient, req: ApiRequest, options: 
   const payload = payloadOf(body);
   const generationId = generationIdOf(body);
   if (payload !== null) return { kind: "completed", generationId, payload, usageCostUsdMicros: null };
+  // an operation that is no job (provenance verify) answers a record that may NAME a generation (the one that made the
+  // image): nothing to poll — the body is the answer
+  if (req.op.async === "none") return { kind: "completed", generationId: null, payload: { kind: "record", body }, usageCostUsdMicros: null };
   if (generationId === null) throw new Error(`${req.op.id} answered without a payload or a generation id`);
   const deadline = started + clampWait(options.waitS) * 1000;
   return poll(client, generationId, deadline, POLL_CAP_MS, options.budget);
