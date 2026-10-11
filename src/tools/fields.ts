@@ -74,7 +74,7 @@ export const FIELD_TEXT: Readonly<Record<string, string>> = {
   prompt_expansion_mode: "How much the model may rewrite the prompt: disabled, fast, balanced (default) or quality",
   video_asset_identifier: "The video to edit, as an Ideogram asset",
   resolution_tier: "The output resolution tier",
-  // the single-operation tools (2.5.0)
+  // the single-operation tools' own fields
   language: "The target language of the copy (one request per language; Arabic is rendered right-to-left)",
   exact_copy: "Pre-approved wordings, one `original => replacement` per line; each names the text element showing original and sets it to replacement",
   platform: "The ad platform whose published safe zone the ad stays inside (google, meta, meta_reels, meta_stories, snapchat, tiktok)",
@@ -119,9 +119,21 @@ export const VIDEO_FIELD_TEXT: Readonly<Record<string, string>> = {
   private: FIELD_TEXT_PRIVATE,
 };
 
-/** The field sentences a family's tool advertises: the video families read their own sentences over the shared ones. */
+/** The sentences the single-operation tools (the tool family) show in place of the image families' for the fields they
+ * share: their aspect ratios take a colon, their quality has three tiers, their reference images are logos to match. */
+export const TOOL_FIELD_TEXT: Readonly<Record<string, string>> = {
+  aspect_ratio: "Output aspect ratio with a colon — 1:1, 3:4, 4:3, 16:9 or 9:16 where the operation lists them (colorways and material swap default to the photo's ratio, ghost mannequin and sketch to render to 1:1, pose variants to the nearest supported); magic prompt: the ratio to pin, or omitted for the model's pick",
+  quality: "low, medium or high: higher may improve detail and takes longer",
+  reference_images: "Local image files (or public https URLs) of the logos to match in the design, REF_0, REF_1, … in the order given (at most 10)",
+  image: "The source photo or ad to work on: a local image file or a public https URL (image_asset_identifier for an Ideogram asset)",
+  num_images: "How many outputs to make (each is billed)",
+  seed: "Random seed for a repeatable result",
+};
+
+/** The field sentences a family's tool advertises: the video and tool families read their own sentences over the shared ones. */
 export function fieldTextsFor(family: string | null): Readonly<Record<string, string>> {
-  return isVideoFamily(family) ? { ...FIELD_TEXT, ...VIDEO_FIELD_TEXT } : FIELD_TEXT;
+  if (isVideoFamily(family)) return { ...FIELD_TEXT, ...VIDEO_FIELD_TEXT };
+  return family === "tool" ? { ...FIELD_TEXT, ...TOOL_FIELD_TEXT } : FIELD_TEXT;
 }
 
 export const VIDEO_INLINE_NOTE = "A video is saved, never returned inline: inline_images has no effect here.";

@@ -204,18 +204,40 @@ export class IdeogramClient {
 
   /** Sends one request inside the call's budget; resolves with the parsed 2xx body, rejects with a typed IdeogramApiError. */
   async call(req: ApiRequest, budget: CallBudget): Promise<ApiResult> {
+    const response = await this.send(req, budget, "application/json");
+    return { status: response.status, body: await parseJson(response, req) };
+  }
+
+  /** Sends one request whose 200 is a file, not JSON (snap mask answers the mask as image/png): the same send as
+   * call() — the body's cap, the 429 and never-sent retries, the typed errors — then the body streamed into `outputDir`
+   * under the kind's cap and types, exactly as a download is. A 200 whose file cannot be written is ANSWER_NOT_SAVED:
+   * the operation ran, its answer is lost here (never "may have run"). */
+  async callToFile(req: ApiRequest, outputDir: string, budget: CallBudget, kind: MediaKind): Promise<SavedFile> {
+    const response = await this.send(req, budget, kind === "video" ? "video/mp4" : "image/*");
+    try {
+      return await this.saveResponse(response, outputDir, budget, kind);
+    } catch (error) {
+      const text = error instanceof IdeogramApiError ? error.message : networkErrorText(error);
+      throw new IdeogramApiError(response.status, "ANSWER_NOT_SAVED", `${req.op.id} answered ${response.status}; its answer could not be saved: ${text}`, { sent: true });
+    }
+  }
+
+  /** The one send loop: the encoded body's cap, every attempt within the budget, a retry on 429 or on a request that
+   * never left (a POST that may have reached Ideogram is never resent), the typed error of a failure — and the ok
+   * response for the caller to read as JSON or as a file. */
+  private async send(req: ApiRequest, budget: CallBudget, accept: string): Promise<Response> {
     const { url, body } = this.encode(req);
     if (body !== null && req.body?.files.length) {
       const refusal = requestBytesRefusal(req.op, body.bytes.byteLength);
       if (refusal !== null) throw new Error(refusal);
     }
-    const headers: Record<string, string> = { ...req.headers, "Api-Key": this.options.apiKey, Accept: "application/json" };
+    const headers: Record<string, string> = { ...req.headers, "Api-Key": this.options.apiKey, Accept: accept };
     if (body !== null) headers["Content-Type"] = body.contentType;
     const idempotent = req.op.method === "GET";
     for (let attempt = 0; ; attempt++) {
       const begun = budget.clock.now();
       const result = await this.attempt(req.op.method, url, headers, body?.bytes ?? null, budget);
-      if (result.kind === "response" && result.response.ok) return { status: result.response.status, body: await parseJson(result.response, req) };
+      if (result.kind === "response" && result.response.ok) return result.response;
       const wait = backoffMs(attempt, result.kind === "response" ? result.response : undefined);
       const reserve = idempotent ? 0 : budget.clock.now() - begun; // a POST is resent only with time for an attempt as long as this one
       if (attempt < this.options.maxRetries && this.fits(budget, wait, reserve) && this.retryable(idempotent, result)) {
@@ -226,19 +248,6 @@ export class IdeogramClient {
       }
       throw result.kind === "network" ? this.networkError(idempotent, result.error) : await errorFromResponse(result.response);
     }
-  }
-
-  /** Sends one request whose 200 is a file, not JSON (snap mask answers the mask as image/png): the body is streamed
-   * into `outputDir` under the kind's cap and types, exactly as a download is; a non-2xx is the typed API error. Sent
-   * once (a POST that may have run is never resent — a retry would be billed twice), inside the call's budget. */
-  async callToFile(req: ApiRequest, outputDir: string, budget: CallBudget, kind: MediaKind): Promise<SavedFile> {
-    const { url, body } = this.encode(req);
-    const headers: Record<string, string> = { ...req.headers, "Api-Key": this.options.apiKey, Accept: kind === "video" ? "video/mp4" : "image/*" };
-    if (body !== null) headers["Content-Type"] = body.contentType;
-    const result = await this.attempt(req.op.method, url, headers, body?.bytes ?? null, budget);
-    if (result.kind === "network") throw this.networkError(req.op.method === "GET", result.error);
-    if (!result.response.ok) throw await errorFromResponse(result.response);
-    return this.saveResponse(result.response, outputDir, budget, kind);
   }
 
   /** Downloads one generated file into `outputDir`, streamed with a byte counter; nothing is left behind on failure. */

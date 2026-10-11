@@ -37,12 +37,12 @@ Fields of the operations this release serves (curated or raw) are listed below t
 | `ideogram_layerize` | Turn a flat image into an editable design (Ideogram 3.0): the detected text comes back as positioned text blocks with matched fonts, sizes and colours, beside a text-free base image that is saved. Optional font files to match against; ideogram_quote prices a call first. |
 | `ideogram_ad_localizer` | Translate an ad's copy into one target language (one request per language; Arabic right-to-left), keeping its layout, logos, brand type and product; exact_copy pins pre-approved wordings line by line. Takes the ad as a local file, a public https URL or an Ideogram asset. Results are saved to the output directory; long jobs come back as a generation_id for ideogram_generation; ideogram_quote prices a call first. |
 | `ideogram_ad_resizer` | Reframe an ad to a platform's exact ad size (resolution WIDTHxHEIGHT from the list; platform picks the published safe zone), optionally editing while reframing. Takes the creative as a local file, a public https URL or an Ideogram asset. Results are saved to the output directory; long jobs come back as a generation_id for ideogram_generation; ideogram_quote prices a call first. |
-| `ideogram_ad_variations` | Vary an ad along one axis — people, setting, group_size or scene — keeping its aspect ratio and product. Takes the creative as a local file, a public https URL or an Ideogram asset. Results are saved to the output directory; long jobs come back as a generation_id for ideogram_generation; ideogram_quote prices a call first. |
+| `ideogram_ad_variations` | Vary an ad along one axis — people, setting, group_size or scene — keeping its aspect ratio and product. Takes the creative as a local file, a public https URL or an Ideogram asset. Results are saved to the output directory; long jobs come back as a generation_id for ideogram_generation; no price quote (the operation offers no dry run). |
 | `ideogram_colorways` | Recolor a product photo: up to 4 masks, each paired by position with a six-digit hex colour; everything outside the masks is preserved. Takes the photo and the masks as local files, public https URLs or Ideogram assets. Results are saved to the output directory; long jobs come back as a generation_id for ideogram_generation; ideogram_quote prices a call first. |
 | `ideogram_ghost_mannequin` | A garment on an invisible mannequin from its photos (front, back, left, right, top, bottom and more angles, as files, URLs or assets), in the view asked (front, three_quarter, back), on a clean white studio background; instruction and metadata add factual product context. Results are saved to the output directory; long jobs come back as a generation_id for ideogram_generation; ideogram_quote prices a call first. |
 | `ideogram_material_swap` | Apply the material of reference images — colour, texture, pattern scale, orientation — to the masked regions of a product photo (up to 4 masks and materials, paired by position). Files, public https URLs or Ideogram assets. Results are saved to the output directory; long jobs come back as a generation_id for ideogram_generation; ideogram_quote prices a call first. |
-| `ideogram_model_pose_variants` | Re-pose the model of a fashion image by a plain-language pose or camera instruction (an optional pose reference asset). The source as a local file, a public https URL or an Ideogram asset. Results are saved to the output directory; long jobs come back as a generation_id for ideogram_generation; ideogram_quote prices a call first. |
-| `ideogram_sketch_to_render` | Render a fashion sketch as a product photo, with material and rendering direction and the construction details the sketch does not show. The sketch as a local file, a public https URL or an Ideogram asset. Results are saved to the output directory; long jobs come back as a generation_id for ideogram_generation; ideogram_quote prices a call first. |
+| `ideogram_model_pose_variants` | Re-pose the model of a fashion image by a plain-language pose or camera instruction (an optional pose reference asset). The source as a local file, a public https URL or an Ideogram asset. Results are saved to the output directory; long jobs come back as a generation_id for ideogram_generation; no price quote (the operation offers no dry run). |
+| `ideogram_sketch_to_render` | Render a fashion sketch as a product photo, with material and rendering direction and the construction details the sketch does not show. The sketch as a local file, a public https URL or an Ideogram asset. Results are saved to the output directory; long jobs come back as a generation_id for ideogram_generation; no price quote (the operation offers no dry run). |
 | `ideogram_magic_prompt` | Rewrite a natural-language prompt into an Ideogram 4.0 structured JSON prompt (and the aspect ratio the model picks for it, or the one you pin). Nothing is generated; no price quote (the v1 operation offers no dry run). |
 | `ideogram_layerize_logos` | Detect reference logos and image elements in a flat design and remove them: the text-free base image is saved, the detected layers come back with the reference each matched (REF_0, REF_1, … in the order given). The design and the references as local files or public https URLs. No price quote (the v1 operation offers no dry run). |
 | `ideogram_provenance` | Check whether an image was created by Ideogram: the provenance record (provider, system version, generation id, creation time, validation state) as Ideogram answers it. The image as a local file or a public https URL. Free of charge; no price quote. |
@@ -1329,12 +1329,12 @@ Rules:
 
 | model | operation | path | class | support | quotable | async | body |
 |---|---|---|---|---|---|---|---|
-| auto | `post_reframe_image_auto` | `POST /v2/image/reframe/auto` | spec_only | raw | yes | none | multipart + json |
-| bria-expand | `post_reframe_image_bria_expand` | `POST /v2/image/reframe/bria-expand` | spec_only | raw | yes | none | multipart + json |
-| gpt-image-2-5-flare | `post_reframe_image_gpt_image25_flare` | `POST /v2/image/reframe/gpt-image-2-5-flare` | spec_only | raw | yes | none | multipart + json |
+| auto | `post_reframe_image_auto` | `POST /v2/image/reframe/auto` | spec_only | raw | yes | only | multipart + json |
+| bria-expand | `post_reframe_image_bria_expand` | `POST /v2/image/reframe/bria-expand` | spec_only | raw | yes | only | multipart + json |
+| gpt-image-2-5-flare | `post_reframe_image_gpt_image25_flare` | `POST /v2/image/reframe/gpt-image-2-5-flare` | spec_only | raw | yes | only | multipart + json |
 | ideogram-3 | `post_reframe_image_v2_ideogram_v3` | `POST /v2/image/reframe/ideogram-3` | documented | curated | yes | optional | multipart + json |
-| nano-banana-2 | `post_reframe_image_nano_banana2` | `POST /v2/image/reframe/nano-banana-2` | documented | curated | yes | none | multipart + json |
-| nano-banana-pro | `post_reframe_image_nano_banana_pro` | `POST /v2/image/reframe/nano-banana-pro` | spec_only | raw | yes | none | multipart + json |
+| nano-banana-2 | `post_reframe_image_nano_banana2` | `POST /v2/image/reframe/nano-banana-2` | documented | curated | yes | only | multipart + json |
+| nano-banana-pro | `post_reframe_image_nano_banana_pro` | `POST /v2/image/reframe/nano-banana-pro` | spec_only | raw | yes | only | multipart + json |
 
 #### auto — `POST /v2/image/reframe/auto`
 
@@ -1785,6 +1785,9 @@ Detect and remove reference logos from an image
 | `reference_images` | local file paths or public https URLs | yes |
 
 File limits: `design_image` 25 MB; `reference_images` 50 MB (not stated; this server's cap).
+
+Rules:
+- reference_images takes at most 10 logo images
 
 #### ideogram-3 — `POST /v2/design/layerize/ideogram-3`
 
@@ -2245,6 +2248,8 @@ File limits: `image` 25 MB; `masks` 25 MB × 4.
 Rules:
 - needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
 - image and image_asset_identifier are alternatives; give one
+- masks and mask_asset_identifiers are alternatives; give one
+- colors are paired by position with the masks: give as many colors as masks (or mask_asset_identifiers)
 
 #### post_ghost_mannequin — `POST /v2/tool/ghost-mannequin`
 
@@ -2277,6 +2282,10 @@ Ghost Mannequin
 | `webhook_url` | string |  |
 
 File limits: `back_image` 50 MB; `bottom_image` 50 MB; `front_image` 50 MB; `garment_images` 50 MB × 15; `left_image` 50 MB; `right_image` 50 MB; `top_image` 50 MB.
+
+Rules:
+- needs at least one garment photo: a view (front_image, back_image, left_image, right_image, top_image, bottom_image — files or URLs — or its *_asset_identifier) or garment_images / garment_asset_identifiers
+- garment_images and garment_asset_identifiers are alternatives; give one
 
 #### post_living_image — `POST /v2/tool/living-image`
 
@@ -2312,6 +2321,9 @@ File limits: `image` 25 MB; `masks` 25 MB × 4; `materials` 25 MB × 4.
 Rules:
 - needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
 - image and image_asset_identifier are alternatives; give one
+- masks and mask_asset_identifiers are alternatives; give one
+- materials and material_asset_identifiers are alternatives; give one
+- materials are one for every mask, or exactly one per mask: give one material or as many as masks
 
 #### post_model_pose_variants — `POST /v2/tool/model-pose-variants`
 
@@ -2331,6 +2343,9 @@ Model Pose Variants
 | `webhook_url` | string |  |
 
 File limits: `source_image` 50 MB.
+
+Rules:
+- needs the fashion image: source_image (a local file or a public https URL) or source_asset_identifier (an Ideogram asset)
 
 #### post_model_swap — `POST /v2/tool/model-swap`
 
@@ -2414,6 +2429,9 @@ Sketch to Render
 | `webhook_url` | string |  |
 
 File limits: `sketch_image` 50 MB.
+
+Rules:
+- needs the sketch: sketch_image (a local file or a public https URL) or sketch_asset_identifier (an Ideogram asset)
 
 #### post_sole_swap — `POST /v2/tool/sole-swap`
 

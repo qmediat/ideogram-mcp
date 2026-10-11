@@ -121,7 +121,7 @@ export const FAMILY_TOOLS: readonly FamilyToolSpec[] = [
 
 async function runFamilyTool(spec: FamilyToolSpec, ctx: ToolContext, args: ToolArguments): Promise<CallToolResult> {
   const call = await prepare(spec, args, ctx.remote);
-  if (call.req.op.facts.responseMedia === "image") return fileAnswer(spec.name, ctx, call.req); // the answer IS the file (snap mask's PNG)
+  if (call.req.op.facts.responseMedia === "image") return fileAnswer(spec.name, ctx, call.req, args.inline_images === true); // the answer IS the file (snap mask's PNG)
   const run = await executeTold(ctx, call.req, call.waitS);
   if (run.kind === "result") return run.result;
   return outcomeResult(ctx, run.outcome, call.notes, { inlineImages: args.inline_images === true });

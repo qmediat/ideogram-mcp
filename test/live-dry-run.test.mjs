@@ -168,4 +168,5 @@ test("live: every curated quotable operation returns a PriceQuote; the quotes go
   ].join("\n");
   await writeFile(new URL(`../docs/PRICES-${date}.md`, import.meta.url), doc);
   assert.deepEqual(failures, [], `every row is in docs/PRICES-${date}.md; these failed:\n${failures.join("\n")}`);
+  assert.ok(rows.filter((r) => / exact | estimate /.test(r)).length >= 30, "at least 30 quotes answered: a key-wide refusal is not a pass");
 });

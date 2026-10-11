@@ -1,7 +1,8 @@
 // The schema budget of the shipped release (docs/DESIGN-ideogram-v2.md section 5): tools/list as a client receives it,
-// over a real MCP session, is at most 104 KB (26 tools after step 4: the eleven image families, the account, the
-// training, the three video families — 80 KB held through step 2, 88 KB through step 3; the video families cost
-// 15 KB on the wire, measured 98 341 bytes on 2026-10-10), and the per-model exactness that costs those bytes is
+// over a real MCP session, is at most 136 KB (38 tools after step 5: the eleven image families, the account, the
+// training, the three video families, the twelve single-operation tools — 80 KB held through step 2, 88 KB through
+// step 3, 104 KB through step 4; the twelve tools cost 34 KB with their sentences, measured 132 254 bytes on
+// 2026-10-11), and the per-model exactness that costs those bytes is
 // really there.
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -12,7 +13,7 @@ const { createServer } = await import("../dist/server.js");
 const { documentedModelsOf } = await import("../dist/registry.js");
 const { IdeogramClient, defaultClientOptions } = await import("../dist/client.js");
 
-const BUDGET_BYTES = 136 * 1024; // 38 tools after step 5: the twelve single-operation tools cost 32.8 KB with their field sentences (130 479 bytes measured on 2026-10-11)
+const BUDGET_BYTES = 136 * 1024; // 38 tools after step 5: the twelve single-operation tools cost 32.8 KB with their field sentences (132 254 bytes measured on 2026-10-11)
 
 async function listTools() {
   const ctx = { client: new IdeogramClient(defaultClientOptions("unused")), outputDir: "/tmp/unused", clock: { now: () => 0, sleep: async () => {} } };

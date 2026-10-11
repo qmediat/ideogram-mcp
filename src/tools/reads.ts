@@ -18,7 +18,7 @@ import { IdeogramApiError } from "../errors.js";
 import { operationById } from "../spec/operations.js";
 import type { Operation } from "../spec/operations.js";
 import type { ToolContext } from "./context.js";
-import { outcomeResult, textResult } from "./results.js";
+import { inlineContent, outcomeResult, textResult } from "./results.js";
 
 /** An answer's JSON is printed inline up to this size; above it the file in the output directory is the answer. */
 export const INLINE_JSON_BYTES = 64 * 1024;
@@ -114,11 +114,15 @@ export async function sendOperation<T extends z.ZodType>(ctx: ToolContext, reque
 
 /** An operation whose 200 is a file (snap mask's image/png): the body saved as the result — the one path of the curated
  * tool and `ideogram_api` alike; a failure that may have run says so (the request is never resent). */
-export async function fileAnswer(what: string, ctx: ToolContext, req: ApiRequest): Promise<CallToolResult> {
+export async function fileAnswer(what: string, ctx: ToolContext, req: ApiRequest, inlineImages: boolean): Promise<CallToolResult> {
   try {
     const saved = await ctx.client.callToFile(req, ctx.outputDir, ctx.budget, "image");
-    return textResult(`Saved: ${saved.path} (${mbText(saved.bytes, 2)}, ${saved.contentType.split(";")[0]})`);
+    const inline = inlineImages ? await inlineContent([saved]) : { items: [], lines: [] };
+    return { content: [{ type: "text", text: [`Saved: ${saved.path} (${mbText(saved.bytes, 2)}, ${saved.contentType.split(";")[0]})`, ...inline.lines].join("\n") }, ...inline.items] };
   } catch (error) {
+    if (error instanceof IdeogramApiError && error.code === "ANSWER_NOT_SAVED") {
+      return textResult(`${what}: ${error.message}\nThe operation ran and answered; the file is lost here. Sending it again runs it again.`, true);
+    }
     const note = req.op.method !== "GET" && sideEffectOf(error) === "unknown" ? `\nThe request had left this machine: ${req.op.id} MAY have run — send it again only if the answer is not in the output directory.` : "";
     return textResult(`${what}: ${errorText(error)}${note}`, true);
   }

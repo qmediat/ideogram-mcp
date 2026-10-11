@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const { OPERATIONS, operationById, isExposable } = await import("../dist/spec/operations.js");
-const { quoteAllowed, quoteRefusal, responseSchemaFor, fileLimitsOf, CONSTRAINTS, constraintViolations, MB, requestLimitOf, requestBytesRefusal, UNSTATED_REQUEST_BYTES, UNSTATED_FILE_BYTES, FONT_FILE_FIELDS } =
+const { sourceRefusal, rulesOf, quoteAllowed, quoteRefusal, responseSchemaFor, fileLimitsOf, CONSTRAINTS, constraintViolations, MB, requestLimitOf, requestBytesRefusal, UNSTATED_REQUEST_BYTES, UNSTATED_FILE_BYTES, FONT_FILE_FIELDS } =
   await import("../dist/spec/overlay.js");
 const { supportOf, operationsWithSupport, servedByRawCall } = await import("../dist/spec/support.js");
 
@@ -17,14 +17,19 @@ const op = (id) => {
   return found;
 };
 
+/** The field's description in every body the operation takes (the JSON and the multipart schema may differ: colorways
+ * states the masks rule in its JSON body only), with the description of a referenced component. */
 function fieldDescription(operation, field) {
   const item = spec.paths[operation.path][operation.method.toLowerCase()];
-  const ref = Object.values(item.requestBody?.content ?? {})[0]?.schema?.$ref;
-  const property = ref ? spec.components.schemas[ref.split("/").pop()].properties?.[field] : undefined;
-  if (!property) return null;
-  const own = property.description ?? "";
-  const target = property.$ref ?? property.allOf?.[0]?.$ref;
-  return `${own} ${target ? (spec.components.schemas[target.split("/").pop()].description ?? "") : ""}`;
+  const texts = [];
+  for (const content of Object.values(item.requestBody?.content ?? {})) {
+    const ref = content?.schema?.$ref;
+    const property = ref ? spec.components.schemas[ref.split("/").pop()].properties?.[field] : undefined;
+    if (!property) continue;
+    const target = property.$ref ?? property.allOf?.[0]?.$ref;
+    texts.push(`${property.description ?? ""} ${target ? (spec.components.schemas[target.split("/").pop()].description ?? "") : ""}`);
+  }
+  return texts.length === 0 ? null : texts.join(" ");
 }
 
 test("every exposable operation has a family and its generated schemas; none outside the exposable classes does", () => {
@@ -106,6 +111,12 @@ test("the constraints refuse what the API refuses and pass what it takes", () =>
     ["post_edit_video_minimax_h3_reference_to_video", { prompt: "x", reference_images: Array(9).fill("a.png"), reference_video_asset_identifiers: Array(3).fill({ asset_type: "RESPONSE", asset_id: "a" }), reference_audios: ["a.wav"] }, /at most 12 references/],
     ["post_generate_video_kling_v3_standard_image_to_video", { prompt: "x", image: "a.png", image_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" } }, /image and image_asset_identifier are alternatives/],
     ["post_generate_video_kling_v3_standard_image_to_video", { prompt: "x", image: "a.png", end_image: "b.png", end_image_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" } }, /end_image and end_image_asset_identifier/],
+    ["post_colorways", { image: "a.png", colors: ["#B3202C"], masks: ["m.png"], mask_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "a" }] }, /masks and mask_asset_identifiers are alternatives/],
+    ["post_material_swap", { image: "a.png", masks: ["m.png"], materials: ["t.png"], material_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "a" }] }, /materials and material_asset_identifiers are alternatives/],
+    ["post_ghost_mannequin", { view: "front", garment_images: ["g.png"], garment_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "a" }] }, /garment_images and garment_asset_identifiers are alternatives/],
+    ["post_colorways", { image: "a.png", colors: ["#B3202C", "#000000"], masks: ["m.png"] }, /as many colors as masks/],
+    ["post_material_swap", { image: "a.png", masks: ["m.png", "n.png"], materials: ["t.png", "u.png", "v.png"] }, /one material or as many as masks/],
+    ["post_layerize_logos", { design_image: "d.png", reference_images: Array(11).fill("l.png") }, /at most 10 logo images/],
     ["post_generate_image_v2_ideogram_v3_character", { prompt: "x", character_reference_mask: "m.png", character_reference_collection_id: "c" }, /character_reference_images/],
     ["post_generate_image_v2_ideogram_v3_character", { prompt: "x" }, /character model needs a character reference/],
     ["post_remix_image_v2_ideogram_v3_character", { prompt: "x", image: "a.png" }, /character model needs a character reference/],
@@ -149,8 +160,29 @@ test("the constraints refuse what the API refuses and pass what it takes", () =>
     ["post_edit_video_minimax_h3_reference_to_video", { prompt: "x", reference_images: Array(9).fill("a.png"), reference_video_asset_identifiers: Array(3).fill({ asset_type: "RESPONSE", asset_id: "a" }) }],
     ["post_generate_video_seed_dance25_text_to_video", { prompt: "x", resolution: "720p", aspect_ratio: "16x9" }],
     ["post_generate_video_kling_v3_standard_image_to_video", { prompt: "x", image: "a.png", end_image_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" } }],
+    ["post_colorways", { image: "a.png", colors: ["#B3202C", "#000000"], masks: ["m.png", "n.png"] }],
+    ["post_material_swap", { image: "a.png", masks: ["m.png", "n.png"], materials: ["t.png"] }],
+    ["post_material_swap", { image: "a.png", masks: ["m.png", "n.png"], materials: ["t.png", "u.png"] }],
+    ["post_layerize_logos", { design_image: "d.png", reference_images: Array(10).fill("l.png") }],
   ];
+  for (const [id, fields, message] of [
+    ["post_model_pose_variants", { instruction: "front" }, /needs the fashion image: source_image/],
+    ["post_sketch_to_render", { instruction: "matte" }, /needs the sketch: sketch_image/],
+    ["post_ghost_mannequin", { view: "front" }, /needs at least one garment photo/],
+  ]) assert.match(sourceRefusal(op(id), fields) ?? "", message, id);
+  assert.equal(sourceRefusal(op("post_ghost_mannequin"), { view: "front", left_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" } }), null, "one view as an asset is a source");
+  assert.equal(sourceRefusal(op("post_model_pose_variants"), { instruction: "x", source_asset_identifier: { asset_type: "UPLOAD", asset_id: "a" } }), null);
+  assert.ok(rulesOf(op("post_ghost_mannequin")).some((r) => /garment photo/.test(r)), "the source rule is listed with the operation's rules");
   for (const [id, fields] of passing) assert.deepEqual(constraintViolations(op(id), fields), [], id);
+});
+
+test("the async kind of every exposable operation is pinned: a reframe acknowledgement (with its size) is a job, an answer that names a generation is not", () => {
+  const kinds = {};
+  for (const o of OPERATIONS.filter(isExposable)) (kinds[o.async] ??= []).push(o.id);
+  for (const id of ["post_reframe_image_nano_banana2", "post_reframe_image_auto", "post_reframe_image_bria_expand", "post_reframe_image_gpt_image25_flare", "post_reframe_image_nano_banana_pro", "post_ad_resizer", "post_colorways"]) assert.equal(op(id).async, "only", `${id} is a job acknowledged by its generation id`);
+  for (const id of ["post_provenance_verify", "post_magic_prompt_v4", "post_layerize_logos", "post_snap_mask", "get_generation_v2"]) assert.equal(op(id).async, "none", `${id} answers, it is no job`);
+  assert.equal(op("post_generate_image_v2_ideogram_v3").async, "optional");
+  assert.deepEqual({ optional: kinds.optional.length, only: kinds.only.length, none: kinds.none.length }, { optional: 37, only: 49, none: 41 }, JSON.stringify(kinds.only));
 });
 
 test("the support table: the eleven image families' documented models and the generation lookup are curated", () => {

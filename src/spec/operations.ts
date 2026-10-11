@@ -151,9 +151,9 @@ function familyOf(facts: SpecOperationFacts, cls: OperationClass): FamilyMatch |
   return match;
 }
 
-/** `optional`: the body takes `async`; `only`: the 200 is an acknowledgement — a generation id with at most its time and
- * status, no payload (an answer that NAMES a generation beside its own facts, like provenance verify's, is no job);
- * `none`: anything else. */
+/** `optional`: the body takes `async`; `only`: the 200 is an acknowledgement — a generation id with at most the job's
+ * own facts (time, status, seed, the size a reframe will make), no payload; an answer that NAMES a generation beside
+ * facts of its own (provenance verify) is no job; `none`: anything else. test/overlay.test.mjs pins the kinds. */
 function asyncKindOf(facts: SpecOperationFacts): AsyncKind {
   if (facts.asyncField) return "optional";
   const props = facts.responseProperties;
@@ -161,7 +161,7 @@ function asyncKindOf(facts: SpecOperationFacts): AsyncKind {
   return acknowledgement ? "only" : "none";
 }
 
-const ACKNOWLEDGEMENT_PROPERTIES: ReadonlySet<string> = new Set(["generation_id", "created", "status", "seed"]);
+const ACKNOWLEDGEMENT_PROPERTIES: ReadonlySet<string> = new Set(["generation_id", "created", "status", "seed", "width", "height"]);
 
 /** The generated schemas by lower-cased export name (the generator's names are a case transform of operationId). */
 const GENERATED_BY_NAME: ReadonlyMap<string, ZodType> = new Map(

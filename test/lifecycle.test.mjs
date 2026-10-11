@@ -42,7 +42,7 @@ test("a synchronous operation (describe) completes in one call", async () => {
   const body = { created: "2026-10-07T00:00:00Z", description_id: "d1", descriptions: [{ text: "a red door" }] };
   const { outcome, requests } = await run(() => ({ json: body }), jsonRequest(op("post_describe_image_ideogram_v3"), {}));
   assert.equal(outcome.kind, "completed");
-  assert.deepEqual(outcome.payload, { kind: "description", descriptionId: "d1", texts: ["a red door"], jsonPrompt: null });
+  assert.deepEqual(outcome.payload, { kind: "description", descriptionId: "d1", texts: ["a red door"], jsonPrompt: null, aspectRatio: null });
   assert.equal(requests.length, 1);
   assert.equal(JSON.parse(requests[0].body).async, undefined, "describe takes no async field");
 });

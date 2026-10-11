@@ -57,6 +57,21 @@ test("a commercial tool runs its one operation with its own fields: no model inp
   assert.equal(quote.requests[0]?.url, "/v2/tool/colorways?dry_run=true", text(quote.result));
   const noDryRun = await call("ideogram_quote", { tool: "ideogram_ad_variations", arguments: { image: png, variation_type: "people" } });
   assert.match(text(noDryRun.result), /post_ad_variations does not declare dry_run/, "a commercial tool without a dry run is refused locally, never sent");
+  assert.equal(noDryRun.requests.length, 0, "never sent");
+  const texts = Object.fromEntries((await Promise.all(["ideogram_ad_variations", "ideogram_colorways"].map(async (n) => [n, (await tool(n)).description]))));
+  assert.match(texts.ideogram_ad_variations, /no price quote \(the operation offers no dry run\)/, "a tool without a dry run does not promise a quote");
+  assert.match(texts.ideogram_colorways, /ideogram_quote prices a call first/);
+  const colorSchema = z.toJSONSchema((await tool("ideogram_colorways")).inputSchema, { io: "input", unrepresentable: "any" });
+  assert.match(colorSchema.properties.aspect_ratio.description, /with a colon — 1:1/, "the tool family's own sentence for a shared field");
+  assert.match(colorSchema.properties.quality.description, /^low, medium or high/);
+  const noPhoto = await call("ideogram_ghost_mannequin", { view: "front" }).catch((e) => e);
+  assert.match(noPhoto.message, /ideogram_ghost_mannequin needs at least one garment photo/, "the source rule, in the tool's name");
+  const bothMasks = await call("ideogram_colorways", { image: png, colors: ["#B3202C"], masks: [png], mask_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "AAAAAAAAAAAAAAAAAAAAAA" }] }).catch((e) => e);
+  assert.match(bothMasks.message, /masks and mask_asset_identifiers are alternatives/);
+  const unpaired = await call("ideogram_colorways", { image: png, colors: ["#B3202C", "#000000"], masks: [png] }).catch((e) => e);
+  assert.match(unpaired.message, /as many colors as masks/);
+  const speed = await call("ideogram_ad_resizer", { image: png, resolution: "1080x1920", rendering_speed: "TURBO" }).catch((e) => e);
+  assert.match(speed.message, /`rendering_speed` is not a parameter of ideogram_ad_resizer/, "the 1.x adapter does not touch a single-operation tool");
   assert.match(text(quote.result), /0\.100000 USD exact/);
 });
 
@@ -65,9 +80,10 @@ test("the v1 utilities answer in their own shapes: a JSON prompt, a provenance r
   const magic = await call("ideogram_magic_prompt", { text_prompt: "a lighthouse at dawn" }, () => ({ json: example }));
   assert.equal(magic.requests[0].url, "/v1/ideogram-v4/magic-prompt");
   assert.deepEqual(JSON.parse(magic.requests[0].body.toString()), { text_prompt: "a lighthouse at dawn" });
-  assert.match(text(magic.result), /JSON prompt:\n\{\n  "compositional_deconstruction": \{/);
+  assert.match(text(magic.result), /^Aspect ratio: 1x1\nJSON prompt:\n\{\n  "compositional_deconstruction": \{/, "the ratio the model picked is said");
   const noPrice = await call("ideogram_quote", { tool: "ideogram_magic_prompt", arguments: { text_prompt: "x" } });
   assert.equal(noPrice.result.isError, true, "no dry run on the v1 utility");
+  assert.equal(noPrice.requests.length, 0, "never sent");
   const prov = await call("ideogram_provenance", { content: png }, () => ({ json: { provenance_detected: true, provider: "Ideogram", system_version: "3.0", generation_id: "g1", created_at: "2026-10-01T00:00:00Z", validation_state: "VALID" } }));
   assert.equal(prov.requests[0].url, "/v1/provenance/verify");
   assert.match(prov.requests[0].body.toString("latin1"), /name="content"; filename="content.png"/);
@@ -75,7 +91,7 @@ test("the v1 utilities answer in their own shapes: a JSON prompt, a provenance r
   const logos = await call("ideogram_layerize_logos", { design_image: png, reference_images: [png] }, (req, _n, api) => (req.url === "/b/base.png" ? { status: 200, headers: { "content-type": "image/png" }, body: PNG } : { json: { base_image_url: `${api.base}/b/base.png`, layers: [{ ref_id: "REF_0", x: 0, y: 0, width: 10, height: 10 }] } }));
   assert.equal(logos.requests[0].url, "/v1/layerize-logos");
   assert.match(logos.requests[0].body.toString("latin1"), /name="design_image"; filename="design_image.png"[\s\S]*name="reference_images"; filename="reference_images.png"/);
-  assert.match(text(logos.result), /1 of 1 base image\(s\) saved \(1 design\(s\)\)\.\nSaved: .*\.png[\s\S]*Text blocks of design 1 \(1\):\n\[\n  \{\n    "ref_id": "REF_0"/);
+  assert.match(text(logos.result), /1 of 1 base image\(s\) saved \(1 design\(s\)\)\.\nSaved: .*\.png[\s\S]*Layers of design 1 \(1\):\n\[\n  \{\n    "ref_id": "REF_0"/, "logo layers are layers, not text blocks");
 });
 
 test("ideogram_snap_mask saves the PNG the operation answers with; an answer of another type or a failure is said", async () => {
@@ -84,6 +100,30 @@ test("ideogram_snap_mask saves the PNG the operation answers with; an answer of 
   assert.match(snapped.requests[0].body.toString("latin1"), /name="image"; filename="image.png"[\s\S]*name="mask"; filename="mask.png"/);
   assert.match(text(snapped.result), /^Saved: .*\.png \(0\.00 MB, image\/png\)$/);
   assert.equal((await readdir(snapped.ctx.outputDir)).length, 1);
+  assert.equal(snapped.result.content.length, 1, "no inline content unless asked");
+  const inline = await call("ideogram_snap_mask", { image: png, mask: png, inline_images: true }, () => ({ status: 200, headers: { "content-type": "image/png" }, body: PNG }));
+  assert.equal(inline.result.content.length, 2, "asked, the mask comes back as image content too");
+  assert.equal(inline.result.content[1].type, "image");
+  assert.equal(inline.result.content[1].mimeType, "image/png");
+  const snapSchema = z.toJSONSchema((await tool("ideogram_snap_mask")).inputSchema, { io: "input", unrepresentable: "any" });
+  assert.equal(snapSchema.properties.wait_s, undefined, "a synchronous file answer takes no wait");
+  assert.ok(snapSchema.properties.inline_images, "but it can be returned inline");
+  let n429 = 0;
+  const retried = await call("ideogram_snap_mask", { image: png, mask: png }, () => (n429++ === 0 ? { status: 429, headers: { "retry-after": "0" }, json: { error: "slow down" } } : { status: 200, headers: { "content-type": "image/png" }, body: PNG }));
+  assert.equal(retried.requests.length, 2, "a 429 is retried as on every call");
+  assert.match(text(retried.result), /^Saved: /);
+  const fileDir = join(dir, "snap-not-a-dir");
+  await writeFile(fileDir, "x");
+  const api2 = await startFakeApi(() => ({ status: 200, headers: { "content-type": "image/png" }, body: PNG }));
+  try {
+    const ctx2 = await testContext(api2.base, join(fileDir, "out"));
+    const lost = await (await tool("ideogram_snap_mask")).handler(ctx2, { image: png, mask: png });
+    assert.equal(lost.isError, true);
+    assert.match(text(lost), /answered 200; its answer could not be saved: .*\nThe operation ran and answered; the file is lost here\. Sending it again runs it again\./, "a lost answer is said as what it is, never as may have run");
+    assert.doesNotMatch(text(lost), /MAY have run/);
+  } finally {
+    await api2.close();
+  }
   const json = await call("ideogram_snap_mask", { image: png, mask: png }, () => ({ json: { error: "unexpected" } }));
   assert.equal(json.result.isError, true);
   assert.match(text(json.result), /ideogram_snap_mask: .*Expected an image, got: application\/json/);
@@ -92,6 +132,7 @@ test("ideogram_snap_mask saves the PNG the operation answers with; an answer of 
   assert.doesNotMatch(text(refused.result), /MAY have run/);
   const down = await call("ideogram_snap_mask", { image: png, mask: png }, () => ({ status: 503, json: { error: "down" } }));
   assert.match(text(down.result), /MAY have run — send it again only if the answer is not in the output directory/);
+  assert.equal(down.requests.length, 1, "a POST that may have run is never resent");
   const raw = await call("ideogram_api", { operation: "post_snap_mask", files: [{ field: "image", path: png }, { field: "mask", path: png }] }, () => ({ status: 200, headers: { "content-type": "image/png" }, body: PNG }));
   assert.match(text(raw.result), /^Saved: .*\.png \(0\.00 MB, image\/png\)$/, "the raw call saves a file answer the same way");
   const missing = await call("ideogram_snap_mask", { image: png }).catch((e) => e);

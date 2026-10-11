@@ -76,7 +76,7 @@ function inlineMimeType(contentType: string): string {
 /** The saved images as content items, each under the inline cap and all of them under the total; the rest are named
  * with their size instead, and a file that cannot be read back is named with the reason — the result (the id, the
  * saved paths) is never lost to an inline omission. */
-async function inlineContent(files: readonly SavedFile[]): Promise<{ items: ImageContent[]; lines: string[] }> {
+export async function inlineContent(files: readonly SavedFile[]): Promise<{ items: ImageContent[]; lines: string[] }> {
   const items: ImageContent[] = [];
   const lines: string[] = [];
   let total = 0;
@@ -122,7 +122,7 @@ function designLines(item: LayeredItem, i: number): string[] {
     ...(item.baseImageUrl === null ? [`Design ${i + 1}: no base image listed by Ideogram`] : []),
     ...(item.url === null ? [] : [`Design ${i + 1}: ${item.url} (Ideogram's links expire; download it to keep it)`]),
     ...(item.htmlUrl === null ? [] : [`Editable page of design ${i + 1}: ${item.htmlUrl} (expires as well)`]),
-    `Text blocks of design ${i + 1} (${item.textBlocks.length}):\n${jsonText(item.textBlocks)}`,
+    `${item.blocksKind === "layers" ? "Layers" : "Text blocks"} of design ${i + 1} (${item.textBlocks.length}):\n${jsonText(item.textBlocks)}`,
   ];
 }
 
@@ -163,6 +163,7 @@ async function videosResult(ctx: ToolContext, items: readonly VideoItem[], inlin
 
 function descriptionLines(payload: Extract<Payload, { kind: "description" }>): string[] {
   const lines = payload.texts.map((text, i) => `${i + 1}. ${text}`);
+  if (payload.aspectRatio !== null) lines.push(`Aspect ratio: ${payload.aspectRatio}`);
   if (payload.jsonPrompt !== null) lines.push(`JSON prompt:\n${jsonText(payload.jsonPrompt)}`);
   return lines;
 }

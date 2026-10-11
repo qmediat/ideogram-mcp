@@ -109,10 +109,20 @@ Step 5: the commercial tools and the v1 utilities, each one operation; nothing o
   `image_asset_identifier` rule reaches colorways and material swap (their prose: "Provide exactly one of").
   Support: curated 80 · raw 47 · planned 0 · unsupported 73 — a v1-only operation of a curated family (the v1 model
   variants, the webhook JWKS) and every spec-only or customer-specific tool and workflow run through `ideogram_api`
-  (`allow_undocumented` where unlisted). tools/list: 38 tools, 130 479 bytes (the budget is 136 KB from this step;
-  the twelve tools with their field sentences cost 32.8 KB). An operation's `async` kind is read from its answer: a
-  200 that is a generation id with at most its time and status is a job; one that NAMES a generation beside its own
-  facts (provenance verify) is an answer, never polled. The facts carry `responseMedia` (json · image · none).
+  (`allow_undocumented` where unlisted). tools/list: 38 tools, 132 254 bytes (the budget is 136 KB from this step;
+  the twelve tools with their field sentences cost 34 KB). An operation's `async` kind is read from its answer: a
+  200 that is a generation id with at most the job's own facts (time, status, seed, the size a reframe will make) is a
+  job; one that NAMES a generation beside facts of its own (provenance verify) is an answer, never polled — the kinds
+  of every exposable operation are pinned by a test. The facts carry `responseMedia` (json · image · none). The tool
+  family shows its own sentences for the shared fields (aspect ratios with a colon, three quality tiers, logo
+  references); the rules anchored to its prose: masks / mask_asset_identifiers, materials / material_asset_identifiers
+  and garment_images / garment_asset_identifiers are alternatives, colors are paired with the masks, materials are one
+  or one per mask, at most 10 logo references; pose variants, sketch to render and ghost mannequin need their source
+  (the one source rule, named per operation). A single-operation tool describes a quote only where the operation
+  offers a dry run; magic prompt says the aspect ratio the model picked; logo layers are listed as layers; the snap
+  mask answer can be returned inline and takes no wait; a file answer whose write fails is "the operation ran and
+  answered; the file is lost here", never "may have run"; the file answer goes through call()'s send loop (a 429 is
+  retried as everywhere).
 
 - `ideogram_precise_edit` (Ideogram 4.5: the image, an optional mask, up to four `reference_images` or
   `reference_image_asset_identifiers`, `context_window`), `ideogram_remove_background` and `ideogram_remove_object`

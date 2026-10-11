@@ -69,13 +69,23 @@ export function isSingleOperation(spec: FamilyToolSpec): boolean {
   return spec.operation !== undefined;
 }
 
+function singleVariant(spec: FamilyToolSpec): readonly ModelVariant[] | null {
+  if (spec.operation === undefined) return null;
+  return [variantFromOperation(operationById(spec.operation), spec.name, spec.operation)];
+}
+
+/** A single-operation tool whose 200 is a file answers within the call: it takes no wait_s. */
+function answersSynchronously(spec: FamilyToolSpec): boolean {
+  return isSingleOperation(spec) && variantsOf(spec)[0].op.facts.responseMedia === "image";
+}
+
 const VARIANTS = new Map<string, readonly ModelVariant[]>();
 
 /** The variants of every documented model of the tool's family, in the registry's order. */
 export function variantsOf(spec: FamilyToolSpec): readonly ModelVariant[] {
   const cached = VARIANTS.get(spec.name);
   if (cached !== undefined) return cached;
-  const variants = isSingleOperation(spec) ? [variantFromOperation(operationById(spec.operation as string), spec.name, spec.operation as string)] : documentedModelsOf(spec.family).map((model) => variantOf(spec.family, model));
+  const variants = singleVariant(spec) ?? documentedModelsOf(spec.family).map((model) => variantOf(spec.family, model));
   if (!variants.some((v) => v.model === spec.defaultModel)) throw new Error(`${spec.name}: no model ${spec.defaultModel}`);
   VARIANTS.set(spec.name, variants);
   return variants;
@@ -180,7 +190,7 @@ export function advertisedSchema(spec: FamilyToolSpec): z.ZodObject {
   return z
     .looseObject({
       ...model,
-      wait_s: z.number().int().min(0).max(WAIT_MAX_S).optional().describe(WAIT_TEXT),
+      ...(answersSynchronously(spec) ? {} : { wait_s: z.number().int().min(0).max(WAIT_MAX_S).optional().describe(WAIT_TEXT) }),
       ...inline,
       ...Object.fromEntries(described.map(([name, text]) => [name, z.unknown().optional().describe(text)])),
       ...spec.legacyInputs,
@@ -274,7 +284,7 @@ export async function prepare(spec: FamilyToolSpec, args: ToolArguments, remote:
   if (!wait.success) throw new Error(`wait_s must be a whole number of seconds from 0 to ${WAIT_MAX_S}`);
   const legacy = new Set(Object.keys(spec.legacyInputs ?? {})); // a legacy input of ANOTHER tool is a foreign field, refused by name
   const requestFields = Object.fromEntries(Object.entries(args).filter(([name]) => !CONTROL_FIELDS.has(name) && !legacy.has(name)));
-  const adapted = adaptFields(requestFields, variant.fields);
+  const adapted = isSingleOperation(spec) ? { fields: requestFields, notes: [] } : adaptFields(requestFields, variant.fields); // the 1.x adapter knows the 1.x families, not these
   checkSource(spec, variant, adapted.fields);
   const fields = withPrivateDefault(variant, adapted.fields);
   checkFields(spec, variant, fields);
