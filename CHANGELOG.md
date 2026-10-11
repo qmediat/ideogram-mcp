@@ -67,11 +67,24 @@ Step 4: video — from a prompt, from an image, from references.
   decoded URL segment is cut at its last slash or backslash before it names a part (`..%2F..%2Fx.png` is `x.png`).
 - `ideogram_video_text`, `ideogram_video_image`, `ideogram_video_reference`: the three video families on the family
   mechanism (Seedance 2.5 by default, Seedance 2, Kling 3 Standard, MiniMax H3; each model its own fields), async
-  only — a finished video is saved as mp4 with its measured length, never returned inline; a long job comes back as
-  a generation_id for `ideogram_generation` (`video: true` slows the polls as the tool's own wait did). Audio
-  references (`reference_audios`) are sent as MP3 or WAV — the one field-type rule, anchored to the specification;
-  a start and an end image as parts or assets. The spec-only video edit is served raw behind `allow_undocumented`.
-  Support: curated 68 · raw 7 · planned 52; tools/list: 26 tools.
+  only — a finished video is saved as mp4 (under its own 512 MiB download cap) with its measured length, resolution
+  and size, never returned inline (the video tools do not advertise `inline_images`; asked anyway, the answer says it
+  has no effect); a long job comes back as a generation_id for `ideogram_generation`. Audio references
+  (`reference_audios`) are sent as MP3 or WAV — the one field-type rule, anchored to the specification; a start and
+  an end image as parts or assets. The video families show their own sentences for the fields they share with the
+  image families (a resolution is a tier and goes with the aspect ratio; references are not an edit's) through one
+  lookup, `fieldTextsFor`. Rules anchored to the specification's prose: a reference-to-video model (MiniMax included)
+  needs a reference image or video; `reference_images` / `reference_image_asset_identifiers`, `image` /
+  `image_asset_identifier` and `end_image` / `end_image_asset_identifier` are alternatives; MiniMax takes at most 12
+  references across images, videos and audio. `duration` says what an omitted value costs: Kling and MiniMax make
+  5 s, Seedance picks the length and is QUOTED at its maximum (measured 2026-10-11: seedance-2-5 omitted and 30 s
+  6.93 USD, 4 s 0.924, 10 s 2.31 at 720p; the dry run does not price `generate_audio`; `docs/PRICES-2026-10-11.md`
+  quotes every video model at its minimum duration — Kling 3 s 0.252, Seedance 2 4 s 0.64). A saved image's line names
+  its Ideogram asset id, for the `*_asset_identifier` inputs of a later call. The spec-only video edit is served raw
+  behind `allow_undocumented`. Support: curated 68 · raw 7 · planned 52; tools/list: 26 tools.
+- `ideogram_generation` lost its `video` input: the poll gaps within a 50 s wait (2, 3, 4.5, 6.75, 10.1, 15.2 s)
+  never reach either cap, so the knob had no effect; one cap for images and video. An empty result list says "no
+  image or video". A download the budget cuts names the re-collect path for videos as for images (one download loop).
 - `get_asset_reference_usage` (spec-only) is served by `ideogram_api` behind `allow_undocumented`: a spec-only
   operation of a curated family is raw, as the undocumented reframe models are. Support: curated 47 · raw 5 ·
   planned 75. tools/list: 19 tools.

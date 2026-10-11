@@ -49,6 +49,9 @@ export interface ClientOptions {
 export const DEFAULT_BASE_URL = "https://api.ideogram.ai";
 export const DEFAULT_DOWNLOAD_HOSTS: readonly string[] = ["ideogram.ai", "d2gu96o5zk2m7w.cloudfront.net"];
 export const MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;
+/** A video's cap: a 4K × 15 s MiniMax or a 1080p × 30 s Seedance mp4 is far above an image's 50 MiB (the sizes are
+ * estimates from the bit rates — no real video was measured); the caller of a video download passes it. */
+export const MAX_VIDEO_DOWNLOAD_BYTES = 512 * 1024 * 1024;
 
 export function defaultClientOptions(apiKey: string): ClientOptions {
   return {
@@ -222,7 +225,7 @@ export class IdeogramClient {
   }
 
   /** Downloads one generated file into `outputDir`, streamed with a byte counter; nothing is left behind on failure. */
-  async download(url: string, outputDir: string, budget: CallBudget): Promise<SavedFile> {
+  async download(url: string, outputDir: string, budget: CallBudget, maxBytes = this.options.maxDownloadBytes): Promise<SavedFile> {
     this.checkDownloadUrl(url);
     const response = await this.fetchDownload(url, budget);
     const contentType = (response.headers.get("Content-Type") ?? "").toLowerCase();
@@ -232,12 +235,12 @@ export class IdeogramClient {
       throw new IdeogramApiError(response.status, "DOWNLOAD_INVALID_TYPE", `Expected an image or a video, got: ${contentType || "(missing)"}`);
     }
     const declared = Number.parseInt(response.headers.get("Content-Length") ?? "", 10);
-    if (Number.isFinite(declared) && declared > this.options.maxDownloadBytes) {
+    if (Number.isFinite(declared) && declared > maxBytes) {
       await response.body?.cancel();
-      throw tooLarge(declared, this.options.maxDownloadBytes);
+      throw tooLarge(declared, maxBytes);
     }
     try {
-      return await streamToFile(response, outputDir, extension, this.options.maxDownloadBytes, contentType);
+      return await streamToFile(response, outputDir, extension, maxBytes, contentType);
     } catch (error) {
       if (error instanceof IdeogramApiError) throw error;
       // the body is read under the same signal as the request: a cut mid-body is the budget's, or the attempt's own timeout

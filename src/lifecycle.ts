@@ -2,7 +2,7 @@
  * A generation from request to outcome. A call is sent asynchronously when the operation takes `async`, so the API
  * answers with the generation id the moment it accepts the job; the tool then waits a bounded time (default 45 s, at
  * most 50 s: the MCP client times a call out at 60 s), polling GET /v2/generations/{id} at 2 s, ×1.5, capped at 30 s
- * (60 s for video). The outcome is Completed, Failed, Pending (the id, to resume with `ideogram_generation`) or
+ * (a cap the 50 s wait never reaches: the gaps run 2, 3, 4.5, 6.75, 10.1, 15.2 s — one cap for images and video). The outcome is Completed, Failed, Pending (the id, to resume with `ideogram_generation`) or
  * ContractMismatch — a 2xx body the generated schema rejects is never passed off as a success.
  */
 import { z } from "zod/v4";
@@ -26,10 +26,11 @@ export const WAIT_MAX_S = 50;
 export const POLL_FIRST_MS = 2_000;
 export const POLL_FACTOR = 1.5;
 export const POLL_CAP_MS = 30_000;
-export const POLL_CAP_VIDEO_MS = 60_000;
 
 export interface ImageItem {
   readonly url: string | null;
+  /** The result as an Ideogram asset (`ImageGenerationObject.asset_id`), for the `*_asset_identifier(s)` inputs of a later call. */
+  readonly assetId: string | null;
   readonly resolution: string | null;
   readonly seed: number | null;
   readonly prompt: string | null;
@@ -96,6 +97,7 @@ const ImageItemShape = z.looseObject({
   seed: z.number().optional(),
   prompt: z.string().optional(),
   is_image_safe: z.boolean().optional(),
+  asset_id: z.string().nullish(),
 });
 
 const VideoItemShape = z.looseObject({
@@ -145,7 +147,7 @@ function imageItems(data: readonly unknown[]): ImageItem[] | null {
     const item = ImageItemShape.safeParse(raw);
     if (!item.success || (item.data.object_type !== undefined && !item.data.object_type.startsWith("image"))) return null;
     const d = item.data;
-    items.push({ url: d.url ?? null, resolution: d.resolution ?? null, seed: d.seed ?? null, prompt: d.prompt ?? null, isImageSafe: d.is_image_safe ?? d.url != null });
+    items.push({ url: d.url ?? null, assetId: d.asset_id ?? null, resolution: d.resolution ?? null, seed: d.seed ?? null, prompt: d.prompt ?? null, isImageSafe: d.is_image_safe ?? d.url != null });
   }
   return items;
 }
@@ -209,8 +211,9 @@ function clampWait(waitS: number): number {
   return Math.max(0, Math.min(WAIT_MAX_S, waitS));
 }
 
-function isVideo(op: Operation): boolean {
-  return op.family !== null && op.family.startsWith("video");
+/** The video families (video_text, video_image, video_reference): their results are videos, saved and never inline. */
+export function isVideoFamily(family: string | null): boolean {
+  return family !== null && family.startsWith("video");
 }
 
 /** Runs one generation: send (async when possible), then the bounded wait. */
@@ -233,16 +236,16 @@ export async function execute(client: IdeogramClient, req: ApiRequest, options: 
   if (payload !== null) return { kind: "completed", generationId, payload, usageCostUsdMicros: null };
   if (generationId === null) throw new Error(`${req.op.id} answered without a payload or a generation id`);
   const deadline = started + clampWait(options.waitS) * 1000;
-  return poll(client, generationId, deadline, isVideo(req.op) ? POLL_CAP_VIDEO_MS : POLL_CAP_MS, options.budget);
+  return poll(client, generationId, deadline, POLL_CAP_MS, options.budget);
 }
 
 /** Resumes a generation by id: the same bounded wait, from now. */
-export async function resume(client: IdeogramClient, generationId: string, options: WaitOptions & { readonly video?: boolean }): Promise<Outcome> {
+export async function resume(client: IdeogramClient, generationId: string, options: WaitOptions): Promise<Outcome> {
   const deadline = options.clock.now() + clampWait(options.waitS) * 1000;
   // the status is read once whatever the wait (wait_s 0 is "tell me now"): only the polls are bounded by it
   const first = await fetchGeneration(client, generationId, options.budget);
   if (first.kind !== "pending") return first;
-  return poll(client, generationId, deadline, options.video ? POLL_CAP_VIDEO_MS : POLL_CAP_MS, options.budget, first.note);
+  return poll(client, generationId, deadline, POLL_CAP_MS, options.budget, first.note);
 }
 
 const GENERATION_OP = operationById("get_generation_v2");

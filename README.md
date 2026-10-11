@@ -9,7 +9,7 @@
 
 # @qmediat.io/ideogram-mcp
 
-MCP server for the [Ideogram](https://developer.ideogram.ai) platform through its v2 API: every image model Ideogram sells through one API key — Ideogram 4.5, 4.0, 3.0, 2a and 2.0, GPT Image, Nano Banana, P-Image, Z-Image, the Topaz upscalers — for generate, precise edit, inpaint, remix, reframe, replace background, remove background, remove object, upscale, describe and layerize, from Claude Code, Claude Desktop or any MCP client over stdio. Every call can be priced first (the API's own dry run), long jobs are returned by id and collected later, and any other operation the release serves is one validated raw call away. Built from Ideogram's OpenAPI specification ([ADR-0001](https://github.com/qmediat/ideogram-mcp/blob/main/docs/adr/0001-openapi-snapshot-as-the-source-of-truth.md)).
+MCP server for the [Ideogram](https://developer.ideogram.ai) platform through its v2 API: every image and video model Ideogram sells through one API key — Ideogram 4.5, 4.0, 3.0, 2a and 2.0, GPT Image, Nano Banana, P-Image, Z-Image, the Topaz upscalers; Seedance 2.5 and 2, Kling 3, MiniMax H3 for video — for generate, precise edit, inpaint, remix, reframe, replace background, remove background, remove object, upscale, describe, layerize and video (from a prompt, an image or references), plus the account's usage, invoices and keys and custom-model training, from Claude Code, Claude Desktop or any MCP client over stdio. Every call can be priced first (the API's own dry run), long jobs are returned by id and collected later, and any other operation the release serves is one validated raw call away. Built from Ideogram's OpenAPI specification ([ADR-0001](https://github.com/qmediat/ideogram-mcp/blob/main/docs/adr/0001-openapi-snapshot-as-the-source-of-truth.md)).
 
 [![npm version](https://img.shields.io/npm/v/@qmediat.io/ideogram-mcp)](https://www.npmjs.com/package/@qmediat.io/ideogram-mcp)
 [![license](https://img.shields.io/npm/l/@qmediat.io/ideogram-mcp)](https://github.com/qmediat/ideogram-mcp/blob/main/LICENSE)
@@ -96,12 +96,12 @@ Add to `claude_desktop_config.json`:
 | `ideogram_remove_object` | Remove what the mask marks (white = remove) and fill the gap | `ideogram-1` |
 | `ideogram_upscale` | Enlarge an image | `auto` (default), `topaz-bloom-2`, `topaz-redefine`, `topaz-standard-2`, `topaz-text-refine`, `topaz-wonder-3-5`, `nano-banana-pro` |
 | `ideogram_describe` | Describe an image: words (`ideogram-3`, default) or a structured JSON prompt (`ideogram-4`) | `ideogram-3`, `ideogram-4` |
-| `ideogram_video_text` | A video from a prompt: duration, aspect ratio, resolution, audio per model; saved as mp4 | `seedance-2-5-text-to-video` (default), `seedance-2-text-to-video`, `kling-3-standard-text-to-video`, `minimax-h3-text-to-video` |
+| `ideogram_video_text` | A video from a prompt: duration, aspect ratio, resolution, audio per model; saved as mp4 (give `duration`: omitted, Seedance is quoted at its maximum length) | `seedance-2-5-text-to-video` (default), `seedance-2-text-to-video`, `kling-3-standard-text-to-video`, `minimax-h3-text-to-video` |
 | `ideogram_video_image` | A video from a start image (and an end image): files, URLs or assets | `seedance-2-5-image-to-video` (default), `seedance-2-image-to-video`, `kling-3-standard-image-to-video`, `minimax-h3-image-to-video` |
-| `ideogram_video_reference` | A video guided by reference images, MP3/WAV clips and uploaded videos, in prompt order | `seedance-2-5-reference-to-video` (default), `seedance-2-reference-to-video`, `minimax-h3-reference-to-video` |
+| `ideogram_video_reference` | A video guided by reference images, MP3/WAV clips (2-30 s on Seedance 2.5, 2-15 s elsewhere) and videos stored with Ideogram, in prompt order; at least one reference image or video | `seedance-2-5-reference-to-video` (default), `seedance-2-reference-to-video`, `minimax-h3-reference-to-video` |
 | `ideogram_layerize` | A flat image as an editable design: the text-free base image (saved) and the detected text blocks (JSON: text, position, font, size, colour); optional `font_candidate_files` (.ttf, .otf, .woff, .woff2) to match against | `ideogram-3` |
 | `ideogram_quote` | The price of a call: `{"tool": "ideogram_generate", "arguments": {…}}` | every model that offers a dry run (all but describe) |
-| `ideogram_generation` | Collect a generation by `generation_id` (`video: true` for a video: the polls slow to 60 s apart, as the generating tool's wait did) | — |
+| `ideogram_generation` | Collect a generation by `generation_id` — its images or its video | — |
 | `ideogram_usage` | Billed usage as Ideogram reports it: buckets of line items summed per product and currency, the buckets handed on (the shape ai-cost reads); default the last 7 days by day | — |
 | `ideogram_invoices` | The organization's invoices with their line items (organization-admin key) | — |
 | `ideogram_api_keys` | The organization's API keys, redacted (organization-admin key) | — |
@@ -197,7 +197,7 @@ A 1.x field that the chosen v2 model does not take is refused with the models th
 
 ### The raw call
 
-`ideogram_api` runs any operation this release serves — the curated ones and every other `/v2/image` operation (the reframe models the documentation index does not list) — by its id, with its parameters kept in their places: `{"operation": "…", "params": {"path": {}, "query": {}, "body": {}}, "files": [{"field": "image", "path": "…"}], "dry_run": false}`. The parameters are checked against the operation's own schema and rules before anything is sent. Operations Ideogram's documentation does not list need `allow_undocumented: true`; web-app (Bearer) and internal operations are refused; the undocumented `get_asset_reference_usage` of the account family too; video, the commercial tools and the v1-only operations come in later releases ([plan](https://github.com/qmediat/ideogram-mcp/blob/main/docs/DESIGN-ideogram-v2.md#8-steps-one-release-per-finished-family--invariant-15)).
+`ideogram_api` runs any operation this release serves — the curated ones and every other `/v2/image` operation (the reframe models the documentation index does not list) — by its id, with its parameters kept in their places: `{"operation": "…", "params": {"path": {}, "query": {}, "body": {}}, "files": [{"field": "image", "path": "…"}], "dry_run": false}`. The parameters are checked against the operation's own schema and rules before anything is sent. Operations Ideogram's documentation does not list need `allow_undocumented: true`; web-app (Bearer) and internal operations are refused; the undocumented `get_asset_reference_usage` of the account family too; the commercial tools and the rest of the v1-only operations come in a later release ([plan](https://github.com/qmediat/ideogram-mcp/blob/main/docs/DESIGN-ideogram-v2.md#8-steps-one-release-per-finished-family--invariant-15)).
 
 ## Security
 
@@ -206,7 +206,7 @@ A defensive, minimal-dependency design:
 - **SSRF protection** — downloads over HTTPS only, from allow-listed hosts, redirects blocked; a URL given as an input is fetched from a public host only (no IP literal, no local name, no private or special-purpose address after resolution, no redirect), under the call's budget, over a connection pinned to the address that was judged (a DNS rebinding reaches nothing)
 - **Symlink rejection** — `lstat()` rejects a symlinked input file before reading (a symlinked parent directory is resolved)
 - **Upload limits per operation** — each file checked with `stat()` against its field's limit before any is read; the local file name is never sent (a file goes as `<field>.<ext>`) — except a training asset's own name (never its directory), which the API pairs captions by
-- **Streamed, capped downloads** — written to disk with a byte counter, stopped at 50 MB, the partial file removed; `image/*` or `video/mp4` required
+- **Streamed, capped downloads** — written to disk with a byte counter, stopped at 50 MB (512 MB for a video), the partial file removed; `image/*` or `video/mp4` required
 - **Schema validation** — inputs against each model's generated schema before any request; a success response the specification's schema rejects is reported as a contract mismatch, never as a success
 - **Input paths** — the model may name any readable image file on the machine for upload; run the server as a user whose readable images you are willing to send to Ideogram
 

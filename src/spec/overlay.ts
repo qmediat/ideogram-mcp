@@ -128,6 +128,11 @@ function given(fields: BodyFields, name: string): boolean {
   return !Array.isArray(value) || value.length > 0;
 }
 
+/** How many entries the listed array fields carry together (a scalar counts as one). */
+function countOf(f: BodyFields, names: readonly string[]): number {
+  return names.reduce((n, name) => n + (given(f, name) ? (Array.isArray(f[name]) ? (f[name] as unknown[]).length : 1) : 0), 0);
+}
+
 function anyGiven(fields: BodyFields, names: readonly string[]): boolean {
   return names.some((name) => given(fields, name));
 }
@@ -361,12 +366,43 @@ export const CONSTRAINTS: readonly Constraint[] = [
   },
   {
     // Stated by the API at run time ("Provide at least one reference image or reference video", measured by the live
-    // dry run of 2026-10-10) and by the reference_audios prose: the anchor pins the field's presence on the reference-to-video operations.
+    // dry run of 2026-10-10) and by the reference_audios prose of every reference-to-video operation (Seedance:
+    // "Requires at least one reference image", MiniMax: "Requires a reference image or video").
     id: "reference-video-needs-a-reference",
-    operations: new Set(["post_generate_video_seed_dance25_reference_to_video", "post_generate_video_seed_dance2_reference_to_video"]), // MiniMax states no such phrase; the live test gives it a reference anyway
-    anchor: { field: "reference_audios", phrase: /Requires at least one reference image/ },
+    operations: new Set(["post_generate_video_seed_dance25_reference_to_video", "post_generate_video_seed_dance2_reference_to_video", "post_edit_video_minimax_h3_reference_to_video"]),
+    anchor: { field: "reference_audios", phrase: /Requires (at least one|a) reference image/ },
     text: "a reference-to-video model needs at least one reference image or video: reference_images, reference_image_asset_identifiers or reference_video_asset_identifiers",
     violated: (f) => !anyGiven(f, ["reference_images", "reference_image_asset_identifiers", "reference_video_asset_identifiers"]),
+  },
+  {
+    id: "reference-images-or-assets",
+    operations: new Set(["post_generate_video_seed_dance25_reference_to_video", "post_generate_video_seed_dance2_reference_to_video", "post_edit_video_minimax_h3_reference_to_video"]),
+    anchor: { field: "reference_image_asset_identifiers", phrase: /Cannot be combined with `reference_images`/ },
+    text: "reference_images and reference_image_asset_identifiers cannot be combined; give one",
+    violated: (f) => given(f, "reference_images") && given(f, "reference_image_asset_identifiers"),
+  },
+  {
+    id: "minimax-references-at-most-12",
+    operations: new Set(["post_edit_video_minimax_h3_reference_to_video"]),
+    anchor: { field: "reference_audios", phrase: /At most 12 references across images, videos, and audio/ },
+    text: "MiniMax takes at most 12 references across reference_images (or reference_image_asset_identifiers), reference_video_asset_identifiers and reference_audios",
+    violated: (f) => countOf(f, ["reference_images", "reference_image_asset_identifiers", "reference_video_asset_identifiers", "reference_audios"]) > 12,
+  },
+  {
+    // The start frame is one of a file and an asset ("in place of uploading `image`"), as remix's image-or-asset rule.
+    id: "video-image-or-asset",
+    operations: new Set(["post_generate_video_kling_v3_standard_image_to_video", "post_generate_video_minimax_h3_image_to_video", "post_generate_video_seed_dance25_image_to_video", "post_generate_video_seed_dance2_image_to_video"]),
+    anchor: { field: "image_asset_identifier", phrase: /in place of uploading `image`/ },
+    text: "image and image_asset_identifier are alternatives; give one",
+    violated: (f) => given(f, "image") && given(f, "image_asset_identifier"),
+  },
+  {
+    // The end frame likewise: the asset is "an optional final frame, as a reference to an image already stored".
+    id: "video-end-image-or-asset",
+    operations: new Set(["post_generate_video_kling_v3_standard_image_to_video", "post_generate_video_minimax_h3_image_to_video", "post_generate_video_seed_dance25_image_to_video", "post_generate_video_seed_dance2_image_to_video"]),
+    anchor: { field: "end_image_asset_identifier", phrase: /An optional final frame, as a reference to an image already stored/ },
+    text: "end_image and end_image_asset_identifier are alternatives; give one",
+    violated: (f) => given(f, "end_image") && given(f, "end_image_asset_identifier"),
   },
   {
     id: "source-size-needs-images",

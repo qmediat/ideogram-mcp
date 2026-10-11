@@ -31,13 +31,13 @@ Fields of the operations this release serves (curated or raw) are listed below t
 | `ideogram_remove_object` | Remove a masked object from an image (white in the mask = remove) and fill the gap. Needs the source and a mask of the same size, each a local file, a public https URL or an Ideogram asset. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
 | `ideogram_upscale` | Enlarge an image (auto, Topaz Bloom, Redefine, Standard, Text Refine and Wonder, or Nano Banana Pro); each model takes its own controls. Results are saved to the output directory; ideogram_quote prices a call first (nothing is generated). |
 | `ideogram_describe` | Describe an image in words (Ideogram 3.0) or as a structured JSON prompt (Ideogram 4.0). Takes a local file, a public https URL or an Ideogram asset. Describe has no price quote (the API offers no dry run for it). |
-| `ideogram_video_text` | A video from a text prompt (Seedance 2.5 by default, Seedance 2, Kling 3 Standard, MiniMax H3); each model takes its own duration, aspect ratio, resolution and audio controls. Saved as mp4 to the output directory; long jobs come back as a generation_id for ideogram_generation (video: true). ideogram_quote prices a call first. |
+| `ideogram_video_text` | A video from a text prompt (Seedance 2.5 by default, Seedance 2, Kling 3 Standard, MiniMax H3); each model takes its own duration, aspect ratio, resolution and audio controls. Saved as mp4 to the output directory (never inline); long jobs come back as a generation_id for ideogram_generation. Give duration to know the price: omitted, Seedance is quoted at its maximum length. ideogram_quote prices a call first. |
 | `ideogram_video_image` | A video that starts from an image (and optionally ends on another): Seedance 2.5 by default, Seedance 2, Kling 3 Standard, MiniMax H3. Takes local files, public https URLs or Ideogram assets. Saved as mp4; long jobs come back as a generation_id. ideogram_quote prices a call first. |
-| `ideogram_video_reference` | A video guided by reference images, audio clips (MP3/WAV, 2-30 s) and uploaded videos in prompt order: Seedance 2.5 by default, Seedance 2, MiniMax H3. Saved as mp4; long jobs come back as a generation_id. ideogram_quote prices a call first. |
+| `ideogram_video_reference` | A video guided by reference images, audio clips (MP3/WAV: 2-30 s on Seedance 2.5, 2-15 s on Seedance 2 and MiniMax) and videos stored with Ideogram, in prompt order: Seedance 2.5 by default, Seedance 2, MiniMax H3; at least one reference image or video. Saved as mp4; long jobs come back as a generation_id. ideogram_quote prices a call first. |
 | `ideogram_layerize` | Turn a flat image into an editable design (Ideogram 3.0): the detected text comes back as positioned text blocks with matched fonts, sizes and colours, beside a text-free base image that is saved. Optional font files to match against; ideogram_quote prices a call first. |
 | `ideogram_edit` | Deprecated alias of ideogram_inpaint, kept through 2.x for 1.x callers: the same arguments and models (see ideogram_inpaint's schema). |
 | `ideogram_quote` | Ask Ideogram what a call would cost before making it: give the curated tool's name and the arguments you would pass it. Answers USD and credits from the API's own dry run (exact, or an estimate with its upper bound). Nothing is generated or billed. |
-| `ideogram_generation` | Collect the result of a generation by its generation_id (from a tool that answered 'still running', or from an earlier session): waits up to wait_s for it, then saves its images. Reading a generation is free and never runs it again. |
+| `ideogram_generation` | Collect the result of a generation by its generation_id (from a tool that answered 'still running', or from an earlier session): waits up to wait_s for it, then saves its images or videos. Reading a generation is free and never runs it again. |
 | `ideogram_usage` | Your organization's billed API usage as Ideogram reports it: dense time buckets of line items (product, endpoint, cost, units, the redacted API key), summed per product, unit and currency here, the buckets written unchanged to a file in the output directory (the shape ai-cost reads; printed too when small). Default: the last 7 days by day. Needs an API key whose owner is an organization admin. Reads only. |
 | `ideogram_invoices` | Your organization's invoices with their line items — the billing record the usage reconciles against. Needs an API key whose owner is an organization admin. Reads only. |
 | `ideogram_api_keys` | The API keys in your organization, newest first, key material redacted (the id and the redacted prefix match the usage report's line items). Needs an API key whose owner is an organization admin. Reads only. |
@@ -1449,6 +1449,8 @@ File limits: `end_image` 50 MB; `image` 50 MB.
 
 Rules:
 - needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
+- image and image_asset_identifier are alternatives; give one
+- end_image and end_image_asset_identifier are alternatives; give one
 
 #### minimax-h3-image-to-video — `POST /v2/video/generate/minimax-h3-image-to-video`
 
@@ -1471,6 +1473,8 @@ File limits: `end_image` 50 MB; `image` 50 MB.
 
 Rules:
 - needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
+- image and image_asset_identifier are alternatives; give one
+- end_image and end_image_asset_identifier are alternatives; give one
 
 #### seedance-2-5-image-to-video — `POST /v2/video/generate/seedance-2-5-image-to-video`
 
@@ -1494,6 +1498,8 @@ File limits: `end_image` 50 MB; `image` 50 MB.
 
 Rules:
 - needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
+- image and image_asset_identifier are alternatives; give one
+- end_image and end_image_asset_identifier are alternatives; give one
 
 #### seedance-2-image-to-video — `POST /v2/video/generate/seedance-2-image-to-video`
 
@@ -1518,6 +1524,8 @@ File limits: `end_image` 50 MB; `image` 50 MB.
 
 Rules:
 - needs a source image: image (a local file or a public https URL) or image_asset_identifier (an Ideogram asset)
+- image and image_asset_identifier are alternatives; give one
+- end_image and end_image_asset_identifier are alternatives; give one
 
 ### video_reference
 
@@ -1548,6 +1556,11 @@ Reference to video with MiniMax H3
 
 File limits: `reference_audios` 15 MB × 3; `reference_images` 50 MB × 9.
 
+Rules:
+- a reference-to-video model needs at least one reference image or video: reference_images, reference_image_asset_identifiers or reference_video_asset_identifiers
+- reference_images and reference_image_asset_identifiers cannot be combined; give one
+- MiniMax takes at most 12 references across reference_images (or reference_image_asset_identifiers), reference_video_asset_identifiers and reference_audios
+
 #### seedance-2-5-reference-to-video — `POST /v2/video/generate/seedance-2-5-reference-to-video`
 
 Reference to video with Seedance 2.5
@@ -1571,6 +1584,7 @@ File limits: `reference_audios` 15 MB × 10; `reference_images` 50 MB × 9.
 
 Rules:
 - a reference-to-video model needs at least one reference image or video: reference_images, reference_image_asset_identifiers or reference_video_asset_identifiers
+- reference_images and reference_image_asset_identifiers cannot be combined; give one
 
 #### seedance-2-reference-to-video — `POST /v2/video/generate/seedance-2-reference-to-video`
 
@@ -1595,6 +1609,7 @@ File limits: `reference_audios` 15 MB × 3; `reference_images` 50 MB × 9.
 
 Rules:
 - a reference-to-video model needs at least one reference image or video: reference_images, reference_image_asset_identifiers or reference_video_asset_identifiers
+- reference_images and reference_image_asset_identifiers cannot be combined; give one
 
 ### video_edit
 

@@ -9,7 +9,7 @@
 import { z } from "zod/v4";
 import type { ZodType } from "zod/v4";
 import type { ApiRequest } from "../client.js";
-import { WAIT_DEFAULT_S, WAIT_MAX_S } from "../lifecycle.js";
+import { isVideoFamily, WAIT_DEFAULT_S, WAIT_MAX_S } from "../lifecycle.js";
 import { documentedModelsOf } from "../registry.js";
 import { constraintViolations, sourceRefusal } from "../spec/overlay.js";
 import { bodySchemaFor, modelOperation } from "../spec/operations.js";
@@ -18,7 +18,7 @@ import { loadUploads } from "../uploads.js";
 import type { FileRef } from "../uploads.js";
 import type { RemoteFetcher } from "../remote-input.js";
 import { adaptFields, resolveModel } from "./compat.js";
-import { CONTROL_FIELDS, FIELD_TEXT, INLINE_TEXT, PRIVATE_FIELD, RESERVED_FIELDS, WAIT_TEXT } from "./fields.js";
+import { CONTROL_FIELDS, fieldTextsFor, INLINE_TEXT, PRIVATE_FIELD, RESERVED_FIELDS, WAIT_TEXT } from "./fields.js";
 
 /** A tool's arguments as the MCP client sent them; `prepare` validates them against the chosen model. */
 export type ToolArguments = Readonly<Record<string, unknown>>;
@@ -150,7 +150,8 @@ function variantJsonSchemas(spec: FamilyToolSpec): { oneOf: unknown[]; definitio
 export function advertisedSchema(spec: FamilyToolSpec): z.ZodObject {
   const models = variantsOf(spec).map((v) => v.model);
   const used = new Set(variantsOf(spec).flatMap((v) => [...v.fields]));
-  const described = Object.entries(FIELD_TEXT).filter(([name]) => used.has(name));
+  const described = Object.entries(fieldTextsFor(spec.family)).filter(([name]) => used.has(name));
+  const inline = isVideoFamily(spec.family) ? {} : { inline_images: z.boolean().optional().describe(INLINE_TEXT) }; // a video is never inline
   return z
     .looseObject({
       model: z
@@ -158,7 +159,7 @@ export function advertisedSchema(spec: FamilyToolSpec): z.ZodObject {
         .optional()
         .meta({ enum: models, description: `The model (default ${spec.defaultModel}); each takes the fields of its variant below` }),
       wait_s: z.number().int().min(0).max(WAIT_MAX_S).optional().describe(WAIT_TEXT),
-      inline_images: z.boolean().optional().describe(INLINE_TEXT),
+      ...inline,
       ...Object.fromEntries(described.map(([name, text]) => [name, z.unknown().optional().describe(text)])),
       ...spec.legacyInputs,
     })
