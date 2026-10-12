@@ -10,7 +10,11 @@
 import { z } from "zod/v4";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { decimalString } from "../cost.js";
-import { zGetAccountUsageResponse, zListAccountApiKeysResponse, zListAccountInvoicesResponse } from "../generated/zod.gen.js";
+import {
+  zGetAccountUsageResponse,
+  zListAccountApiKeysResponse,
+  zListAccountInvoicesResponse,
+} from "../generated/zod.gen.js";
 import type { QueryValue } from "../wire.js";
 import type { ToolContext, ToolDefinition } from "./context.js";
 import type { ToolArguments } from "./family.js";
@@ -72,10 +76,21 @@ function addLine(sums: Sums, item: LineItem): void {
     return;
   }
   const quantity = item.billed_units === undefined ? undefined : decimalUnits(item.billed_units.quantity);
-  if (quantity === null) sums.unreadable.push(`${item.product}: quantity ${item.billed_units?.quantity ?? ""} (its cost is summed, its units are not)`);
+  if (quantity === null)
+    sums.unreadable.push(
+      `${item.product}: quantity ${item.billed_units?.quantity ?? ""} (its cost is summed, its units are not)`,
+    );
   const unit = item.billed_units?.unit ?? null;
   const key = [item.product, item.currency_code, unit ?? ""].join("\u0000");
-  const row = sums.totals.get(key) ?? { product: item.product, description: item.description, endpoint: item.endpoint, currency: item.currency_code, unit, cost: 0n, quantity: null };
+  const row = sums.totals.get(key) ?? {
+    product: item.product,
+    description: item.description,
+    endpoint: item.endpoint,
+    currency: item.currency_code,
+    unit,
+    cost: 0n,
+    quantity: null,
+  };
   row.cost += cost;
   if (quantity !== undefined && quantity !== null) row.quantity = (row.quantity ?? 0n) + quantity;
   sums.totals.set(key, row);
@@ -86,9 +101,12 @@ function summaryLines(usage: Usage, width: Width): string[] {
   for (const bucket of usage.buckets) for (const item of bucket.line_items) addLine(sums, item);
   if (usage.buckets.length === 0) return ["Ideogram listed no bucket for this range."];
   const items = usage.buckets.reduce((n, b) => n + b.line_items.length, 0);
-  const lines = [`Usage from ${usage.buckets[0].start_time} to ${usage.buckets.at(-1)?.end_time}: ${usage.buckets.length} bucket(s) of ${width}, ${items} line item(s).`];
+  const lines = [
+    `Usage from ${usage.buckets[0].start_time} to ${usage.buckets.at(-1)?.end_time}: ${usage.buckets.length} bucket(s) of ${width}, ${items} line item(s).`,
+  ];
   const byCurrency = new Map<string, bigint>();
-  const byCostThenName = (a: ProductTotal, b: ProductTotal): number => (a.cost === b.cost ? a.product.localeCompare(b.product) : a.cost > b.cost ? -1 : 1);
+  const byCostThenName = (a: ProductTotal, b: ProductTotal): number =>
+    a.cost === b.cost ? a.product.localeCompare(b.product) : a.cost > b.cost ? -1 : 1;
   for (const t of [...sums.totals.values()].sort(byCostThenName)) {
     const units = t.quantity === null ? "" : ` · ${unitsText(t.quantity)} ${t.unit ?? "unit(s)"}`;
     lines.push(`  ${t.product} (${t.description}, ${t.endpoint}): ${unitsText(t.cost)} ${t.currency}${units}`);
@@ -96,7 +114,10 @@ function summaryLines(usage: Usage, width: Width): string[] {
   }
   if (items === 0) lines.push("  nothing billed in this range");
   for (const [currency, cost] of byCurrency) lines.push(`Total: ${unitsText(cost)} ${currency}`);
-  if (sums.unreadable.length > 0) lines.push(`${sums.unreadable.length} amount(s) not summed (not a decimal the sums read): ${sums.unreadable.join("; ")}`);
+  if (sums.unreadable.length > 0)
+    lines.push(
+      `${sums.unreadable.length} amount(s) not summed (not a decimal the sums read): ${sums.unreadable.join("; ")}`,
+    );
   return lines;
 }
 
@@ -107,10 +128,22 @@ function usageName(query: Readonly<Record<string, QueryValue>>, width: Width, so
 }
 
 const UsageInput = z.object({
-  start_time: z.string().optional().describe("Start of the range, RFC 3339 (e.g. 2026-10-01T00:00:00Z); default 7 days (1d) or 24 hours (1h) before the end"),
+  start_time: z
+    .string()
+    .optional()
+    .describe(
+      "Start of the range, RFC 3339 (e.g. 2026-10-01T00:00:00Z); default 7 days (1d) or 24 hours (1h) before the end",
+    ),
   end_time: z.string().optional().describe("End of the range, exclusive, RFC 3339; default now"),
-  bucket_width: z.enum(["1d", "1h"]).optional().describe("1d (a range of at most 92 days) or 1h (at most 168 hours); default 1d"),
-  sources: z.array(z.enum(["api", "app"])).min(1).optional().describe("api (API requests), app (web-app usage) or both; default both"),
+  bucket_width: z
+    .enum(["1d", "1h"])
+    .optional()
+    .describe("1d (a range of at most 92 days) or 1h (at most 168 hours); default 1d"),
+  sources: z
+    .array(z.enum(["api", "app"]))
+    .min(1)
+    .optional()
+    .describe("api (API requests), app (web-app usage) or both; default both"),
 });
 
 const toRfc3339 = (ms: number): string => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
@@ -131,7 +164,8 @@ function rangeOf(ctx: ToolContext, input: z.infer<typeof UsageInput>): { start: 
   const startMs = Date.parse(start);
   if (!Number.isFinite(startMs)) return `start_time ${start} is not an RFC 3339 time (e.g. 2026-10-01T00:00:00Z)`;
   if (startMs >= endMs) return `start_time ${start} is not before the end ${input.end_time ?? "(now)"}`;
-  if (endMs - startMs > width.maxMs) return `the range spans more than ${width.limit}, the most one request may cover at ${input.bucket_width ?? "1d"}; page by moving start_time`;
+  if (endMs - startMs > width.maxMs)
+    return `the range spans more than ${width.limit}, the most one request may cover at ${input.bucket_width ?? "1d"}; page by moving start_time`;
   return { start, end: input.end_time ?? toRfc3339(endMs) };
 }
 
@@ -143,7 +177,8 @@ function usageQuery(ctx: ToolContext, input: z.infer<typeof UsageInput>): Record
   if (input.bucket_width !== undefined) query.bucket_width = input.bucket_width;
   if (input.sources !== undefined) query.sources = input.sources;
   const checked = USAGE.schemas.query?.safeParse(query);
-  if (checked !== undefined && !checked.success) return `ideogram_usage: ${issueText(checked.error, "")} (RFC 3339 times, e.g. 2026-10-01T00:00:00Z)`;
+  if (checked !== undefined && !checked.success)
+    return `ideogram_usage: ${issueText(checked.error, "")} (RFC 3339 times, e.g. 2026-10-01T00:00:00Z)`;
   return query;
 }
 
@@ -158,9 +193,21 @@ async function runUsage(ctx: ToolContext, args: ToolArguments): Promise<CallTool
     const width = input.data.bucket_width ?? "1d";
     const sources = input.data.sources ?? ["api", "app"];
     const buckets = (answer.raw as { buckets?: unknown }).buckets ?? [];
-    return listingResult(summaryLines(answer.data, width), await rawLines(ctx, "Buckets as Ideogram sent them (the shape ai-cost reads)", usageName(query, width, sources), buckets));
+    return listingResult(
+      summaryLines(answer.data, width),
+      await rawLines(
+        ctx,
+        "Buckets as Ideogram sent them (the shape ai-cost reads)",
+        usageName(query, width, sources),
+        buckets,
+      ),
+    );
   } catch (error) {
-    return apiErrorResult(error, "Reading the usage", "needs an API key whose owner is an organization admin — Ideogram answers 404 to a key owned by another member");
+    return apiErrorResult(
+      error,
+      "Reading the usage",
+      "needs an API key whose owner is an organization admin — Ideogram answers 404 to a key owned by another member",
+    );
   }
 }
 
@@ -168,11 +215,21 @@ async function runInvoices(ctx: ToolContext): Promise<CallToolResult> {
   try {
     const answer = await readOperation(ctx, { op: INVOICES }, zListAccountInvoicesResponse);
     if (!answer.ok) return answer.result;
-    const rows = answer.data.invoices.map((inv) => `${inv.start_time} → ${inv.end_time}: ${inv.total} ${inv.currency_code}, ${inv.status}${inv.paid_time ? `, paid ${inv.paid_time}` : ""} (${inv.line_items.length} line item(s))`);
+    const rows = answer.data.invoices.map(
+      (inv) =>
+        `${inv.start_time} → ${inv.end_time}: ${inv.total} ${inv.currency_code}, ${inv.status}${inv.paid_time ? `, paid ${inv.paid_time}` : ""} (${inv.line_items.length} line item(s))`,
+    );
     const raw = (answer.raw as { invoices?: unknown }).invoices ?? [];
-    return listingResult([`${rows.length} invoice(s).`, ...rows], await rawLines(ctx, "Invoices as Ideogram sent them", `invoices-${ctx.clock.now()}`, raw));
+    return listingResult(
+      [`${rows.length} invoice(s).`, ...rows],
+      await rawLines(ctx, "Invoices as Ideogram sent them", `invoices-${ctx.clock.now()}`, raw),
+    );
   } catch (error) {
-    return apiErrorResult(error, "Listing invoices", "needs an API key whose owner is an organization admin — Ideogram answers 404 to a key owned by another member");
+    return apiErrorResult(
+      error,
+      "Listing invoices",
+      "needs an API key whose owner is an organization admin — Ideogram answers 404 to a key owned by another member",
+    );
   }
 }
 
@@ -180,11 +237,21 @@ async function runApiKeys(ctx: ToolContext): Promise<CallToolResult> {
   try {
     const answer = await readOperation(ctx, { op: API_KEYS }, zListAccountApiKeysResponse);
     if (!answer.ok) return answer.result;
-    const rows = answer.data.api_keys.map((k) => `${k.redacted_api_key} (${k.api_key_id}) ${k.status}${k.label ? ` "${k.label}"` : ""}, created ${k.creation_time}${k.creator_display_label ? ` by ${k.creator_display_label}` : ""}`);
+    const rows = answer.data.api_keys.map(
+      (k) =>
+        `${k.redacted_api_key} (${k.api_key_id}) ${k.status}${k.label ? ` "${k.label}"` : ""}, created ${k.creation_time}${k.creator_display_label ? ` by ${k.creator_display_label}` : ""}`,
+    );
     const raw = (answer.raw as { api_keys?: unknown }).api_keys ?? [];
-    return listingResult([`${rows.length} API key(s), newest first (key material redacted by Ideogram).`, ...rows], await rawLines(ctx, "API keys as Ideogram sent them", `api-keys-${ctx.clock.now()}`, raw));
+    return listingResult(
+      [`${rows.length} API key(s), newest first (key material redacted by Ideogram).`, ...rows],
+      await rawLines(ctx, "API keys as Ideogram sent them", `api-keys-${ctx.clock.now()}`, raw),
+    );
   } catch (error) {
-    return apiErrorResult(error, "Listing API keys", "needs an API key whose owner is an organization admin — Ideogram answers 404 to a key owned by another member");
+    return apiErrorResult(
+      error,
+      "Listing API keys",
+      "needs an API key whose owner is an organization admin — Ideogram answers 404 to a key owned by another member",
+    );
   }
 }
 

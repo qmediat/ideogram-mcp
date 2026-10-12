@@ -76,7 +76,8 @@ export function supportOf(op: Operation): SupportStatus {
   if (CURATED_OPERATIONS_OUTSIDE_FAMILIES.has(op.id)) return "curated";
   const curatedFamily = op.family !== null && CURATED_FAMILIES.has(op.family);
   if (curatedFamily && op.class === "documented") return "curated";
-  if (op.path.startsWith("/v2/image/") || (curatedFamily && (op.class === "spec_only" || op.class === "v1_only"))) return "raw"; // a v1 model variant of a curated family (ernie, flux, the v4 tiers, the p-image tiers…) runs raw
+  if (op.path.startsWith("/v2/image/") || (curatedFamily && (op.class === "spec_only" || op.class === "v1_only")))
+    return "raw"; // a v1 model variant of a curated family (ernie, flux, the v4 tiers, the p-image tiers…) runs raw
   if (op.family !== null && RAW_FAMILIES.has(op.family)) return "raw";
   return "planned";
 }

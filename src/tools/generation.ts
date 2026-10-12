@@ -15,7 +15,13 @@ export const GENERATION_TOOL: ToolDefinition = {
     "Collect the result of a generation by its generation_id (from a tool that answered 'still running', or from an earlier session): waits up to wait_s for it, then saves its images or videos. Reading a generation is free and never runs it again.",
   inputSchema: z.object({
     generation_id: z.string().min(1).describe("The id a tool returned"),
-    wait_s: z.number().int().min(0).max(WAIT_MAX_S).optional().describe("Seconds to wait if it is still running (0-50, default 45)"),
+    wait_s: z
+      .number()
+      .int()
+      .min(0)
+      .max(WAIT_MAX_S)
+      .optional()
+      .describe("Seconds to wait if it is still running (0-50, default 45)"),
     inline_images: z.boolean().optional().describe(INLINE_TEXT),
   }),
   handler: async (ctx, args) => {

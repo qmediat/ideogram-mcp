@@ -94,7 +94,8 @@ export interface SavedFile {
   readonly contentType: string;
 }
 
-type Attempt = { readonly kind: "response"; readonly response: Response } | { readonly kind: "network"; readonly error: unknown };
+type Attempt =
+  { readonly kind: "response"; readonly response: Response } | { readonly kind: "network"; readonly error: unknown };
 
 /** The least an attempt is given: a retry does not start when less than this remains of the budget. */
 const MIN_ATTEMPT_MS = 1_000;
@@ -104,7 +105,6 @@ function retryAfterSeconds(response: Response): number | undefined {
   const seconds = Number.parseInt(response.headers.get("Retry-After") ?? "", 10);
   return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
 }
-
 
 function backoffMs(attempt: number, response?: Response): number {
   const after = response === undefined ? undefined : retryAfterSeconds(response);
@@ -134,7 +134,11 @@ export async function errorFromResponse(response: Response): Promise<IdeogramApi
   }
   const typed = zGenerationErrorResponse.safeParse(body);
   const details: ApiErrorDetails = typed.success
-    ? { rejectReason: typed.data.reject_reason, maxInflight: typed.data.max_inflight_requests, taskCompletionSpeed: typed.data.task_completion_speed }
+    ? {
+        rejectReason: typed.data.reject_reason,
+        maxInflight: typed.data.max_inflight_requests,
+        taskCompletionSpeed: typed.data.task_completion_speed,
+      }
     : {};
   const message = typed.success ? typed.data.error : messageOf(body, excerpt(text) || response.statusText);
   const code = typed.success ? typed.data.reject_reason.toUpperCase() : `HTTP_${response.status}`;
@@ -154,15 +158,25 @@ export class IdeogramClient {
    * budget's own signal is the only thing that ends the attempt (it fires at that very instant — a second timer for the
    * same instant would race it); the client's attempt cap gets a timer of its own only when it is the shorter one. The
    * caller's cancellation is part of the budget's signal. */
-  private async attempt(method: string, url: string, headers: Record<string, string>, body: Uint8Array<ArrayBuffer> | null, budget: CallBudget): Promise<Attempt> {
+  private async attempt(
+    method: string,
+    url: string,
+    headers: Record<string, string>,
+    body: Uint8Array<ArrayBuffer> | null,
+    budget: CallBudget,
+  ): Promise<Attempt> {
     const left = remainingMs(budget);
     if (budget.signal.aborted) return { kind: "network", error: budgetEnded(budget.signal, false) };
-    if (left <= 0) return { kind: "network", error: new BudgetEnded(budget.bound === "wait" ? "wait" : "timeout", false) };
+    if (left <= 0)
+      return { kind: "network", error: new BudgetEnded(budget.bound === "wait" ? "wait" : "timeout", false) };
     try {
       // redirect manual: a 3xx is returned as a response, never followed — the download host allow-list is checked on
       // the URL this server asked for, and a hop to another host would skip it.
       const cap = this.options.requestTimeoutMs;
-      const signal = left <= cap ? budget.signal : AbortSignal.any([budget.signal, AbortSignal.timeout(Math.max(1, Math.ceil(cap)))]);
+      const signal =
+        left <= cap
+          ? budget.signal
+          : AbortSignal.any([budget.signal, AbortSignal.timeout(Math.max(1, Math.ceil(cap)))]);
       const init: RequestInit = { method, headers, redirect: "manual", signal };
       if (body !== null) init.body = body;
       return { kind: "response", response: await fetch(url, init) };
@@ -177,7 +191,8 @@ export class IdeogramClient {
   private budgetCut(budget: CallBudget, error: unknown): BudgetEnded | null {
     if (budget.signal.aborted) return budgetEnded(budget.signal, true);
     // a belt under the signal rule: an abort of any name past the deadline is the budget's
-    if (isAbort(error) && remainingMs(budget) <= 0) return new BudgetEnded(budget.bound === "wait" ? "wait" : "timeout", true);
+    if (isAbort(error) && remainingMs(budget) <= 0)
+      return new BudgetEnded(budget.bound === "wait" ? "wait" : "timeout", true);
     return null;
   }
 
@@ -201,7 +216,10 @@ export class IdeogramClient {
   private networkError(idempotent: boolean, error: unknown): IdeogramApiError {
     if (error instanceof BudgetEnded) return error.toApiError(idempotent);
     const sent = !failedBeforeSending(error);
-    const note = sent && !idempotent ? "; the request may have reached Ideogram, so it was not sent again (it could be billed twice)" : "";
+    const note =
+      sent && !idempotent
+        ? "; the request may have reached Ideogram, so it was not sent again (it could be billed twice)"
+        : "";
     return new IdeogramApiError(0, "NETWORK_ERROR", `Network error: ${networkErrorText(error)}${note}`, { sent });
   }
 
@@ -223,8 +241,19 @@ export class IdeogramClient {
     } catch (error) {
       // the save's own refusals (not a file of the kind, over the cap) say what the answer was; anything else — a failed
       // write, a cut connection, the budget's end mid-body — is the answer lost
-      if (error instanceof IdeogramApiError && SAVE_REFUSALS.has(error.code)) throw new IdeogramApiError(response.status, error.code, `${req.op.id} answered ${response.status}: ${error.message}`, { sent: true });
-      throw new IdeogramApiError(response.status, "ANSWER_NOT_SAVED", `${req.op.id} answered ${response.status}; its answer could not be saved: ${error instanceof IdeogramApiError ? error.message : networkErrorText(error)}`, { sent: true });
+      if (error instanceof IdeogramApiError && SAVE_REFUSALS.has(error.code))
+        throw new IdeogramApiError(
+          response.status,
+          error.code,
+          `${req.op.id} answered ${response.status}: ${error.message}`,
+          { sent: true },
+        );
+      throw new IdeogramApiError(
+        response.status,
+        "ANSWER_NOT_SAVED",
+        `${req.op.id} answered ${response.status}; its answer could not be saved: ${error instanceof IdeogramApiError ? error.message : networkErrorText(error)}`,
+        { sent: true },
+      );
     }
   }
 
@@ -252,7 +281,9 @@ export class IdeogramClient {
         await sleepWithin(budget, wait);
         continue;
       }
-      throw result.kind === "network" ? this.networkError(idempotent, result.error) : await errorFromResponse(result.response);
+      throw result.kind === "network"
+        ? this.networkError(idempotent, result.error)
+        : await errorFromResponse(result.response);
     }
   }
 
@@ -264,13 +295,24 @@ export class IdeogramClient {
   }
 
   /** A 2xx response's body as a file of the expected kind: the type and the cap checked, the bytes streamed. */
-  private async saveResponse(response: Response, outputDir: string, budget: CallBudget, kind: MediaKind): Promise<SavedFile> {
+  private async saveResponse(
+    response: Response,
+    outputDir: string,
+    budget: CallBudget,
+    kind: MediaKind,
+  ): Promise<SavedFile> {
     const maxBytes = kind === "video" ? MAX_VIDEO_DOWNLOAD_BYTES : this.options.maxDownloadBytes;
     const contentType = (response.headers.get("Content-Type") ?? "").toLowerCase();
-    const extension = MEDIA_EXTENSIONS.find(([prefix]) => contentType.startsWith(prefix) && prefix.startsWith(kind))?.[1];
+    const extension = MEDIA_EXTENSIONS.find(
+      ([prefix]) => contentType.startsWith(prefix) && prefix.startsWith(kind),
+    )?.[1];
     if (extension === undefined) {
       await response.body?.cancel();
-      throw new IdeogramApiError(response.status, "DOWNLOAD_INVALID_TYPE", `Expected ${kind === "video" ? "a video (video/mp4)" : "an image"}, got: ${contentType || "(missing)"}`);
+      throw new IdeogramApiError(
+        response.status,
+        "DOWNLOAD_INVALID_TYPE",
+        `Expected ${kind === "video" ? "a video (video/mp4)" : "an image"}, got: ${contentType || "(missing)"}`,
+      );
     }
     const declared = Number.parseInt(response.headers.get("Content-Length") ?? "", 10);
     if (Number.isFinite(declared) && declared > maxBytes) {
@@ -311,7 +353,11 @@ export class IdeogramClient {
       if (result.kind === "response" && result.response.status >= 300 && result.response.status < 400) {
         await result.response.body?.cancel();
         const location = result.response.headers.get("Location") ?? "unknown";
-        throw new IdeogramApiError(result.response.status, "REDIRECT_BLOCKED", `Download redirect blocked (${result.response.status} → ${location})`);
+        throw new IdeogramApiError(
+          result.response.status,
+          "REDIRECT_BLOCKED",
+          `Download redirect blocked (${result.response.status} → ${location})`,
+        );
       }
       if (result.kind === "response" && result.response.ok) return result.response;
       const wait = backoffMs(attempt, result.kind === "response" ? result.response : undefined); // Retry-After honoured here too
@@ -328,12 +374,21 @@ export class IdeogramClient {
       await result.response.body?.cancel();
       const after = retryAfterSeconds(result.response); // a 429 the budget cannot wait out keeps its Retry-After for the caller
       const retry = after === undefined ? "" : ` (retry after ${after} s)`;
-      throw new IdeogramApiError(result.response.status, "DOWNLOAD_FAILED", `Failed to download: ${result.response.status} ${result.response.statusText}${retry}`, { retryAfterS: after });
+      throw new IdeogramApiError(
+        result.response.status,
+        "DOWNLOAD_FAILED",
+        `Failed to download: ${result.response.status} ${result.response.statusText}${retry}`,
+        { retryAfterS: after },
+      );
     }
   }
 }
 
-const BUDGET_END_TEXT = { timeout: "the call's time ran out", cancel: "the call was cancelled by the caller", wait: "the wait ran out" } as const;
+const BUDGET_END_TEXT = {
+  timeout: "the call's time ran out",
+  cancel: "the call was cancelled by the caller",
+  wait: "the wait ran out",
+} as const;
 const BUDGET_END_CODE = { timeout: "CALL_TIMEOUT", cancel: "CANCELLED", wait: "WAIT_TIMEOUT" } as const;
 
 /** The budget ended — the call's limit ran out, the caller cancelled, or the tool's wait ran out — before an attempt or
@@ -385,14 +440,28 @@ async function parseJson(response: Response, req: ApiRequest): Promise<unknown> 
     text = await response.text();
   } catch (error) {
     // The 2xx status arrived, so a POST was accepted; its body (the generation id) is lost with the connection.
-    const note = req.op.method === "GET" ? "" : "; Ideogram answered 2xx, so the job may be running and billed — its id did not arrive";
-    throw new IdeogramApiError(response.status, "RESPONSE_READ_FAILED", `${req.op.id}: the response body could not be read: ${networkErrorText(error)}${note}`);
+    const note =
+      req.op.method === "GET"
+        ? ""
+        : "; Ideogram answered 2xx, so the job may be running and billed — its id did not arrive";
+    throw new IdeogramApiError(
+      response.status,
+      "RESPONSE_READ_FAILED",
+      `${req.op.id}: the response body could not be read: ${networkErrorText(error)}${note}`,
+    );
   }
   try {
     return JSON.parse(text);
   } catch {
-    const note = req.op.method === "GET" ? "" : "; Ideogram answered 2xx, so the job may be running and billed — its id is not in this answer";
-    throw new IdeogramApiError(response.status, "INVALID_JSON", `${req.op.id} answered ${response.status} with a non-JSON body: ${excerpt(text)}${note}`);
+    const note =
+      req.op.method === "GET"
+        ? ""
+        : "; Ideogram answered 2xx, so the job may be running and billed — its id is not in this answer";
+    throw new IdeogramApiError(
+      response.status,
+      "INVALID_JSON",
+      `${req.op.id} answered ${response.status} with a non-JSON body: ${excerpt(text)}${note}`,
+    );
   }
 }
 
@@ -408,7 +477,11 @@ const MEDIA_EXTENSIONS: readonly (readonly [string, string])[] = [
 
 function tooLarge(bytes: number, cap: number): IdeogramApiError {
   const mb = (n: number): string => (n / 1024 / 1024).toFixed(1);
-  return new IdeogramApiError(200, "DOWNLOAD_TOO_LARGE", `The file is over ${mb(cap)} MB (${mb(bytes)} MB read); not saved`);
+  return new IdeogramApiError(
+    200,
+    "DOWNLOAD_TOO_LARGE",
+    `The file is over ${mb(cap)} MB (${mb(bytes)} MB read); not saved`,
+  );
 }
 
 /** A new file name in the output directory: ideogram-<ms>-<random>.<ext>. */
@@ -426,7 +499,13 @@ async function writeAll(handle: FileHandle, chunk: Uint8Array): Promise<void> {
   }
 }
 
-async function streamToFile(response: Response, outputDir: string, extension: string, cap: number, contentType: string): Promise<SavedFile> {
+async function streamToFile(
+  response: Response,
+  outputDir: string,
+  extension: string,
+  cap: number,
+  contentType: string,
+): Promise<SavedFile> {
   const dir = resolve(outputDir);
   await mkdir(dir, { recursive: true });
   const partial = join(dir, `.${outputFileName(extension)}.part`);

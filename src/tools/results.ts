@@ -24,7 +24,10 @@ export function jsonText(value: unknown): string {
 function imageLine(path: string, item: ImageItem): string {
   const lines = [`Saved: ${path}`, `  Resolution: ${item.resolution ?? "unknown"}`];
   if (item.seed !== null) lines.push(`  Seed: ${item.seed}`);
-  if (item.assetId !== null) lines.push(`  Asset: ${JSON.stringify({ asset_type: "RESPONSE", asset_id: item.assetId })} (an *_asset_identifier input of a later call)`);
+  if (item.assetId !== null)
+    lines.push(
+      `  Asset: ${JSON.stringify({ asset_type: "RESPONSE", asset_id: item.assetId })} (an *_asset_identifier input of a later call)`,
+    );
   if (item.prompt !== null) lines.push(`  Prompt used: ${item.prompt}`);
   return lines.join("\n");
 }
@@ -40,12 +43,17 @@ type Download = { readonly ok: true; readonly file: SavedFile } | { readonly ok:
 /** Every result file downloaded at once, each outcome typed: the one loop of images, base images and videos. A failure
  * is counted and said beside its URL; one the call's budget cut names the re-collect path (the id is above). */
 async function downloadAll(ctx: ToolContext, urls: readonly string[], kind: MediaKind): Promise<Download[]> {
-  const results = await Promise.allSettled(urls.map((url) => ctx.client.download(url, ctx.outputDir, ctx.budget, kind)));
+  const results = await Promise.allSettled(
+    urls.map((url) => ctx.client.download(url, ctx.outputDir, ctx.budget, kind)),
+  );
   return results.map((result, i) => {
     if (result.status === "fulfilled") return { ok: true, file: result.value };
     COUNTERS.downloadFailures += 1;
     const reason = result.reason instanceof Error ? result.reason.message : String(result.reason);
-    const later = result.reason instanceof IdeogramApiError && result.reason.code === "CALL_TIMEOUT" ? " (ideogram_generation with the id above saves the generation's files in a new call)" : "";
+    const later =
+      result.reason instanceof IdeogramApiError && result.reason.code === "CALL_TIMEOUT"
+        ? " (ideogram_generation with the id above saves the generation's files in a new call)"
+        : "";
     return { ok: false, line: `Not saved: ${urls[i]} — ${reason}${later}` };
   });
 }
@@ -54,7 +62,11 @@ async function downloadAll(ctx: ToolContext, urls: readonly string[], kind: Medi
  * has none; one that carries both is still withheld, never fetched). */
 async function saveImages(ctx: ToolContext, items: readonly ImageItem[]): Promise<Saved> {
   const safe = items.filter((item) => item.url !== null && item.isImageSafe);
-  const downloads = await downloadAll(ctx, safe.map((item) => item.url as string), "image");
+  const downloads = await downloadAll(
+    ctx,
+    safe.map((item) => item.url as string),
+    "image",
+  );
   const files = downloads.flatMap((d) => (d.ok ? [d.file] : []));
   const lines = downloads.map((d, i) => (d.ok ? imageLine(d.file.path, safe[i]) : d.line));
   const unsafe = items.length - safe.length;
@@ -87,11 +99,15 @@ export async function inlineContent(files: readonly SavedFile[]): Promise<{ item
       continue;
     }
     if (file.bytes > INLINE_MAX_BYTES) {
-      lines.push(`Not returned inline: ${file.path} is ${file.bytes} bytes, over ${mbText(INLINE_MAX_BYTES, 2)} (${INLINE_MAX_BYTES} bytes)`);
+      lines.push(
+        `Not returned inline: ${file.path} is ${file.bytes} bytes, over ${mbText(INLINE_MAX_BYTES, 2)} (${INLINE_MAX_BYTES} bytes)`,
+      );
       continue;
     }
     if (total + file.bytes > INLINE_MAX_TOTAL_BYTES) {
-      lines.push(`Not returned inline: ${file.path} would take this result past ${mbText(INLINE_MAX_TOTAL_BYTES, 2)} of images`);
+      lines.push(
+        `Not returned inline: ${file.path} would take this result past ${mbText(INLINE_MAX_TOTAL_BYTES, 2)} of images`,
+      );
       continue;
     }
     try {
@@ -99,7 +115,9 @@ export async function inlineContent(files: readonly SavedFile[]): Promise<{ item
       total += file.bytes;
     } catch (error) {
       COUNTERS.inlineReadFailures += 1;
-      lines.push(`Not returned inline: ${file.path} could not be read back (${error instanceof Error ? error.message : String(error)})`);
+      lines.push(
+        `Not returned inline: ${file.path} could not be read back (${error instanceof Error ? error.message : String(error)})`,
+      );
     }
   }
   return { items, lines };
@@ -117,7 +135,8 @@ interface Shaped {
 
 /** A withheld design is said and nothing of it is shown; a safe one lists what Ideogram gave. */
 function designLines(item: LayeredItem, i: number): string[] {
-  if (!item.isImageSafe) return [`Design ${i + 1} withheld by Ideogram's safety check (nothing shown, nothing downloaded)`];
+  if (!item.isImageSafe)
+    return [`Design ${i + 1} withheld by Ideogram's safety check (nothing shown, nothing downloaded)`];
   return [
     ...(item.baseImageUrl === null ? [`Design ${i + 1}: no base image listed by Ideogram`] : []),
     ...(item.url === null ? [] : [`Design ${i + 1}: ${item.url} (Ideogram's links expire; download it to keep it)`]),
@@ -131,9 +150,19 @@ function designLines(item: LayeredItem, i: number): string[] {
  * withheld, or one that lists none of them, is an error. */
 async function layeredResult(ctx: ToolContext, items: readonly LayeredItem[]): Promise<Shaped> {
   const withBase = items.filter((item) => item.isImageSafe && item.baseImageUrl !== null);
-  const base: ImageItem[] = withBase.map((item) => ({ url: item.baseImageUrl, assetId: null, resolution: item.resolution, seed: item.seed, prompt: null, isImageSafe: true }));
+  const base: ImageItem[] = withBase.map((item) => ({
+    url: item.baseImageUrl,
+    assetId: null,
+    resolution: item.resolution,
+    seed: item.seed,
+    prompt: null,
+    isImageSafe: true,
+  }));
   const images = await saveImages(ctx, base);
-  const usable = items.some((item) => item.isImageSafe && (item.url !== null || item.htmlUrl !== null || item.textBlocks.length > 0)) || images.saved > 0;
+  const usable =
+    items.some(
+      (item) => item.isImageSafe && (item.url !== null || item.htmlUrl !== null || item.textBlocks.length > 0),
+    ) || images.saved > 0;
   const head = `${images.saved} of ${withBase.length} base image(s) saved (${items.length} design(s)).`;
   return { lines: [head, ...images.lines, ...items.flatMap(designLines)], isError: !usable, files: images.files };
 }
@@ -142,7 +171,11 @@ async function layeredResult(ctx: ToolContext, items: readonly LayeredItem[]): P
  * never inline — said when inline_images was asked), its measured length, resolution and size said. */
 async function videosResult(ctx: ToolContext, items: readonly VideoItem[], inlineAsked: boolean): Promise<Shaped> {
   const withUrl = items.filter((item) => item.url !== null);
-  const downloads = await downloadAll(ctx, withUrl.map((item) => item.url as string), "video");
+  const downloads = await downloadAll(
+    ctx,
+    withUrl.map((item) => item.url as string),
+    "video",
+  );
   const lines: string[] = [];
   let saved = 0;
   downloads.forEach((d, i) => {
@@ -152,7 +185,10 @@ async function videosResult(ctx: ToolContext, items: readonly VideoItem[], inlin
     }
     const item = withUrl[i];
     saved += 1;
-    lines.push(`Saved: ${d.file.path}`, `  Duration: ${item.durationS ?? "?"} s · Resolution: ${item.resolution ?? "?"} · Aspect: ${item.aspectRatio ?? "?"} · Size: ${mbText(d.file.bytes, 1)}`);
+    lines.push(
+      `Saved: ${d.file.path}`,
+      `  Duration: ${item.durationS ?? "?"} s · Resolution: ${item.resolution ?? "?"} · Aspect: ${item.aspectRatio ?? "?"} · Size: ${mbText(d.file.bytes, 1)}`,
+    );
     if (item.prompt !== null) lines.push(`  Prompt used: ${item.prompt}`);
   });
   const withheld = items.length - withUrl.length;
@@ -168,9 +204,14 @@ function descriptionLines(payload: Extract<Payload, { kind: "description" }>): s
   return lines;
 }
 
-async function completedResult(ctx: ToolContext, outcome: Extract<Outcome, { kind: "completed" }>, options: ResultOptions): Promise<Shaped> {
+async function completedResult(
+  ctx: ToolContext,
+  outcome: Extract<Outcome, { kind: "completed" }>,
+  options: ResultOptions,
+): Promise<Shaped> {
   const head = outcome.generationId === null ? [] : [`Generation ${outcome.generationId} completed.`];
-  if (outcome.usageCostUsdMicros !== null) head.push(`Cost reported by Ideogram: ${microsToUsd(outcome.usageCostUsdMicros)} USD`);
+  if (outcome.usageCostUsdMicros !== null)
+    head.push(`Cost reported by Ideogram: ${microsToUsd(outcome.usageCostUsdMicros)} USD`);
   const payload = outcome.payload;
   if (payload.kind === "description") return { lines: [...head, ...descriptionLines(payload)], isError: false };
   if (payload.kind === "record") return { lines: [...head, jsonText(payload.body)], isError: false };
@@ -182,7 +223,11 @@ async function completedResult(ctx: ToolContext, outcome: Extract<Outcome, { kin
     const layered = await layeredResult(ctx, payload.items);
     return { lines: [...head, ...layered.lines], isError: layered.isError, files: layered.files };
   }
-  if (payload.items.length === 0) return { lines: [...head, "Ideogram listed no image or video for this generation (nothing to save)."], isError: true };
+  if (payload.items.length === 0)
+    return {
+      lines: [...head, "Ideogram listed no image or video for this generation (nothing to save)."],
+      isError: true,
+    };
   const images = await saveImages(ctx, payload.items);
   const summary = `${images.saved} of ${payload.items.length} image(s) saved.`;
   return { lines: [...head, summary, ...images.lines], isError: images.saved === 0, files: images.files };
@@ -205,7 +250,9 @@ function otherResult(outcome: Exclude<Outcome, { kind: "completed" }>): Shaped {
       return {
         lines: [
           `Ideogram answered ${outcome.status} with a body that does not match its own specification; not treated as a success.`,
-          ...(outcome.generationId === null ? [] : [`Generation id: ${outcome.generationId} (ideogram_generation can look it up)`]),
+          ...(outcome.generationId === null
+            ? []
+            : [`Generation id: ${outcome.generationId} (ideogram_generation can look it up)`]),
           ...outcome.issues.map((issue) => `  ${issue}`),
           `Body (start): ${outcome.bodyExcerpt}`,
         ],
@@ -214,12 +261,23 @@ function otherResult(outcome: Exclude<Outcome, { kind: "completed" }>): Shaped {
   }
 }
 
-export async function outcomeResult(ctx: ToolContext, outcome: Outcome, notes: readonly string[], options: ResultOptions = {}): Promise<CallToolResult> {
+export async function outcomeResult(
+  ctx: ToolContext,
+  outcome: Outcome,
+  notes: readonly string[],
+  options: ResultOptions = {},
+): Promise<CallToolResult> {
   const shaped = outcome.kind === "completed" ? await completedResult(ctx, outcome, options) : otherResult(outcome);
-  const inline = options.inlineImages === true && shaped.files !== undefined ? await inlineContent(shaped.files) : { items: [], lines: [] };
+  const inline =
+    options.inlineImages === true && shaped.files !== undefined
+      ? await inlineContent(shaped.files)
+      : { items: [], lines: [] };
   const lines = [...shaped.lines, ...inline.lines];
   if (notes.length > 0) lines.push(`Mapped from the 1.x inputs: ${notes.join("; ")}`);
-  return { content: [{ type: "text", text: lines.join("\n") }, ...inline.items], ...(shaped.isError ? { isError: true } : {}) };
+  return {
+    content: [{ type: "text", text: lines.join("\n") }, ...inline.items],
+    ...(shaped.isError ? { isError: true } : {}),
+  };
 }
 
 export function textResult(text: string, isError = false): CallToolResult {

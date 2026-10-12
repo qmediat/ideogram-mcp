@@ -90,7 +90,8 @@ export function variantsOf(spec: FamilyToolSpec): readonly ModelVariant[] {
   const cached = VARIANTS.get(spec.name);
   if (cached !== undefined) return cached;
   const variants = singleVariant(spec) ?? documentedModelsOf(spec.family).map((model) => variantOf(spec.family, model));
-  if (!variants.some((v) => v.model === spec.defaultModel)) throw new Error(`${spec.name}: no model ${spec.defaultModel}`);
+  if (!variants.some((v) => v.model === spec.defaultModel))
+    throw new Error(`${spec.name}: no model ${spec.defaultModel}`);
   VARIANTS.set(spec.name, variants);
   return variants;
 }
@@ -101,14 +102,18 @@ type JsonObject = Record<string, unknown>;
 function unwrapRef(schema: unknown): unknown {
   const s = schema as JsonObject;
   const allOf = s?.allOf as JsonObject[] | undefined;
-  return Object.keys(s ?? {}).length === 1 && allOf?.length === 1 && typeof allOf[0].$ref === "string" ? allOf[0] : schema;
+  return Object.keys(s ?? {}).length === 1 && allOf?.length === 1 && typeof allOf[0].$ref === "string"
+    ? allOf[0]
+    : schema;
 }
 
 /** Moves every property schema that occurs in two or more variants into `definitions` (lossless; the advertised
  * schema's bytes are a cost every client pays — docs/DESIGN-ideogram-v2.md section 5). */
 function hoistShared(variants: JsonObject[], definitions: JsonObject): void {
   const seen = new Map<string, number>();
-  for (const v of variants) for (const p of Object.values(v.properties as JsonObject)) seen.set(JSON.stringify(p), (seen.get(JSON.stringify(p)) ?? 0) + 1);
+  for (const v of variants)
+    for (const p of Object.values(v.properties as JsonObject))
+      seen.set(JSON.stringify(p), (seen.get(JSON.stringify(p)) ?? 0) + 1);
   const names = new Map<string, string>();
   for (const [text, count] of seen) {
     if (count < 2 || text.length < 24 || text.startsWith('{"$ref"')) continue;
@@ -149,7 +154,9 @@ export function inlineSmallDefinitions(json: JsonObject): void {
   json.oneOf = walk(json.oneOf, new Set());
   for (const [name, def] of Object.entries(definitions)) definitions[name] = walk(def, new Set());
   // a definition is dropped only when nothing refers to it any more (a $ref beside other keys is left as it is)
-  const remaining = new Set((JSON.stringify(json).match(/"#\/definitions\/[^"]+"/g) ?? []).map((ref) => JSON.parse(ref) as string));
+  const remaining = new Set(
+    (JSON.stringify(json).match(/"#\/definitions\/[^"]+"/g) ?? []).map((ref) => JSON.parse(ref) as string),
+  );
   for (const ref of small.keys()) if (!remaining.has(ref)) delete definitions[ref.replace("#/definitions/", "")];
 }
 
@@ -159,14 +166,20 @@ function variantJsonSchemas(spec: FamilyToolSpec): { oneOf: unknown[]; definitio
     const model = v.model === spec.defaultModel ? z.literal(v.model).optional() : z.literal(v.model);
     return single ? v.schema : z.object({ model, ...v.schema.shape }); // a single-operation tool has no model to tell its one variant by
   });
-  const json = z.toJSONSchema(single ? variants[0] : z.union(variants), { io: "input", reused: "ref", target: "draft-7", unrepresentable: "any" }) as {
+  const json = z.toJSONSchema(single ? variants[0] : z.union(variants), {
+    io: "input",
+    reused: "ref",
+    target: "draft-7",
+    unrepresentable: "any",
+  }) as {
     anyOf?: JsonObject[];
     definitions?: JsonObject;
     properties?: JsonObject;
   };
   if (single) json.anyOf = [{ ...json, $schema: undefined, definitions: undefined }]; // the one variant, without the root's own keys
   const definitions = json.definitions ?? {};
-  if (!Array.isArray(json.anyOf)) throw new Error(`${spec.name}: the variants did not render as a union (${variants.length} model(s))`);
+  if (!Array.isArray(json.anyOf))
+    throw new Error(`${spec.name}: the variants did not render as a union (${variants.length} model(s))`);
   for (const v of json.anyOf) {
     const props = v.properties as JsonObject;
     for (const key of Object.keys(props)) props[key] = unwrapRef(props[key]);
@@ -181,7 +194,9 @@ function variantJsonSchemas(spec: FamilyToolSpec): { oneOf: unknown[]; definitio
 export function advertisedSchema(spec: FamilyToolSpec): z.ZodObject {
   const models = variantsOf(spec).map((v) => v.model);
   const used = new Set(variantsOf(spec).flatMap((v) => [...v.fields]));
-  const described = Object.entries({ ...fieldTextsFor(spec.family), ...spec.fieldTexts }).filter(([name]) => used.has(name));
+  const described = Object.entries({ ...fieldTextsFor(spec.family), ...spec.fieldTexts }).filter(([name]) =>
+    used.has(name),
+  );
   const inline = isVideoFamily(spec.family) ? {} : { inline_images: z.boolean().optional().describe(INLINE_TEXT) }; // a video is never inline
   const model = isSingleOperation(spec)
     ? {}
@@ -189,12 +204,17 @@ export function advertisedSchema(spec: FamilyToolSpec): z.ZodObject {
         model: z
           .string()
           .optional()
-          .meta({ enum: models, description: `The model (default ${spec.defaultModel}); each takes the fields of its variant below` }),
+          .meta({
+            enum: models,
+            description: `The model (default ${spec.defaultModel}); each takes the fields of its variant below`,
+          }),
       };
   return z
     .looseObject({
       ...model,
-      ...(answersSynchronously(spec) ? {} : { wait_s: z.number().int().min(0).max(WAIT_MAX_S).optional().describe(WAIT_TEXT) }),
+      ...(answersSynchronously(spec)
+        ? {}
+        : { wait_s: z.number().int().min(0).max(WAIT_MAX_S).optional().describe(WAIT_TEXT) }),
       ...inline,
       ...Object.fromEntries(described.map(([name, text]) => [name, z.unknown().optional().describe(text)])),
       ...spec.legacyInputs,
@@ -204,10 +224,14 @@ export function advertisedSchema(spec: FamilyToolSpec): z.ZodObject {
 
 function refusalFor(spec: FamilyToolSpec, variant: ModelVariant, field: string): string {
   if (RESERVED_FIELDS.has(field)) {
-    return field === "async" ? "`async` is managed by this tool: use wait_s" : `\`${field}\` is available through ideogram_api only`;
+    return field === "async"
+      ? "`async` is managed by this tool: use wait_s"
+      : `\`${field}\` is available through ideogram_api only`;
   }
   if (isSingleOperation(spec)) return `\`${field}\` is not a parameter of ${spec.name} (${variant.op.id})`;
-  const takers = variantsOf(spec).filter((v) => v.fields.has(field)).map((v) => v.model);
+  const takers = variantsOf(spec)
+    .filter((v) => v.fields.has(field))
+    .map((v) => v.model);
   const who = takers.length === 0 ? `no ${spec.name} model takes it` : `the models that take it: ${takers.join(", ")}`;
   return `\`${field}\` is not a parameter of ${variant.model}; ${who}`;
 }
@@ -225,7 +249,10 @@ function checkFields(spec: FamilyToolSpec, variant: ModelVariant, fields: Readon
 }
 
 /** Moves the file fields' paths out of the body into file references. */
-export function splitFiles(op: Operation, fields: Readonly<Record<string, unknown>>): { body: Record<string, unknown>; files: FileRef[] } {
+export function splitFiles(
+  op: Operation,
+  fields: Readonly<Record<string, unknown>>,
+): { body: Record<string, unknown>; files: FileRef[] } {
   const fileFields = new Set(op.facts.fileFields.map((f) => f.name));
   const body: Record<string, unknown> = {};
   const files: FileRef[] = [];
@@ -250,14 +277,25 @@ function checkMediaSchema(op: Operation, media: "json" | "multipart", fields: Re
 }
 
 /** The request one operation call becomes: multipart when files go with it, else JSON when the operation takes it. */
-export async function buildRequest(op: Operation, fields: Readonly<Record<string, unknown>>, remote: RemoteFetcher | undefined): Promise<ApiRequest> {
+export async function buildRequest(
+  op: Operation,
+  fields: Readonly<Record<string, unknown>>,
+  remote: RemoteFetcher | undefined,
+): Promise<ApiRequest> {
   const { body, files } = splitFiles(op, fields);
   const takesJson = op.facts.bodies.includes("json");
   if (files.length > 0 && !op.facts.bodies.includes("multipart")) throw new Error(`${op.id} takes no files`);
   const media = files.length === 0 && takesJson ? "json" : "multipart";
   checkMediaSchema(op, media, fields);
   const uploads = await loadUploads(op, files, remote);
-  return { op, path: {}, query: {}, headers: {}, body: { media, fields: body, files: uploads, jsonParts: op.facts.jsonParts }, dryRun: false };
+  return {
+    op,
+    path: {},
+    query: {},
+    headers: {},
+    body: { media, fields: body, files: uploads, jsonParts: op.facts.jsonParts },
+    dryRun: false,
+  };
 }
 
 const WaitInput = z.number().int().min(0).max(WAIT_MAX_S).optional();
@@ -271,28 +309,45 @@ function checkSource(spec: FamilyToolSpec, variant: ModelVariant, fields: Readon
 /** `private: true` unless the caller set it, on a model that takes the field; a null is "not set" (the schemas accept
  * it, multipart would drop it and JSON would send it — either way the API's own default would apply). */
 function withPrivateDefault(variant: ModelVariant, fields: Record<string, unknown>): Record<string, unknown> {
-  if (!variant.fields.has(PRIVATE_FIELD) || (fields[PRIVATE_FIELD] !== undefined && fields[PRIVATE_FIELD] !== null)) return fields;
+  if (!variant.fields.has(PRIVATE_FIELD) || (fields[PRIVATE_FIELD] !== undefined && fields[PRIVATE_FIELD] !== null))
+    return fields;
   return { ...fields, [PRIVATE_FIELD]: true };
 }
 
 /** Turns a curated tool's arguments into one checked request of the chosen model. */
 /** `remote` is the call's URL fetcher; a caller without a call passes `undefined` on purpose (a URL input is then refused). */
-export async function prepare(spec: FamilyToolSpec, args: ToolArguments, remote: RemoteFetcher | undefined): Promise<PreparedCall> {
-  if (isSingleOperation(spec) && args.model !== undefined) throw new Error(`${spec.name} runs one operation (${spec.operation}); it takes no model`);
-  const resolved = isSingleOperation(spec) ? { model: spec.name, notes: [] } : resolveModel(spec.family, args, spec.defaultModel);
+export async function prepare(
+  spec: FamilyToolSpec,
+  args: ToolArguments,
+  remote: RemoteFetcher | undefined,
+): Promise<PreparedCall> {
+  if (isSingleOperation(spec) && args.model !== undefined)
+    throw new Error(`${spec.name} runs one operation (${spec.operation}); it takes no model`);
+  const resolved = isSingleOperation(spec)
+    ? { model: spec.name, notes: [] }
+    : resolveModel(spec.family, args, spec.defaultModel);
   const variant = variantsOf(spec).find((v) => v.model === resolved.model);
   if (variant === undefined) {
-    throw new Error(`${spec.name} has no model ${resolved.model}; one of: ${variantsOf(spec).map((v) => v.model).join(", ")}`);
+    throw new Error(
+      `${spec.name} has no model ${resolved.model}; one of: ${variantsOf(spec)
+        .map((v) => v.model)
+        .join(", ")}`,
+    );
   }
   const wait = WaitInput.safeParse(args.wait_s);
   if (!wait.success) throw new Error(`wait_s must be a whole number of seconds from 0 to ${WAIT_MAX_S}`);
   const legacy = new Set(Object.keys(spec.legacyInputs ?? {})); // a legacy input of ANOTHER tool is a foreign field, refused by name
-  const requestFields = Object.fromEntries(Object.entries(args).filter(([name]) => !CONTROL_FIELDS.has(name) && !legacy.has(name)));
-  const adapted = isSingleOperation(spec) ? { fields: requestFields, notes: [] } : adaptFields(requestFields, variant.fields); // the 1.x adapter knows the 1.x families, not these
+  const requestFields = Object.fromEntries(
+    Object.entries(args).filter(([name]) => !CONTROL_FIELDS.has(name) && !legacy.has(name)),
+  );
+  const adapted = isSingleOperation(spec)
+    ? { fields: requestFields, notes: [] }
+    : adaptFields(requestFields, variant.fields); // the 1.x adapter knows the 1.x families, not these
   checkSource(spec, variant, adapted.fields);
   const fields = withPrivateDefault(variant, adapted.fields);
   checkFields(spec, variant, fields);
-  if (args.inline_images !== undefined && typeof args.inline_images !== "boolean") throw new Error("inline_images must be true or false");
+  if (args.inline_images !== undefined && typeof args.inline_images !== "boolean")
+    throw new Error("inline_images must be true or false");
   const req = await buildRequest(variant.op, fields, remote);
   return { req, notes: [...resolved.notes, ...adapted.notes], waitS: wait.data ?? WAIT_DEFAULT_S, variant };
 }

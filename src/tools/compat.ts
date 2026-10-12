@@ -29,9 +29,14 @@ export const SPEED_TO_QUALITY: Readonly<Record<string, string>> = {
 const LOWERCASED_ENUMS: readonly string[] = ["magic_prompt", "style_type"];
 
 /** The model a call asks for: its alias resolved, or describe's 1.x version field read. */
-export function resolveModel(family: string, args: ToolArguments, fallback: string): { model: string; notes: string[] } {
+export function resolveModel(
+  family: string,
+  args: ToolArguments,
+  fallback: string,
+): { model: string; notes: string[] } {
   const notes: string[] = [];
-  if (args.model !== undefined && typeof args.model !== "string") throw new Error(`model must be a string, got ${JSON.stringify(args.model)}`);
+  if (args.model !== undefined && typeof args.model !== "string")
+    throw new Error(`model must be a string, got ${JSON.stringify(args.model)}`);
   let model = typeof args.model === "string" ? args.model : fallback;
   const alias = MODEL_ALIASES[family]?.[model];
   if (alias !== undefined) {
@@ -40,7 +45,9 @@ export function resolveModel(family: string, args: ToolArguments, fallback: stri
   }
   if (family === "describe" && args.describe_model_version !== undefined) {
     if (args.describe_model_version !== "V_3") {
-      throw new Error(`describe_model_version ${String(args.describe_model_version)} has no v2 model; use model ideogram-3 or ideogram-4`);
+      throw new Error(
+        `describe_model_version ${String(args.describe_model_version)} has no v2 model; use model ideogram-3 or ideogram-4`,
+      );
     }
     notes.push("describe_model_version V_3 → model ideogram-3");
     model = "ideogram-3";
@@ -52,7 +59,10 @@ function adaptSpeed(fields: Record<string, unknown>, takes: ReadonlySet<string>,
   const speed = fields.rendering_speed;
   if (typeof speed !== "string" || speed !== speed.toUpperCase() || !(speed in SPEED_TO_QUALITY)) return;
   if (takes.has("quality") && !takes.has("rendering_speed")) {
-    if (fields.quality !== undefined) throw new Error(`rendering_speed ${speed} maps to quality, which is also given (${JSON.stringify(fields.quality)}); give one`);
+    if (fields.quality !== undefined)
+      throw new Error(
+        `rendering_speed ${speed} maps to quality, which is also given (${JSON.stringify(fields.quality)}); give one`,
+      );
     delete fields.rendering_speed;
     fields.quality = SPEED_TO_QUALITY[speed];
     notes.push(`rendering_speed ${speed} → quality ${SPEED_TO_QUALITY[speed]}`);

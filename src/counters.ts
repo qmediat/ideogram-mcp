@@ -17,7 +17,14 @@ export interface Counters {
   rawWriteFailures: number;
 }
 
-export const COUNTERS: Counters = { retries: 0, contractMismatches: 0, pollErrors: 0, downloadFailures: 0, inlineReadFailures: 0, rawWriteFailures: 0 };
+export const COUNTERS: Counters = {
+  retries: 0,
+  contractMismatches: 0,
+  pollErrors: 0,
+  downloadFailures: 0,
+  inlineReadFailures: 0,
+  rawWriteFailures: 0,
+};
 
 export function countersLine(): string {
   const c = COUNTERS;

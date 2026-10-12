@@ -46,7 +46,10 @@ const LOCAL_NAME = /(^|\.)(localhost|local|internal|intranet|home\.arpa|lan|corp
 
 /** The host name as judged: lower-case, without a trailing dot or IPv6 brackets. */
 function hostOf(url: URL): string {
-  return url.hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  return url.hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.$/, "");
 }
 
 /** Why the URL itself may not be fetched, or null; the resolved addresses are judged apart. */
@@ -83,10 +86,12 @@ function ipv4Private(a: number, b: number, c: number): boolean {
 function embeddedIpv4(groups: readonly number[], lower: string): string | null {
   const dotted = (hi: number, lo: number): string => `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`;
   if (groups.slice(0, 5).every((g) => g === 0) && groups[5] === 0xffff) return dotted(groups[6], groups[7]);
-  if (groups[0] === 0x64 && groups[1] === 0xff9b && groups.slice(2, 6).every((g) => g === 0)) return dotted(groups[6], groups[7]); // NAT64 64:ff9b::/96
+  if (groups[0] === 0x64 && groups[1] === 0xff9b && groups.slice(2, 6).every((g) => g === 0))
+    return dotted(groups[6], groups[7]); // NAT64 64:ff9b::/96
   if (groups[0] === 0x64 && groups[1] === 0xff9b && groups[2] === 1) return dotted(groups[6], groups[7]); // NAT64 local-use 64:ff9b:1::/48
   if (groups[0] === 0x2002) return dotted(groups[1], groups[2]);
-  if (groups.slice(0, 6).every((g) => g === 0) && lower !== "::1" && lower !== "::") return dotted(groups[6], groups[7]);
+  if (groups.slice(0, 6).every((g) => g === 0) && lower !== "::1" && lower !== "::")
+    return dotted(groups[6], groups[7]);
   return null;
 }
 
@@ -102,7 +107,9 @@ function ipv6Groups(address: string): number[] | null {
   const left = head === "" ? [] : head.split(":");
   const right = rest === undefined ? [] : rest === "" ? [] : rest.split(":");
   if (rest === undefined && left.length !== 8) return null;
-  const groups = [...left, ...Array<string>(8 - left.length - right.length).fill("0"), ...right].map((g) => Number.parseInt(g, 16));
+  const groups = [...left, ...Array<string>(8 - left.length - right.length).fill("0"), ...right].map((g) =>
+    Number.parseInt(g, 16),
+  );
   return groups.length === 8 && groups.every((g) => Number.isFinite(g)) ? groups : null;
 }
 
@@ -144,12 +151,16 @@ export function addressRefusal(host: string, addresses: readonly string[]): stri
   return bad === undefined ? null : `${host} resolves to ${bad}, which is not a public address`;
 }
 
-const describe = (error: unknown): string => (error instanceof Error ? ((error as { cause?: Error }).cause?.message ?? error.message) : String(error));
+const describe = (error: unknown): string =>
+  error instanceof Error ? ((error as { cause?: Error }).cause?.message ?? error.message) : String(error);
 
 /** The budget's end, when the fetch failed because of it; else the network error, named. */
 function fetchError(url: string, budget: CallBudget, error: unknown): Error {
   if (budget.signal.aborted) {
-    const why = budget.signal.reason instanceof Error && budget.signal.reason.name === "WaitEnded" ? "the wait ran out" : "the call's time ran out or the caller cancelled";
+    const why =
+      budget.signal.reason instanceof Error && budget.signal.reason.name === "WaitEnded"
+        ? "the wait ran out"
+        : "the call's time ran out or the caller cancelled";
     return new Error(`${url}: not fetched, ${why}`);
   }
   return new Error(`${url}: network error while fetching it (${describe(error)})`);
@@ -202,13 +213,24 @@ function refuse(response: IncomingMessage, message: string): never {
 function requestHead(url: URL, addresses: readonly string[] | null, budget: CallBudget): Promise<IncomingMessage> {
   const request = url.protocol === "https:" ? httpsRequest : httpRequest;
   const judged = addresses === null ? null : addresses.map((address) => ({ address, family: isIP(address) }));
-  const lookupPinned = judged === null ? undefined : (_host: string, options: { all?: boolean }, callback: (err: Error | null, result: unknown, family?: number) => void): void => {
-    if (options.all === true) callback(null, judged);
-    else callback(null, judged[0].address, judged[0].family);
-  };
+  const lookupPinned =
+    judged === null
+      ? undefined
+      : (
+          _host: string,
+          options: { all?: boolean },
+          callback: (err: Error | null, result: unknown, family?: number) => void,
+        ): void => {
+          if (options.all === true) callback(null, judged);
+          else callback(null, judged[0].address, judged[0].family);
+        };
   return new Promise((done, fail) => {
     // agent: false — a fresh socket per fetch, never a pooled one that another lookup's judgement opened
-    const req = request(url, { method: "GET", signal: budget.signal, servername: url.hostname, lookup: lookupPinned as never, agent: false }, done);
+    const req = request(
+      url,
+      { method: "GET", signal: budget.signal, servername: url.hostname, lookup: lookupPinned as never, agent: false },
+      done,
+    );
     req.on("error", fail);
     req.end();
   });
@@ -243,7 +265,11 @@ async function checkHost(url: string, options: RemoteFetchOptions, judge: boolea
     if (error instanceof BudgetEndedHere) throw fetchError(url, options.budget, error);
     throw new Error(`${url}: ${host} could not be resolved (${describe(error)})`);
   }
-  const byAddress = judge ? addressRefusal(host, addresses) : addresses.length === 0 ? `${host} resolves to no address` : null;
+  const byAddress = judge
+    ? addressRefusal(host, addresses)
+    : addresses.length === 0
+      ? `${host} resolves to no address`
+      : null;
   if (byAddress !== null) throw new Error(`${url}: ${byAddress}`);
   return addresses;
 }
@@ -262,13 +288,19 @@ export async function fetchRemoteInput(url: string, options: RemoteFetchOptions)
     throw fetchError(url, options.budget, error);
   }
   const status = response.statusCode ?? 0;
-  if (status >= 300 && status < 400) refuse(response, `${url} redirects (${status}); a redirect is not followed — give the final URL`);
-  if (status < 200 || status >= 300) refuse(response, `${url} answered ${status} ${response.statusMessage ?? ""}`.trim());
+  if (status >= 300 && status < 400)
+    refuse(response, `${url} redirects (${status}); a redirect is not followed — give the final URL`);
+  if (status < 200 || status >= 300)
+    refuse(response, `${url} answered ${status} ${response.statusMessage ?? ""}`.trim());
   const contentType = (response.headers["content-type"] ?? "").split(";")[0].trim().toLowerCase();
-  if (!options.accepted.includes(contentType)) refuse(response, `${url} is ${contentType || "(no content type)"}, not one of ${options.accepted.join(", ")}`);
+  if (!options.accepted.includes(contentType))
+    refuse(response, `${url} is ${contentType || "(no content type)"}, not one of ${options.accepted.join(", ")}`);
   const declared = Number.parseInt(response.headers["content-length"] ?? "", 10);
   if (Number.isFinite(declared) && declared > options.maxBytes) {
-    refuse(response, `${url} is ${declared} bytes by its Content-Length (${mbText(declared, 2)}), over ${options.maxBytes} bytes (${mbText(options.maxBytes, 2)}), the limit here`);
+    refuse(
+      response,
+      `${url} is ${declared} bytes by its Content-Length (${mbText(declared, 2)}), over ${options.maxBytes} bytes (${mbText(options.maxBytes, 2)}), the limit here`,
+    );
   }
   try {
     return { bytes: await readCapped(response, options.maxBytes, url), contentType };

@@ -10,7 +10,14 @@
  */
 import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { basename, extname, resolve } from "node:path";
-import { AUDIO_FILE_FIELDS, DATASET_UPLOAD_OPERATIONS, fileLimitsOf, FONT_FILE_FIELDS, mbText, requestLimitOf } from "./spec/overlay.js";
+import {
+  AUDIO_FILE_FIELDS,
+  DATASET_UPLOAD_OPERATIONS,
+  fileLimitsOf,
+  FONT_FILE_FIELDS,
+  mbText,
+  requestLimitOf,
+} from "./spec/overlay.js";
 import type { FileLimit } from "./spec/overlay.js";
 import type { Operation } from "./spec/operations.js";
 import { isRemoteInput } from "./remote-input.js";
@@ -42,10 +49,22 @@ export const FONT_TYPES: Readonly<Record<string, string>> = {
 
 /** The media types a training asset is sent as: the images, a caption sidecar (.txt, or .json — the response names
  * both), an archive of both. */
-export const DATASET_TYPES: Readonly<Record<string, string>> = { ...UPLOAD_TYPES, ".txt": "text/plain", ".json": "application/json", ".zip": "application/zip" };
+export const DATASET_TYPES: Readonly<Record<string, string>> = {
+  ...UPLOAD_TYPES,
+  ".txt": "text/plain",
+  ".json": "application/json",
+  ".zip": "application/zip",
+};
 
 /** Media types a remote server may name for a type above (the part is sent as the canonical one). */
-const TYPE_ALIASES: Readonly<Record<string, string>> = { "application/x-zip-compressed": "application/zip", "image/jpg": "image/jpeg", "text/json": "application/json", "audio/mp3": "audio/mpeg", "audio/x-wav": "audio/wav", "audio/wave": "audio/wav" };
+const TYPE_ALIASES: Readonly<Record<string, string>> = {
+  "application/x-zip-compressed": "application/zip",
+  "image/jpg": "image/jpeg",
+  "text/json": "application/json",
+  "audio/mp3": "audio/mpeg",
+  "audio/x-wav": "audio/wav",
+  "audio/wave": "audio/wav",
+};
 
 /** The part's file name: `<field>.<ext>` (nothing local leaves the machine), or the asset's own name for a training
  * upload (the directory never, the name yes — the API pairs a caption with its image by it): a URL's last segment
@@ -71,7 +90,10 @@ function checkUniqueNames(op: Operation, parts: readonly UploadPart[]): void {
   if (!DATASET_UPLOAD_OPERATIONS.has(op.id)) return;
   const seen = new Set<string>();
   for (const part of parts) {
-    if (seen.has(part.filename)) throw new Error(`${part.field}: two files would be sent as ${part.filename}; a dataset asset is known by its name — rename one`);
+    if (seen.has(part.filename))
+      throw new Error(
+        `${part.field}: two files would be sent as ${part.filename}; a dataset asset is known by its name — rename one`,
+      );
     seen.add(part.filename);
   }
 }
@@ -98,17 +120,22 @@ const mb = mbText;
 
 async function checkFile(ref: FileRef, limit: FileLimit, op: Operation): Promise<CheckedFile> {
   const resolved = resolve(ref.path);
-  if ((await lstat(resolved)).isSymbolicLink()) throw new Error(`${ref.field}: symlinks are not uploaded (${ref.path})`);
+  if ((await lstat(resolved)).isSymbolicLink())
+    throw new Error(`${ref.field}: symlinks are not uploaded (${ref.path})`);
   const realPath = await realpath(resolved);
   const types = uploadTypesFor(ref.field, op);
   const contentType = types[extname(realPath).toLowerCase()];
   if (contentType === undefined) {
-    throw new Error(`${ref.field}: unsupported file type ${extname(realPath) || "(none)"}; one of ${Object.keys(types).join(", ")}`);
+    throw new Error(
+      `${ref.field}: unsupported file type ${extname(realPath) || "(none)"}; one of ${Object.keys(types).join(", ")}`,
+    );
   }
   const bytes = (await stat(realPath)).size;
   if (bytes === 0) throw new Error(`${ref.field}: ${ref.path} is empty`);
   if (bytes > limit.maxBytes) {
-    const source = limit.stated ? "the limit Ideogram states for this field" : "this server's limit for a field Ideogram states none for";
+    const source = limit.stated
+      ? "the limit Ideogram states for this field"
+      : "this server's limit for a field Ideogram states none for";
     throw new Error(`${ref.field}: ${ref.path} is ${mb(bytes)}, over ${mb(limit.maxBytes)} (${source})`);
   }
   return { ref, realPath, bytes, contentType };
@@ -118,7 +145,8 @@ function checkCounts(op: Operation, files: readonly FileRef[], limits: ReadonlyM
   for (const [field, limit] of limits) {
     const count = files.filter((f) => f.field === field).length;
     if (!limit.array && count > 1) throw new Error(`${field} takes one file, ${count} were given`);
-    if (limit.maxItems !== null && count > limit.maxItems) throw new Error(`${field} takes at most ${limit.maxItems} files, ${count} were given`);
+    if (limit.maxItems !== null && count > limit.maxItems)
+      throw new Error(`${field} takes at most ${limit.maxItems} files, ${count} were given`);
   }
   const unknown = files.find((f) => !limits.has(f.field));
   if (unknown !== undefined) {
@@ -133,43 +161,85 @@ function extensionFor(types: Readonly<Record<string, string>>, contentType: stri
 
 /** A remote input as the upload part it becomes: fetched under the field's limit and the room the request cap leaves,
  * accepted only as a type the field takes. */
-async function fetchRemote(op: Operation, ref: FileRef, limit: FileLimit, room: number, remote: RemoteFetcher | undefined): Promise<UploadPart> {
-  if (remote === undefined) throw new Error(`${ref.field}: a URL input needs a running call (not available here): ${ref.path}`);
+async function fetchRemote(
+  op: Operation,
+  ref: FileRef,
+  limit: FileLimit,
+  room: number,
+  remote: RemoteFetcher | undefined,
+): Promise<UploadPart> {
+  if (remote === undefined)
+    throw new Error(`${ref.field}: a URL input needs a running call (not available here): ${ref.path}`);
   const types = uploadTypesFor(ref.field, op);
   const canonical = [...new Set(Object.values(types))];
-  const accepted = [...canonical, ...Object.entries(TYPE_ALIASES).filter(([, to]) => canonical.includes(to)).map(([from]) => from)];
+  const accepted = [
+    ...canonical,
+    ...Object.entries(TYPE_ALIASES)
+      .filter(([, to]) => canonical.includes(to))
+      .map(([from]) => from),
+  ];
   const got = await remote(ref.path, Math.min(limit.maxBytes, room), accepted).catch((error: unknown) => {
     throw new Error(`${ref.field}: ${error instanceof Error ? error.message : String(error)}`);
   });
   const contentType = TYPE_ALIASES[got.contentType] ?? got.contentType;
-  return { field: ref.field, filename: partName(op, ref.field, ref.path, extensionFor(types, contentType)), contentType, bytes: got.bytes };
+  return {
+    field: ref.field,
+    filename: partName(op, ref.field, ref.path, extensionFor(types, contentType)),
+    contentType,
+    bytes: got.bytes,
+  };
 }
 
 function checkRequestCap(op: Operation, total: number): void {
   const cap = requestLimitOf(op);
   if (total <= cap.maxBytes) return;
-  const source = cap.stated ? "the limit Ideogram states for this request" : "this server's cap for a request Ideogram states no limit for";
-  throw new Error(`the files together are ${mb(total)}; ${op.id} takes a request under ${mb(cap.maxBytes)} (${source})`);
+  const source = cap.stated
+    ? "the limit Ideogram states for this request"
+    : "this server's cap for a request Ideogram states no limit for";
+  throw new Error(
+    `the files together are ${mb(total)}; ${op.id} takes a request under ${mb(cap.maxBytes)} (${source})`,
+  );
 }
 
 /** A checked local file read whole; a file that grew since its check is refused by the bytes actually read. */
 async function readLocal(op: Operation, f: CheckedFile, limit: FileLimit): Promise<UploadPart> {
   const bytes = new Uint8Array(await readFile(f.realPath));
-  if (bytes.byteLength > limit.maxBytes) throw new Error(`${f.ref.field}: ${f.ref.path} grew to ${mb(bytes.byteLength)} while it was read, over ${mb(limit.maxBytes)}`);
-  return { field: f.ref.field, filename: partName(op, f.ref.field, f.ref.path, extname(f.realPath).toLowerCase()), contentType: f.contentType, bytes };
+  if (bytes.byteLength > limit.maxBytes)
+    throw new Error(
+      `${f.ref.field}: ${f.ref.path} grew to ${mb(bytes.byteLength)} while it was read, over ${mb(limit.maxBytes)}`,
+    );
+  return {
+    field: f.ref.field,
+    filename: partName(op, f.ref.field, f.ref.path, extname(f.realPath).toLowerCase()),
+    contentType: f.contentType,
+    bytes,
+  };
 }
 
 /** Checks every local file against the operation's limits, reads them (before any fetch, so nothing changes under
  * a download), then fetches the remote inputs one after another, each under the room the request cap still leaves (a
  * body over it is cut as it arrives, never held whole); nothing is read or fetched when any local check fails. The
  * parts keep the caller's order. */
-export async function loadUploads(op: Operation, files: readonly FileRef[], remote: RemoteFetcher | undefined): Promise<UploadPart[]> {
+export async function loadUploads(
+  op: Operation,
+  files: readonly FileRef[],
+  remote: RemoteFetcher | undefined,
+): Promise<UploadPart[]> {
   const limits = new Map(fileLimitsOf(op).map((l) => [l.field, l]));
   checkCounts(op, files, limits);
   const local = files.filter((f) => !isRemoteInput(f.path));
-  const checked = new Map(await Promise.all(local.map(async (f) => [f, await checkFile(f, limits.get(f.field) as FileLimit, op)] as const)));
-  checkRequestCap(op, [...checked.values()].reduce((sum, f) => sum + f.bytes, 0));
-  const read = new Map(await Promise.all([...checked].map(async ([f, own]) => [f, await readLocal(op, own, limits.get(f.field) as FileLimit)] as const)));
+  const checked = new Map(
+    await Promise.all(local.map(async (f) => [f, await checkFile(f, limits.get(f.field) as FileLimit, op)] as const)),
+  );
+  checkRequestCap(
+    op,
+    [...checked.values()].reduce((sum, f) => sum + f.bytes, 0),
+  );
+  const read = new Map(
+    await Promise.all(
+      [...checked].map(async ([f, own]) => [f, await readLocal(op, own, limits.get(f.field) as FileLimit)] as const),
+    ),
+  );
   let total = [...read.values()].reduce((sum, p) => sum + p.bytes.byteLength, 0);
   checkRequestCap(op, total);
   const cap = requestLimitOf(op).maxBytes;
