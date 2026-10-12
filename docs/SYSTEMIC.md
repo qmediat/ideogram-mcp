@@ -24,9 +24,8 @@ double quotes, semicolons, trailing commas: the style the code had) formats ever
 file (the one glob: the `fmt` script); `npm run format` rewrites; `npm run lint` starts with `npm run format:check`,
 so CI's lint step checks it. Excluded (`.prettierignore`): the vendored presets of Rule 1, whatever ESLint ignores
 (the same list: `src/generated/`, which CI regenerates and compares, and `scripts/spec-gen/`). `.gitattributes` keeps
-every text file LF. Prose, JSON and YAML are not formatted by it. The one-time reformat went in three pull requests
-that each fit one review (#51 `scripts/`, #52 `src/`, then `test/`); `.git-blame-ignore-revs` names all three
-for `git blame`.
+every text file LF. Prose, JSON and YAML are not formatted by it. `.git-blame-ignore-revs` names the one-time
+reformat's commits for `git blame`.
 
 **The exemplars** — read before writing, not the nearest file:
 
