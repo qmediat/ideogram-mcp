@@ -86,18 +86,23 @@ function check(label: string, schema: ZodType | null, value: Readonly<Record<str
   }
 }
 
-/** Checks the four locations against the operation's generated schemas, then builds the request with its uploads. */
-async function buildRawRequest(op: Operation, args: RawArgs, remote: RemoteFetcher): Promise<ApiRequest> {
-  const params = args.params ?? {};
-  const files = args.files ?? [];
-  const body = params.body ?? {};
+/** The body's fields with every upload's path under its field (an array field collects the paths given for it). */
+function withFileFields(op: Operation, body: Readonly<Record<string, unknown>>, files: NonNullable<RawArgs["files"]>): Record<string, unknown> {
   const arrayFields = new Set(op.facts.fileFields.filter((f) => f.array).map((f) => f.name));
   const grouped: Record<string, unknown> = {};
   for (const f of files) {
     if (arrayFields.has(f.field)) grouped[f.field] = [...((grouped[f.field] as string[] | undefined) ?? []), f.path];
     else grouped[f.field] = f.path;
   }
-  const withFiles = { ...body, ...grouped };
+  return { ...body, ...grouped };
+}
+
+/** Checks the four locations against the operation's generated schemas, then builds the request with its uploads. */
+async function buildRawRequest(op: Operation, args: RawArgs, remote: RemoteFetcher): Promise<ApiRequest> {
+  const params = args.params ?? {};
+  const files = args.files ?? [];
+  const body = params.body ?? {};
+  const withFiles = withFileFields(op, body, files);
   const media = files.length === 0 && op.facts.bodies.includes("json") ? "json" : "multipart";
   if ("dry_run" in (params.query ?? {})) throw new Error("query.dry_run: use the dry_run argument of ideogram_api (the quote path checks the answer as a PriceQuote)");
   check("path", op.schemas.path, params.path ?? {});

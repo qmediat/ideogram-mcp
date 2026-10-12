@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Development only: `npm run lint` checks the structure of the code with a shared preset (ESLint with Babel's
   TypeScript parser — TypeScript 7 has no JavaScript API for typescript-eslint —, jscpd for repeated blocks, a ratchet
   that keeps the recorded baselines from growing); CI runs it. Nothing in the published package changes.
+- Internal: the usage, raw-call, file-answer and training tools each hand one step to a function of its own (the usage
+  query, the upload fields, the failed file answer, the training request), so the formatter adopted next keeps every
+  function within 40 lines; three complexity baseline entries are gone. Behaviour unchanged.
 
 ## [2.5.0] - 2026-10-11
 
