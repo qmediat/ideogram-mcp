@@ -18,8 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Internal: every refusal that quotes a Zod error's issues (`path: message`) is built by one helper, `src/issues.ts`
   (seven inline copies in six files before). Messages unchanged.
 - Development only: Prettier formats the code (`npm run format`; `npm run lint` checks it, in CI too), printWidth 120 —
-  the style the code already had; the code reformatted once, in three pull requests that each fit one review (`scripts/`, `src/`, `test/`), named
-  in `.git-blame-ignore-revs`.
+  the style the code already had; the code reformatted once, in three pull requests that each fit one review
+  (`scripts/`, `src/`, `test/`); `.git-blame-ignore-revs` names each merged one (the last once its merge gives the hash).
 
 ## [2.5.0] - 2026-10-11
 
