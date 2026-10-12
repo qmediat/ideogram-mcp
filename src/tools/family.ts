@@ -19,6 +19,7 @@ import type { FileRef } from "../uploads.js";
 import type { RemoteFetcher } from "../remote-input.js";
 import { adaptFields, resolveModel } from "./compat.js";
 import { CONTROL_FIELDS, fieldTextsFor, INLINE_TEXT, PRIVATE_FIELD, RESERVED_FIELDS, WAIT_TEXT } from "./fields.js";
+import { issueLines } from "../issues.js";
 
 /** A tool's arguments as the MCP client sent them; `prepare` validates them against the chosen model. */
 export type ToolArguments = Readonly<Record<string, unknown>>;
@@ -216,7 +217,7 @@ function checkFields(spec: FamilyToolSpec, variant: ModelVariant, fields: Readon
   if (foreign.length > 0) throw new Error(foreign.map((f) => refusalFor(spec, variant, f)).join("\n"));
   const parsed = variant.schema.safeParse(fields);
   if (!parsed.success) {
-    const issues = parsed.error.issues.map((i) => `${i.path.join(".") || "(input)"}: ${i.message}`);
+    const issues = issueLines(parsed.error);
     throw new Error(`${variant.model} refuses the input:\n${issues.join("\n")}`);
   }
   const violations = constraintViolations(variant.op, fields);
@@ -244,7 +245,7 @@ function checkMediaSchema(op: Operation, media: "json" | "multipart", fields: Re
   if (schema === null) return;
   const parsed = schema.safeParse(fields);
   if (parsed.success) return;
-  const issues = parsed.error.issues.map((i) => `${i.path.join(".") || "(input)"}: ${i.message}`);
+  const issues = issueLines(parsed.error);
   throw new Error(`${op.id} sent as ${media} refuses the input:\n${issues.join("\n")}`);
 }
 

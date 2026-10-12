@@ -25,6 +25,7 @@ import type { ToolArguments } from "./family.js";
 import { INLINE_TEXT } from "./fields.js";
 import { executeTold, fileAnswer } from "./reads.js";
 import { outcomeResult, textResult } from "./results.js";
+import { issueText } from "../issues.js";
 
 const CLASS_REFUSAL: Readonly<Partial<Record<OperationClass, string>>> = {
   legacy: "is a legacy path whose capability v2 covers; use the v2 operation (ideogram_operations lists them)",
@@ -82,7 +83,7 @@ function check(label: string, schema: ZodType | null, value: Readonly<Record<str
   }
   const parsed = schema.safeParse(value);
   if (!parsed.success) {
-    throw new Error(`${label}: ${parsed.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ")}`);
+    throw new Error(`${label}: ${issueText(parsed.error, "(root)")}`);
   }
 }
 
@@ -131,7 +132,7 @@ async function buildRawRequest(op: Operation, args: RawArgs, remote: RemoteFetch
 
 async function runRaw(ctx: ToolContext, input: ToolArguments): Promise<CallToolResult> {
   const parsed = RawInput.safeParse(input);
-  if (!parsed.success) return textResult(`ideogram_api: ${parsed.error.issues.map((i) => `${i.path.join(".") || "(input)"}: ${i.message}`).join("; ")}`, true);
+  if (!parsed.success) return textResult(`ideogram_api: ${issueText(parsed.error)}`, true);
   const args = parsed.data;
   const op = operationById(args.operation);
   if (op === null) return textResult(`No operation ${args.operation}; ideogram_operations lists them`, true);

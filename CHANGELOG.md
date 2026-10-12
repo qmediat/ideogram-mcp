@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Internal: the usage, raw-call, file-answer and training tools each hand one step to a function of its own (the usage
   query, the upload fields, the failed file answer, the training request), so the formatter adopted next keeps every
   function within 40 lines; three complexity baseline entries are gone. Behaviour unchanged.
+- Internal: every refusal that quotes a Zod error's issues (`path: message`) is built by one helper, `src/issues.ts`
+  (seven inline copies in six files before). Messages unchanged.
 
 ## [2.5.0] - 2026-10-11
 

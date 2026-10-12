@@ -19,6 +19,7 @@ import { operationById } from "../spec/operations.js";
 import type { Operation } from "../spec/operations.js";
 import type { ToolContext } from "./context.js";
 import { inlineContent, outcomeResult, textResult } from "./results.js";
+import { issueText } from "../issues.js";
 
 /** An answer's JSON is printed inline up to this size; above it the file in the output directory is the answer. */
 export const INLINE_JSON_BYTES = 64 * 1024;
@@ -158,7 +159,7 @@ function checkLocation(op: Operation, label: "query" | "path", value: Readonly<R
     return;
   }
   const parsed = schema.safeParse(value);
-  if (!parsed.success) throw new Error(`${op.id} ${label}: ${parsed.error.issues.map((i) => `${i.path.join(".") || "(input)"}: ${i.message}`).join("; ")}`);
+  if (!parsed.success) throw new Error(`${op.id} ${label}: ${issueText(parsed.error)}`);
 }
 
 export async function readOperation<T extends z.ZodType>(ctx: ToolContext, request: ReadRequest, schema: T): Promise<Read<z.infer<T>>> {

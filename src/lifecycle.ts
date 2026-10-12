@@ -17,6 +17,7 @@ import type { Operation } from "./spec/operations.js";
 
 import { boundedBy, sleepWithin } from "./budget.js";
 import type { CallBudget, Clock } from "./budget.js";
+import { issueLines } from "./issues.js";
 
 export { SYSTEM_CLOCK } from "./budget.js";
 export type { Clock } from "./budget.js";
@@ -141,7 +142,7 @@ function generationIdOf(body: unknown): string | null {
 
 export function contractMismatch(status: number, body: unknown, error: ZodError): ContractMismatch {
   COUNTERS.contractMismatches += 1;
-  const issues = error.issues.slice(0, 10).map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`);
+  const issues = issueLines(error, "(root)").slice(0, 10);
   const text = JSON.stringify(body) ?? String(body);
   return { kind: "contract_mismatch", status, generationId: generationIdOf(body), issues, bodyExcerpt: text.slice(0, 300) };
 }

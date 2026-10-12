@@ -16,6 +16,7 @@ import type { ToolContext, ToolDefinition } from "./context.js";
 import type { ToolArguments } from "./family.js";
 import { apiErrorResult, listingResult, operation, rawLines, readOperation } from "./reads.js";
 import { textResult } from "./results.js";
+import { issueText } from "../issues.js";
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
@@ -142,13 +143,13 @@ function usageQuery(ctx: ToolContext, input: z.infer<typeof UsageInput>): Record
   if (input.bucket_width !== undefined) query.bucket_width = input.bucket_width;
   if (input.sources !== undefined) query.sources = input.sources;
   const checked = USAGE.schemas.query?.safeParse(query);
-  if (checked !== undefined && !checked.success) return `ideogram_usage: ${checked.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")} (RFC 3339 times, e.g. 2026-10-01T00:00:00Z)`;
+  if (checked !== undefined && !checked.success) return `ideogram_usage: ${issueText(checked.error, "")} (RFC 3339 times, e.g. 2026-10-01T00:00:00Z)`;
   return query;
 }
 
 async function runUsage(ctx: ToolContext, args: ToolArguments): Promise<CallToolResult> {
   const input = UsageInput.safeParse(args);
-  if (!input.success) return textResult(`ideogram_usage: ${input.error.issues.map((i) => `${i.path.join(".") || "(input)"}: ${i.message}`).join("; ")}`, true);
+  if (!input.success) return textResult(`ideogram_usage: ${issueText(input.error)}`, true);
   const query = usageQuery(ctx, input.data);
   if (typeof query === "string") return textResult(query, true);
   try {
