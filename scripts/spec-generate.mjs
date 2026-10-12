@@ -5,7 +5,16 @@
 //   node scripts/spec-generate.mjs           write src/generated/
 //   node scripts/spec-generate.mjs --check   regenerate into a temporary directory; exit 1 when src/generated/ differs
 // Either mode fails when the generated code exceeds its budget (DESIGN-ideogram-v2.md section 5).
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -53,7 +62,13 @@ function bodyFacts(spec, op) {
     multipart: refName(content["multipart/form-data"]?.schema),
     json: refName(content["application/json"]?.schema),
   };
-  return { bodies, requiredBody: op.requestBody?.required === true, schemaRef: first?.schema, jsonParts, requestSchemas };
+  return {
+    bodies,
+    requiredBody: op.requestBody?.required === true,
+    schemaRef: first?.schema,
+    jsonParts,
+    requestSchemas,
+  };
 }
 
 function isBinary(property) {
@@ -120,7 +135,14 @@ function operationFacts(spec, method, path, op) {
   const responseRef = content200["application/json"]?.schema;
   const response = resolveSchema(spec, responseRef);
   const types200 = Object.keys(content200);
-  const responseMedia = responseRef !== undefined ? "json" : types200.some((t) => t.startsWith("image/")) ? "image" : types200.some((t) => t.startsWith("video/")) ? "video" : "none";
+  const responseMedia =
+    responseRef !== undefined
+      ? "json"
+      : types200.some((t) => t.startsWith("image/"))
+        ? "image"
+        : types200.some((t) => t.startsWith("video/"))
+          ? "video"
+          : "none";
   const { parameters, dryRun } = parameterFacts(spec, op);
   return {
     id: op.operationId,
@@ -197,7 +219,8 @@ function measure(dir) {
   const total = sizes.reduce((sum, s) => sum + s.bytes, 0);
   for (const s of sizes) console.log(`${s.file}: ${s.bytes} bytes`);
   console.log(`total: ${total} bytes (budget ${BUDGET_BYTES})`);
-  if (total > BUDGET_BYTES) throw new Error(`the generated code is ${total} bytes, over the ${BUDGET_BYTES}-byte budget`);
+  if (total > BUDGET_BYTES)
+    throw new Error(`the generated code is ${total} bytes, over the ${BUDGET_BYTES}-byte budget`);
 }
 
 function differingFiles(dir) {
