@@ -1,3 +1,5 @@
+# every text file LF in the work tree too: Prettier (endOfLine lf) and the hashes of the vendored presets need it
+* text=auto eol=lf
 # Generated from the committed specification snapshot (scripts/spec-generate.mjs, scripts/api-reference.mjs): CI
 # regenerates them and fails when they differ. Collapsed on GitHub; a review reads the generator config and the lists instead.
 src/generated/** linguist-generated=true -diff
