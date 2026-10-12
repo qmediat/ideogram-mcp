@@ -6,5 +6,4 @@
 /src/generated/
 /scripts/spec-gen/
 # not yet reformatted: each leaves this list in the pull request that reformats it
-/src/
 /test/
