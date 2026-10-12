@@ -21,11 +21,11 @@ its TypeScript plugin alone, so a decorator or an `accessor` field is a parse er
 
 **Formatting.** Prettier (pinned in `package.json`; `.prettierrc.json`: printWidth 120, its defaults otherwise —
 double quotes, semicolons, trailing commas: the style the code had) formats every `*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}`
-file (the one glob: the `fmt` script); `npm run format` rewrites, `npm run format:check` is a CI step. Excluded
-(`.prettierignore`): the vendored presets of Rule 1, whatever ESLint ignores (the same list: `src/generated/`, which
-CI regenerates and compares, and `scripts/spec-gen/`) and, until the pull request that reformats it, `test/` — a
-whole-tree reformat does not fit one review. `.gitattributes` keeps every text file LF. Prose, JSON and YAML are not
-formatted by it.
+file (the one glob: the `fmt` script); `npm run format` rewrites; `npm run lint` starts with `npm run format:check`,
+so CI's lint step checks it. Excluded (`.prettierignore`): the vendored presets of Rule 1, whatever ESLint ignores
+(the same list: `src/generated/`, which CI regenerates and compares, and `scripts/spec-gen/`) and, until the pull
+request that reformats it, `test/` — a whole-tree reformat does not fit one review. `.gitattributes` keeps every text
+file LF. Prose, JSON and YAML are not formatted by it.
 
 **The exemplars** — read before writing, not the nearest file:
 
@@ -45,4 +45,4 @@ passes while another is fixed in the same PR — the count is the only guard the
 touched functions. `eslint-suppressions.json` is marked `linguist-generated` (a review packet carries it as data,
 last): the ratchet holds it after adoption, and the adoption PR names its counts.
 
-**Enforcement.** The CI job runs `npm run lint` and `npm run format:check` on Node 22 and 24.
+**Enforcement.** The CI job runs `npm run lint` (`npm run format:check` first) on Node 22 and 24.

@@ -233,7 +233,7 @@ npm install
 npm run build
 npm run typecheck
 npm run lint        # structure rules, repeated blocks, the baseline ratchet (docs/SYSTEMIC.md §1)
-npm run format      # Prettier (CI checks it with npm run format:check)
+npm run format      # Prettier (npm run lint checks it)
 npm test            # builds, then every test against a fake API (no key, no network); with IDEOGRAM_API_KEY set, the live dry-run suite runs too (below)
 ```
 
