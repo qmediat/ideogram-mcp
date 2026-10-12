@@ -23,9 +23,10 @@ its TypeScript plugin alone, so a decorator or an `accessor` field is a parse er
 double quotes, semicolons, trailing commas: the style the code had) formats every `*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}`
 file (the one glob: the `fmt` script); `npm run format` rewrites; `npm run lint` starts with `npm run format:check`,
 so CI's lint step checks it. Excluded (`.prettierignore`): the vendored presets of Rule 1, whatever ESLint ignores
-(the same list: `src/generated/`, which CI regenerates and compares, and `scripts/spec-gen/`) and, until the pull
-request that reformats it, `test/` — a whole-tree reformat does not fit one review. `.gitattributes` keeps every text
-file LF. Prose, JSON and YAML are not formatted by it.
+(the same list: `src/generated/`, which CI regenerates and compares, and `scripts/spec-gen/`). `.gitattributes` keeps
+every text file LF. Prose, JSON and YAML are not formatted by it. The one-time reformat went in three pull requests
+that each fit one review (#51 `scripts/`, #52 `src/`, then `test/`); `.git-blame-ignore-revs` names them for `git
+blame`.
 
 **The exemplars** — read before writing, not the nearest file:
 

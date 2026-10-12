@@ -5,5 +5,3 @@
 # generated from the committed specification; CI regenerates it and compares (scripts/spec-generate.mjs)
 /src/generated/
 /scripts/spec-gen/
-# not yet reformatted: each leaves this list in the pull request that reformats it
-/test/
