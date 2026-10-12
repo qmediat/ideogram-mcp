@@ -25,6 +25,7 @@ import type { ToolArguments } from "./family.js";
 import { INLINE_TEXT } from "./fields.js";
 import { executeTold, fileAnswer } from "./reads.js";
 import { outcomeResult, textResult } from "./results.js";
+import { issueText } from "../issues.js";
 
 const CLASS_REFUSAL: Readonly<Partial<Record<OperationClass, string>>> = {
   legacy: "is a legacy path whose capability v2 covers; use the v2 operation (ideogram_operations lists them)",
@@ -82,8 +83,19 @@ function check(label: string, schema: ZodType | null, value: Readonly<Record<str
   }
   const parsed = schema.safeParse(value);
   if (!parsed.success) {
-    throw new Error(`${label}: ${parsed.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ")}`);
+    throw new Error(`${label}: ${issueText(parsed.error, "(root)")}`);
   }
+}
+
+/** The body's fields with every upload's path under its field (an array field collects the paths given for it). */
+function withFileFields(op: Operation, body: Readonly<Record<string, unknown>>, files: NonNullable<RawArgs["files"]>): Record<string, unknown> {
+  const arrayFields = new Set(op.facts.fileFields.filter((f) => f.array).map((f) => f.name));
+  const grouped: Record<string, unknown> = {};
+  for (const f of files) {
+    if (arrayFields.has(f.field)) grouped[f.field] = [...((grouped[f.field] as string[] | undefined) ?? []), f.path];
+    else grouped[f.field] = f.path;
+  }
+  return { ...body, ...grouped };
 }
 
 /** Checks the four locations against the operation's generated schemas, then builds the request with its uploads. */
@@ -91,13 +103,7 @@ async function buildRawRequest(op: Operation, args: RawArgs, remote: RemoteFetch
   const params = args.params ?? {};
   const files = args.files ?? [];
   const body = params.body ?? {};
-  const arrayFields = new Set(op.facts.fileFields.filter((f) => f.array).map((f) => f.name));
-  const grouped: Record<string, unknown> = {};
-  for (const f of files) {
-    if (arrayFields.has(f.field)) grouped[f.field] = [...((grouped[f.field] as string[] | undefined) ?? []), f.path];
-    else grouped[f.field] = f.path;
-  }
-  const withFiles = { ...body, ...grouped };
+  const withFiles = withFileFields(op, body, files);
   const media = files.length === 0 && op.facts.bodies.includes("json") ? "json" : "multipart";
   if ("dry_run" in (params.query ?? {})) throw new Error("query.dry_run: use the dry_run argument of ideogram_api (the quote path checks the answer as a PriceQuote)");
   check("path", op.schemas.path, params.path ?? {});
@@ -126,7 +132,7 @@ async function buildRawRequest(op: Operation, args: RawArgs, remote: RemoteFetch
 
 async function runRaw(ctx: ToolContext, input: ToolArguments): Promise<CallToolResult> {
   const parsed = RawInput.safeParse(input);
-  if (!parsed.success) return textResult(`ideogram_api: ${parsed.error.issues.map((i) => `${i.path.join(".") || "(input)"}: ${i.message}`).join("; ")}`, true);
+  if (!parsed.success) return textResult(`ideogram_api: ${issueText(parsed.error)}`, true);
   const args = parsed.data;
   const op = operationById(args.operation);
   if (op === null) return textResult(`No operation ${args.operation}; ideogram_operations lists them`, true);

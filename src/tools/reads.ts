@@ -19,6 +19,7 @@ import { operationById } from "../spec/operations.js";
 import type { Operation } from "../spec/operations.js";
 import type { ToolContext } from "./context.js";
 import { inlineContent, outcomeResult, textResult } from "./results.js";
+import { issueText } from "../issues.js";
 
 /** An answer's JSON is printed inline up to this size; above it the file in the output directory is the answer. */
 export const INLINE_JSON_BYTES = 64 * 1024;
@@ -121,15 +122,20 @@ export async function fileAnswer(what: string, ctx: ToolContext, req: ApiRequest
     const inline = inlineImages && kind === "image" ? await inlineContent([saved]) : { items: [], lines: [] };
     return { content: [{ type: "text", text: [`Saved: ${saved.path} (${mbText(saved.bytes, 2)}, ${saved.contentType.split(";")[0]})`, ...inline.lines, ...notes].join("\n") }, ...inline.items] };
   } catch (error) {
-    if (error instanceof IdeogramApiError && error.code === "ANSWER_NOT_SAVED") {
-      return textResult(`${what}: ${error.message}\nThe operation ran and answered; the file is lost here. Sending it again runs it again.`, true);
-    }
-    if (error instanceof IdeogramApiError && error.status >= 200 && error.status < 300) {
-      return textResult(`${what}: ${error.message}\nThe operation ran and answered, with no file this server keeps.`, true); // not a file of the kind, or over the cap
-    }
-    const note = req.op.method !== "GET" && sideEffectOf(error) === "unknown" ? `\nThe request had left this machine: ${req.op.id} MAY have run — send it again only if the answer is not in the output directory.` : "";
-    return textResult(`${what}: ${errorText(error)}${note}`, true);
+    return fileFailure(what, req, error);
   }
+}
+
+/** What a failed file answer did on the server: ran and answered (the file lost or not kept), or may have run. */
+function fileFailure(what: string, req: ApiRequest, error: unknown): CallToolResult {
+  if (error instanceof IdeogramApiError && error.code === "ANSWER_NOT_SAVED") {
+    return textResult(`${what}: ${error.message}\nThe operation ran and answered; the file is lost here. Sending it again runs it again.`, true);
+  }
+  if (error instanceof IdeogramApiError && error.status >= 200 && error.status < 300) {
+    return textResult(`${what}: ${error.message}\nThe operation ran and answered, with no file this server keeps.`, true); // not a file of the kind, or over the cap
+  }
+  const note = req.op.method !== "GET" && sideEffectOf(error) === "unknown" ? `\nThe request had left this machine: ${req.op.id} MAY have run — send it again only if the answer is not in the output directory.` : "";
+  return textResult(`${what}: ${errorText(error)}${note}`, true);
 }
 
 /** The text of a result (its text blocks joined), for a tool that prefixes its own lines to another's answer. */
@@ -153,7 +159,7 @@ function checkLocation(op: Operation, label: "query" | "path", value: Readonly<R
     return;
   }
   const parsed = schema.safeParse(value);
-  if (!parsed.success) throw new Error(`${op.id} ${label}: ${parsed.error.issues.map((i) => `${i.path.join(".") || "(input)"}: ${i.message}`).join("; ")}`);
+  if (!parsed.success) throw new Error(`${op.id} ${label}: ${issueText(parsed.error)}`);
 }
 
 export async function readOperation<T extends z.ZodType>(ctx: ToolContext, request: ReadRequest, schema: T): Promise<Read<z.infer<T>>> {

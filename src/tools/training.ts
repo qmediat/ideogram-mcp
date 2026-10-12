@@ -23,6 +23,7 @@ import { IdeogramApiError } from "../errors.js";
 import { apiErrorResult, errorText, listingResult, operation, rawLines, readOperation, resultText, sendOperation } from "./reads.js";
 import type { Sent, SideEffect } from "./reads.js";
 import { textResult } from "./results.js";
+import { issueText } from "../issues.js";
 
 const LIST_DATASETS = operation("list_datasets");
 const GET_DATASET = operation("get_dataset");
@@ -41,9 +42,6 @@ type TrainModel = keyof typeof TRAIN;
 const OWNER = "the dataset is not yours or does not exist";
 const LISTING = "this key cannot list datasets (Ideogram answers 404 to a key without access)";
 
-function issues(error: z.ZodError): string {
-  return error.issues.map((i) => `${i.path.join(".") || "(input)"}: ${i.message}`).join("; ");
-}
 
 const DatasetsInput = z
   .strictObject({
@@ -54,7 +52,7 @@ const DatasetsInput = z
 
 async function runDatasets(ctx: ToolContext, args: ToolArguments): Promise<CallToolResult> {
   const input = DatasetsInput.safeParse(args);
-  if (!input.success) return textResult(`ideogram_datasets: ${issues(input.error)}`, true);
+  if (!input.success) return textResult(`ideogram_datasets: ${issueText(input.error)}`, true);
   try {
     if (input.data.dataset_id !== undefined) {
       const one = await readOperation(ctx, { op: GET_DATASET, path: { dataset_id: input.data.dataset_id } }, zGetDatasetResponse);
@@ -89,7 +87,7 @@ async function createDataset(ctx: ToolContext, name: string): Promise<Created> {
   const schema = bodySchemaFor(CREATE_DATASET, "json");
   const body = { name };
   const checked = schema?.safeParse(body);
-  if (checked !== undefined && !checked.success) return { kind: "result", result: textResult(`ideogram_dataset_upload: name: ${issues(checked.error)}`, true) };
+  if (checked !== undefined && !checked.success) return { kind: "result", result: textResult(`ideogram_dataset_upload: name: ${issueText(checked.error)}`, true) };
   const sent = await sendOperation(ctx, { op: CREATE_DATASET, body: { media: "json", fields: body, files: [], jsonParts: [] } }, zCreateDatasetResponse);
   const mayExist = `A dataset named "${name}" MAY have been created: list ideogram_datasets before creating it again.`;
   if (sent.kind === "answer") {
@@ -109,7 +107,7 @@ function failureText(sent: Extract<Sent<unknown>, { kind: SideEffect }>, what: s
 
 async function runUpload(ctx: ToolContext, args: ToolArguments): Promise<CallToolResult> {
   const input = UploadInput.safeParse(args);
-  if (!input.success) return textResult(`ideogram_dataset_upload: ${issues(input.error)}`, true);
+  if (!input.success) return textResult(`ideogram_dataset_upload: ${issueText(input.error)}`, true);
   if ((input.data.dataset_id === undefined) === (input.data.name === undefined)) return textResult("ideogram_dataset_upload: give dataset_id (an existing dataset) or name (a new one), not both", true);
   let uploads;
   try {
@@ -169,22 +167,31 @@ const TrainInput = z.strictObject({
 });
 const HYPERPARAMETERS = ["training_steps", "lora_rank", "ema", "learning_rate", "batch_size", "base_variant", "wandb_project"] as const;
 
-async function runTrain(ctx: ToolContext, args: ToolArguments): Promise<CallToolResult> {
-  const input = TrainInput.safeParse(args);
-  if (!input.success) return textResult(`ideogram_train: ${issues(input.error)}`, true);
-  const { model = "ideogram-4", ...rest } = input.data;
+/** The training operation the arguments select (the advanced one when a hyperparameter is given) and its checked
+ * body; a string is the tool's refusal. */
+function trainRequest(model: TrainModel, rest: Omit<z.infer<typeof TrainInput>, "model">): { op: Operation; body: Record<string, unknown> } | string {
   const given = HYPERPARAMETERS.filter((h) => rest[h] !== undefined);
-  const op = given.length > 0 ? TRAIN[model as TrainModel].advanced : TRAIN[model as TrainModel].plain;
+  const op = given.length > 0 ? TRAIN[model].advanced : TRAIN[model].plain;
   const body = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined));
   const schema = bodySchemaFor(op, "json");
   if (schema instanceof z.ZodObject) {
     const foreign = Object.keys(body).filter((k) => !(k in schema.shape));
-    if (foreign.length > 0) return textResult(`ideogram_train: ${foreign.join(", ")} is not a parameter of ${model}'s training (${op.id})`, true);
+    if (foreign.length > 0) return `ideogram_train: ${foreign.join(", ")} is not a parameter of ${model}'s training (${op.id})`;
   }
   const checked = schema?.safeParse(body);
-  if (checked !== undefined && !checked.success) return textResult(`ideogram_train (${op.id}): ${issues(checked.error)}`, true);
+  if (checked !== undefined && !checked.success) return `ideogram_train (${op.id}): ${issueText(checked.error)}`;
   const rules = constraintViolations(op, body);
-  if (rules.length > 0) return textResult(`ideogram_train: ${rules.join("; ")}`, true);
+  if (rules.length > 0) return `ideogram_train: ${rules.join("; ")}`;
+  return { op, body };
+}
+
+async function runTrain(ctx: ToolContext, args: ToolArguments): Promise<CallToolResult> {
+  const input = TrainInput.safeParse(args);
+  if (!input.success) return textResult(`ideogram_train: ${issueText(input.error)}`, true);
+  const { model = "ideogram-4", ...rest } = input.data;
+  const request = trainRequest(model as TrainModel, rest);
+  if (typeof request === "string") return textResult(request, true);
+  const { op, body } = request;
   const sent = await sendOperation(ctx, { op, body: { media: "json", fields: body, files: [], jsonParts: [] } }, zTrainDatasetModelResponse);
   const mayRun = "a training MAY have started and will be billed — list ideogram_models before starting it again.";
   if (sent.kind === "answer") {
@@ -213,7 +220,7 @@ function modelLine(m: { name: string; model_id: string; status: string; custom_m
 
 async function runModels(ctx: ToolContext, args: ToolArguments): Promise<CallToolResult> {
   const input = ModelsInput.safeParse(args);
-  if (!input.success) return textResult(`ideogram_models: ${issues(input.error)}`, true);
+  if (!input.success) return textResult(`ideogram_models: ${issueText(input.error)}`, true);
   try {
     if (input.data.model_id !== undefined) {
       const one = await readOperation(ctx, { op: GET_MODEL, path: { model_id: input.data.model_id } }, zGetCustomModelResponse);

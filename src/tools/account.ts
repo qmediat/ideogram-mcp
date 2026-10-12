@@ -16,6 +16,7 @@ import type { ToolContext, ToolDefinition } from "./context.js";
 import type { ToolArguments } from "./family.js";
 import { apiErrorResult, listingResult, operation, rawLines, readOperation } from "./reads.js";
 import { textResult } from "./results.js";
+import { issueText } from "../issues.js";
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
@@ -134,16 +135,23 @@ function rangeOf(ctx: ToolContext, input: z.infer<typeof UsageInput>): { start: 
   return { start, end: input.end_time ?? toRfc3339(endMs) };
 }
 
+/** The query a usage request sends, checked against the operation's schema; a string is the tool's refusal. */
+function usageQuery(ctx: ToolContext, input: z.infer<typeof UsageInput>): Record<string, QueryValue> | string {
+  const range = rangeOf(ctx, input);
+  if (typeof range === "string") return `ideogram_usage: ${range}`;
+  const query: Record<string, QueryValue> = { start_time: range.start, end_time: range.end };
+  if (input.bucket_width !== undefined) query.bucket_width = input.bucket_width;
+  if (input.sources !== undefined) query.sources = input.sources;
+  const checked = USAGE.schemas.query?.safeParse(query);
+  if (checked !== undefined && !checked.success) return `ideogram_usage: ${issueText(checked.error, "")} (RFC 3339 times, e.g. 2026-10-01T00:00:00Z)`;
+  return query;
+}
+
 async function runUsage(ctx: ToolContext, args: ToolArguments): Promise<CallToolResult> {
   const input = UsageInput.safeParse(args);
-  if (!input.success) return textResult(`ideogram_usage: ${input.error.issues.map((i) => `${i.path.join(".") || "(input)"}: ${i.message}`).join("; ")}`, true);
-  const range = rangeOf(ctx, input.data);
-  if (typeof range === "string") return textResult(`ideogram_usage: ${range}`, true);
-  const query: Record<string, QueryValue> = { start_time: range.start, end_time: range.end };
-  if (input.data.bucket_width !== undefined) query.bucket_width = input.data.bucket_width;
-  if (input.data.sources !== undefined) query.sources = input.data.sources;
-  const checked = USAGE.schemas.query?.safeParse(query);
-  if (checked !== undefined && !checked.success) return textResult(`ideogram_usage: ${checked.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")} (RFC 3339 times, e.g. 2026-10-01T00:00:00Z)`, true);
+  if (!input.success) return textResult(`ideogram_usage: ${issueText(input.error)}`, true);
+  const query = usageQuery(ctx, input.data);
+  if (typeof query === "string") return textResult(query, true);
   try {
     const answer = await readOperation(ctx, { op: USAGE, query }, zGetAccountUsageResponse);
     if (!answer.ok) return answer.result;

@@ -31,7 +31,7 @@
   },
   "src/tools/account.ts": {
     "complexity": {
-      "count": 4
+      "count": 3
     }
   },
   "src/tools/family.ts": {
@@ -40,16 +40,6 @@
     }
   },
   "src/tools/raw.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
-  "src/tools/reads.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
-  "src/tools/training.ts": {
     "complexity": {
       "count": 1
     }
