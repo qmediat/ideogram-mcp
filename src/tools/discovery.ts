@@ -12,7 +12,9 @@ import { supportOf } from "../spec/support.js";
 import type { ToolDefinition } from "./context.js";
 import { textResult } from "./results.js";
 
-const LISTED: readonly Family[] = FAMILIES.filter((family) => OPERATIONS.some((op) => op.family === family && isExposable(op)));
+const LISTED: readonly Family[] = FAMILIES.filter((family) =>
+  OPERATIONS.some((op) => op.family === family && isExposable(op)),
+);
 
 function opLine(op: Operation): string {
   const model = op.model === null ? "" : ` · model ${op.model}`;
@@ -30,7 +32,10 @@ function parameterLines(op: Operation): string[] {
 }
 
 function detail(op: Operation): string {
-  const limits = fileLimitsOf(op).map((l) => `  ${l.field}: ${(l.maxBytes / MB).toFixed(0)} MB${l.stated ? "" : " (not stated by Ideogram; this server's cap)"}${l.maxItems === null ? "" : `, at most ${l.maxItems} files`}`);
+  const limits = fileLimitsOf(op).map(
+    (l) =>
+      `  ${l.field}: ${(l.maxBytes / MB).toFixed(0)} MB${l.stated ? "" : " (not stated by Ideogram; this server's cap)"}${l.maxItems === null ? "" : `, at most ${l.maxItems} files`}`,
+  );
   const rules = rulesOf(op).map((text) => `  ${text}`);
   return [
     opLine(op),
@@ -66,10 +71,16 @@ export const OPERATIONS_TOOL: ToolDefinition = {
   handler: async (_ctx, args) => {
     if (typeof args.operation === "string") {
       const op = operationById(args.operation);
-      return op === null ? textResult(`No operation ${args.operation}; list a family to see the ids`, true) : textResult(detail(op));
+      return op === null
+        ? textResult(`No operation ${args.operation}; list a family to see the ids`, true)
+        : textResult(detail(op));
     }
     if (typeof args.family === "string") {
-      return textResult(OPERATIONS.filter((op) => op.family === args.family).map(opLine).join("\n"));
+      return textResult(
+        OPERATIONS.filter((op) => op.family === args.family)
+          .map(opLine)
+          .join("\n"),
+      );
     }
     return textResult(overview());
   },

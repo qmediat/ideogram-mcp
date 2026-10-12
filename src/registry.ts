@@ -60,7 +60,9 @@ export function registryProblems(): string[] {
   for (const [family, newest] of Object.entries(NEWEST) as [Family, string][]) {
     const models = documentedModelsOf(family);
     if (!models.includes(newest)) {
-      problems.push(`NEWEST.${family} = ${newest} is not a documented model of the snapshot (it has: ${models.join(", ") || "none"})`);
+      problems.push(
+        `NEWEST.${family} = ${newest} is not a documented model of the snapshot (it has: ${models.join(", ") || "none"})`,
+      );
     }
   }
   for (const op of OPERATIONS) {

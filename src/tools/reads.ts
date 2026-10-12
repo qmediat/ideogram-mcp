@@ -33,7 +33,12 @@ export function operation(id: string): Operation {
 
 /** A file-name component from caller-controlled text: letters, digits and a few marks only, bounded — never a separator. */
 export function fileNameComponent(text: string): string {
-  return text.replace(/[^0-9A-Za-z,_.-]/g, "_").replace(/\.{2,}/g, "_").slice(0, 120) || "_";
+  return (
+    text
+      .replace(/[^0-9A-Za-z,_.-]/g, "_")
+      .replace(/\.{2,}/g, "_")
+      .slice(0, 120) || "_"
+  );
 }
 
 /** An error as the text a tool answers with (the API's typed message, or the error's own). */
@@ -58,10 +63,16 @@ export async function rawLines(ctx: ToolContext, what: string, name: string, val
   } catch (error) {
     COUNTERS.rawWriteFailures += 1;
     const size = shown.length === 0 ? `; too large to print here (${bytes} bytes)` : "";
-    return { lines: [`${what}: not written to ${path} (${errorText(error)})${size}`, ...shown], kept: shown.length > 0 };
+    return {
+      lines: [`${what}: not written to ${path} (${errorText(error)})${size}`, ...shown],
+      kept: shown.length > 0,
+    };
   }
   const head = `${what}: ${path} (${bytes} bytes, owner-readable)`;
-  return { lines: shown.length > 0 ? [head, ...shown] : [`${head}; not printed here, over ${INLINE_JSON_BYTES} bytes`], kept: true };
+  return {
+    lines: shown.length > 0 ? [head, ...shown] : [`${head}; not printed here, over ${INLINE_JSON_BYTES} bytes`],
+    kept: true,
+  };
 }
 
 /** The raw answer's lines and whether the caller's client can reach the data: written to disk, or printed whole. */
@@ -80,12 +91,25 @@ export function listingResult(head: readonly string[], raw: RawAnswer): CallTool
 /** `execute()` for a tool: a failed non-idempotent request that may have reached Ideogram (a 5xx, a cut connection
  * after the request left) is answered with the typed note instead of the bare error — the one sentence every surface
  * that sends such a request shows (the family tools, `ideogram_api`; the training tools say it in their own words). */
-export async function executeTold(ctx: ToolContext, req: ApiRequest, waitS: number): Promise<{ kind: "outcome"; outcome: Outcome } | { kind: "result"; result: CallToolResult }> {
+export async function executeTold(
+  ctx: ToolContext,
+  req: ApiRequest,
+  waitS: number,
+): Promise<{ kind: "outcome"; outcome: Outcome } | { kind: "result"; result: CallToolResult }> {
   try {
-    return { kind: "outcome", outcome: await execute(ctx.client, req, { waitS, clock: ctx.clock, budget: ctx.budget }) };
+    return {
+      kind: "outcome",
+      outcome: await execute(ctx.client, req, { waitS, clock: ctx.clock, budget: ctx.budget }),
+    };
   } catch (error) {
     if (req.op.method === "GET" || sideEffectOf(error) !== "unknown") throw error;
-    return { kind: "result", result: textResult(`${errorText(error)}\nThe request had left this machine: ${req.op.id} MAY have run and be billed — check before sending it again (ideogram_generation for a generation, ideogram_models for a training, ideogram_datasets for a dataset).`, true) };
+    return {
+      kind: "result",
+      result: textResult(
+        `${errorText(error)}\nThe request had left this machine: ${req.op.id} MAY have run and be billed — check before sending it again (ideogram_generation for a generation, ideogram_models for a training, ideogram_datasets for a dataset).`,
+        true,
+      ),
+    };
   }
 }
 
@@ -101,11 +125,16 @@ export function sideEffectOf(error: unknown): SideEffect {
   return "unknown";
 }
 
-export type Sent<T> = { readonly kind: "answer"; readonly read: Read<T> } | { readonly kind: SideEffect; readonly error: unknown };
+export type Sent<T> =
+  { readonly kind: "answer"; readonly read: Read<T> } | { readonly kind: SideEffect; readonly error: unknown };
 
 /** One non-idempotent call, never thrown: the answer (checked against its schema, the mismatch kept) or the failure
  * typed by what it did on the server — the one decision every tool with a side effect makes. */
-export async function sendOperation<T extends z.ZodType>(ctx: ToolContext, request: ReadRequest, schema: T): Promise<Sent<z.infer<T>>> {
+export async function sendOperation<T extends z.ZodType>(
+  ctx: ToolContext,
+  request: ReadRequest,
+  schema: T,
+): Promise<Sent<z.infer<T>>> {
   try {
     return { kind: "answer", read: await readOperation(ctx, request, schema) };
   } catch (error) {
@@ -115,12 +144,30 @@ export async function sendOperation<T extends z.ZodType>(ctx: ToolContext, reque
 
 /** An operation whose 200 is a file (snap mask's image/png): the body saved as the result — the one path of the curated
  * tool and `ideogram_api` alike; a failure that may have run says so (the request is never resent). */
-export async function fileAnswer(what: string, ctx: ToolContext, req: ApiRequest, inlineImages: boolean, notes: readonly string[] = []): Promise<CallToolResult> {
+export async function fileAnswer(
+  what: string,
+  ctx: ToolContext,
+  req: ApiRequest,
+  inlineImages: boolean,
+  notes: readonly string[] = [],
+): Promise<CallToolResult> {
   const kind: MediaKind = req.op.facts.responseMedia === "video" ? "video" : "image";
   try {
     const saved = await ctx.client.callToFile(req, ctx.outputDir, ctx.budget, kind);
     const inline = inlineImages && kind === "image" ? await inlineContent([saved]) : { items: [], lines: [] };
-    return { content: [{ type: "text", text: [`Saved: ${saved.path} (${mbText(saved.bytes, 2)}, ${saved.contentType.split(";")[0]})`, ...inline.lines, ...notes].join("\n") }, ...inline.items] };
+    return {
+      content: [
+        {
+          type: "text",
+          text: [
+            `Saved: ${saved.path} (${mbText(saved.bytes, 2)}, ${saved.contentType.split(";")[0]})`,
+            ...inline.lines,
+            ...notes,
+          ].join("\n"),
+        },
+        ...inline.items,
+      ],
+    };
   } catch (error) {
     return fileFailure(what, req, error);
   }
@@ -129,12 +176,21 @@ export async function fileAnswer(what: string, ctx: ToolContext, req: ApiRequest
 /** What a failed file answer did on the server: ran and answered (the file lost or not kept), or may have run. */
 function fileFailure(what: string, req: ApiRequest, error: unknown): CallToolResult {
   if (error instanceof IdeogramApiError && error.code === "ANSWER_NOT_SAVED") {
-    return textResult(`${what}: ${error.message}\nThe operation ran and answered; the file is lost here. Sending it again runs it again.`, true);
+    return textResult(
+      `${what}: ${error.message}\nThe operation ran and answered; the file is lost here. Sending it again runs it again.`,
+      true,
+    );
   }
   if (error instanceof IdeogramApiError && error.status >= 200 && error.status < 300) {
-    return textResult(`${what}: ${error.message}\nThe operation ran and answered, with no file this server keeps.`, true); // not a file of the kind, or over the cap
+    return textResult(
+      `${what}: ${error.message}\nThe operation ran and answered, with no file this server keeps.`,
+      true,
+    ); // not a file of the kind, or over the cap
   }
-  const note = req.op.method !== "GET" && sideEffectOf(error) === "unknown" ? `\nThe request had left this machine: ${req.op.id} MAY have run — send it again only if the answer is not in the output directory.` : "";
+  const note =
+    req.op.method !== "GET" && sideEffectOf(error) === "unknown"
+      ? `\nThe request had left this machine: ${req.op.id} MAY have run — send it again only if the answer is not in the output directory.`
+      : "";
   return textResult(`${what}: ${errorText(error)}${note}`, true);
 }
 
@@ -150,34 +206,54 @@ export interface ReadRequest {
   readonly body?: BodyInput | null;
 }
 
-export type Read<T> = { readonly ok: true; readonly data: T; readonly raw: unknown } | { readonly ok: false; readonly result: CallToolResult };
+export type Read<T> =
+  | { readonly ok: true; readonly data: T; readonly raw: unknown }
+  | { readonly ok: false; readonly result: CallToolResult };
 
 function checkLocation(op: Operation, label: "query" | "path", value: Readonly<Record<string, unknown>>): void {
   const schema = op.schemas[label];
   if (schema === null) {
-    if (Object.keys(value).length > 0) throw new Error(`${op.id} takes no ${label} parameters; given ${Object.keys(value).join(", ")}`);
+    if (Object.keys(value).length > 0)
+      throw new Error(`${op.id} takes no ${label} parameters; given ${Object.keys(value).join(", ")}`);
     return;
   }
   const parsed = schema.safeParse(value);
   if (!parsed.success) throw new Error(`${op.id} ${label}: ${issueText(parsed.error)}`);
 }
 
-export async function readOperation<T extends z.ZodType>(ctx: ToolContext, request: ReadRequest, schema: T): Promise<Read<z.infer<T>>> {
+export async function readOperation<T extends z.ZodType>(
+  ctx: ToolContext,
+  request: ReadRequest,
+  schema: T,
+): Promise<Read<z.infer<T>>> {
   checkLocation(request.op, "path", request.path ?? {});
   checkLocation(request.op, "query", request.query ?? {});
-  const req: ApiRequest = { op: request.op, path: request.path ?? {}, query: request.query ?? {}, headers: {}, body: request.body ?? null, dryRun: false };
+  const req: ApiRequest = {
+    op: request.op,
+    path: request.path ?? {},
+    query: request.query ?? {},
+    headers: {},
+    body: request.body ?? null,
+    dryRun: false,
+  };
   const answer = await ctx.client.call(req, ctx.budget);
   const parsed = schema.safeParse(answer.body);
   if (parsed.success) return { ok: true, data: parsed.data as z.infer<T>, raw: answer.body };
   // a listing off its schema is reported as such (never a success) AND kept as received: the data is the point of a listing
   const mismatch = await outcomeResult(ctx, contractMismatch(answer.status, answer.body, parsed.error), []);
   const said = mismatch.content[0]?.type === "text" ? mismatch.content[0].text : "";
-  const kept = await rawLines(ctx, "As Ideogram sent it (off the specification)", `${request.op.id}-mismatch-${ctx.clock.now()}`, answer.body);
+  const kept = await rawLines(
+    ctx,
+    "As Ideogram sent it (off the specification)",
+    `${request.op.id}-mismatch-${ctx.clock.now()}`,
+    answer.body,
+  );
   return { ok: false, result: textResult([said, ...kept.lines].join("\n"), true) };
 }
 
 /** An API error as the text a tool returns; a 404 of an owner-scoped resource is said with the API's words. */
 export function apiErrorResult(error: unknown, what: string, notFoundMeans: string): CallToolResult {
-  if (error instanceof IdeogramApiError && error.status === 404) return textResult(`${what}: ${notFoundMeans} (Ideogram's answer: ${error.message}).`, true);
+  if (error instanceof IdeogramApiError && error.status === 404)
+    return textResult(`${what}: ${notFoundMeans} (Ideogram's answer: ${error.message}).`, true);
   throw error;
 }

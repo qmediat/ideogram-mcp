@@ -45,7 +45,13 @@ export interface RequestLimit {
 
 /** The file fields that take font files, not images: every file field whose description states the font formats
  * (".ttf, .otf, .woff, .woff2"); test/overlay.test.mjs derives the same set from the specification. */
-export const FONT_FILE_FIELDS: ReadonlySet<string> = new Set(["font_candidate_files", "font_file_body", "font_file_h1", "font_file_h2", "font_file_small"]);
+export const FONT_FILE_FIELDS: ReadonlySet<string> = new Set([
+  "font_candidate_files",
+  "font_file_body",
+  "font_file_h1",
+  "font_file_h2",
+  "font_file_small",
+]);
 
 /** The file fields that take audio references (the specification: "MP3 or WAV audio references"). */
 export const AUDIO_FILE_FIELDS: ReadonlySet<string> = new Set(["reference_audios"]);
@@ -106,7 +112,9 @@ export function requestLimitOf(op: Operation): RequestLimit {
 export function requestBytesRefusal(op: Operation, bodyBytes: number): string | null {
   const limit = requestLimitOf(op);
   if (bodyBytes <= limit.maxBytes) return null;
-  const source = limit.stated ? "the limit Ideogram states for this request" : "this server's cap for a request Ideogram states no limit for";
+  const source = limit.stated
+    ? "the limit Ideogram states for this request"
+    : "this server's cap for a request Ideogram states no limit for";
   return `the request body is ${mbText(bodyBytes)}; ${op.id} takes at most ${mbText(limit.maxBytes, 0)} (${source})`;
 }
 
@@ -131,7 +139,10 @@ function given(fields: BodyFields, name: string): boolean {
 
 /** How many entries the listed array fields carry together (a scalar counts as one). */
 function countOf(f: BodyFields, names: readonly string[]): number {
-  return names.reduce((n, name) => n + (given(f, name) ? (Array.isArray(f[name]) ? (f[name] as unknown[]).length : 1) : 0), 0);
+  return names.reduce(
+    (n, name) => n + (given(f, name) ? (Array.isArray(f[name]) ? (f[name] as unknown[]).length : 1) : 0),
+    0,
+  );
 }
 
 function anyGiven(fields: BodyFields, names: readonly string[]): boolean {
@@ -196,7 +207,11 @@ export const CONSTRAINTS: readonly Constraint[] = [
       "post_material_swap",
       "post_text_layerizer",
     ]),
-    anchor: { field: "image_asset_identifier", phrase: /never both|Provide\s+exactly\s+one\s+of\s+`image_asset_identifier`\s+or\s+`image`|Provide\s+exactly\s+one\s+of\s+`image`\s+or\s+`image_asset_identifier`/ },
+    anchor: {
+      field: "image_asset_identifier",
+      phrase:
+        /never both|Provide\s+exactly\s+one\s+of\s+`image_asset_identifier`\s+or\s+`image`|Provide\s+exactly\s+one\s+of\s+`image`\s+or\s+`image_asset_identifier`/,
+    },
     text: "image and image_asset_identifier are alternatives; give one",
     violated: (f) => given(f, "image") && given(f, "image_asset_identifier"),
   },
@@ -235,7 +250,8 @@ export const CONSTRAINTS: readonly Constraint[] = [
     ]),
     anchor: { field: "mask", phrase: /Black marks the region to repaint/ },
     text: "inpaint needs the source (image or image_asset_identifier) and the mask (mask or mask_asset_identifier)",
-    violated: (f) => !anyGiven(f, ["image", "image_asset_identifier"]) || !anyGiven(f, ["mask", "mask_asset_identifier"]),
+    violated: (f) =>
+      !anyGiven(f, ["image", "image_asset_identifier"]) || !anyGiven(f, ["mask", "mask_asset_identifier"]),
   },
   {
     id: "character-mask-needs-character",
@@ -260,14 +276,23 @@ export const CONSTRAINTS: readonly Constraint[] = [
     ]),
     anchor: { field: "character_reference_images", phrase: /character/ },
     text: "a character model needs a character reference: character_reference_images, character_reference_asset_identifiers or character_reference_collection_id",
-    violated: (f) => !anyGiven(f, ["character_reference_images", "character_reference_asset_identifiers", "character_reference_collection_id"]),
+    violated: (f) =>
+      !anyGiven(f, [
+        "character_reference_images",
+        "character_reference_asset_identifiers",
+        "character_reference_collection_id",
+      ]),
   },
   {
     id: "references-by-reference-need-the-image-by-reference",
     operations: new Set(["post_precise_edit_image_v2_ideogram45"]),
-    anchor: { field: "reference_image_asset_identifiers", phrase: /Requires the image being edited to be supplied by reference too, and cannot be combined with `?mask`?/ },
+    anchor: {
+      field: "reference_image_asset_identifiers",
+      phrase: /Requires the image being edited to be supplied by reference too, and cannot be combined with `?mask`?/,
+    },
     text: "reference_image_asset_identifiers needs the edited image by reference too (image_asset_identifier) and cannot be combined with mask",
-    violated: (f) => given(f, "reference_image_asset_identifiers") && (!given(f, "image_asset_identifier") || given(f, "mask")),
+    violated: (f) =>
+      given(f, "reference_image_asset_identifiers") && (!given(f, "image_asset_identifier") || given(f, "mask")),
   },
   {
     id: "mask-leaves-three-references",
@@ -300,9 +325,16 @@ export const CONSTRAINTS: readonly Constraint[] = [
   {
     id: "context-window-region",
     operations: new Set(["post_precise_edit_image_v2_ideogram45"]),
-    anchor: { field: "context_window", phrase: /measure at least 256px on each side, have an aspect ratio between 1:6 and 6:1, and cover no more than 4194304 pixels/ },
+    anchor: {
+      field: "context_window",
+      phrase:
+        /measure at least 256px on each side, have an aspect ratio between 1:6 and 6:1, and cover no more than 4194304 pixels/,
+    },
     text: "context_window names a region as y_min,x_min,y_max,x_max: whole numbers, max above min, each side at least 256 px, aspect ratio between 1:6 and 6:1, at most 4194304 pixels",
-    violated: (f) => typeof f.context_window === "string" && !["none", "auto"].includes(f.context_window) && !regionAllowed(f.context_window),
+    violated: (f) =>
+      typeof f.context_window === "string" &&
+      !["none", "auto"].includes(f.context_window) &&
+      !regionAllowed(f.context_window),
   },
   {
     id: "five-font-files",
@@ -317,14 +349,22 @@ export const CONSTRAINTS: readonly Constraint[] = [
     operations: new Set(["post_remove_object_from_v2_assets"]),
     anchor: { field: "mask", phrase: /marks the region to remove/ },
     text: "remove object needs the source (image or image_asset_identifier) and the mask (mask or mask_asset_identifier)",
-    violated: (f) => !anyGiven(f, ["image", "image_asset_identifier"]) || !anyGiven(f, ["mask", "mask_asset_identifier"]),
+    violated: (f) =>
+      !anyGiven(f, ["image", "image_asset_identifier"]) || !anyGiven(f, ["mask", "mask_asset_identifier"]),
   },
   {
     id: "training-steps",
     operations: new Set(["train_model_v3_advanced", "train_model_v4_advanced"]),
     anchor: { field: "training_steps", phrase: /between 100 and 10000 and a multiple of 100/ },
     text: "training_steps must be between 100 and 10000 and a multiple of 100",
-    violated: (f) => f.training_steps !== undefined && !(Number.isInteger(f.training_steps) && (f.training_steps as number) >= 100 && (f.training_steps as number) <= 10000 && (f.training_steps as number) % 100 === 0),
+    violated: (f) =>
+      f.training_steps !== undefined &&
+      !(
+        Number.isInteger(f.training_steps) &&
+        (f.training_steps as number) >= 100 &&
+        (f.training_steps as number) <= 10000 &&
+        (f.training_steps as number) % 100 === 0
+      ),
   },
   {
     id: "lora-rank",
@@ -359,7 +399,8 @@ export const CONSTRAINTS: readonly Constraint[] = [
     operations: new Set(["train_model_v4_advanced"]),
     anchor: { field: "base_variant", phrase: /Must be one of `?distilled_gd`? .* or `?oldbase_farzad_fused`?/ },
     text: "base_variant must be distilled_gd or oldbase_farzad_fused",
-    violated: (f) => f.base_variant !== undefined && !["distilled_gd", "oldbase_farzad_fused"].includes(f.base_variant as string),
+    violated: (f) =>
+      f.base_variant !== undefined && !["distilled_gd", "oldbase_farzad_fused"].includes(f.base_variant as string),
   },
   {
     id: "model-name",
@@ -373,14 +414,23 @@ export const CONSTRAINTS: readonly Constraint[] = [
     // dry run of 2026-10-10) and by the reference_audios prose of every reference-to-video operation (Seedance:
     // "Requires at least one reference image", MiniMax: "Requires a reference image or video").
     id: "reference-video-needs-a-reference",
-    operations: new Set(["post_generate_video_seed_dance25_reference_to_video", "post_generate_video_seed_dance2_reference_to_video", "post_edit_video_minimax_h3_reference_to_video"]),
+    operations: new Set([
+      "post_generate_video_seed_dance25_reference_to_video",
+      "post_generate_video_seed_dance2_reference_to_video",
+      "post_edit_video_minimax_h3_reference_to_video",
+    ]),
     anchor: { field: "reference_audios", phrase: /Requires (at least one|a) reference image/ },
     text: "a reference-to-video model needs at least one reference image or video: reference_images, reference_image_asset_identifiers or reference_video_asset_identifiers",
-    violated: (f) => !anyGiven(f, ["reference_images", "reference_image_asset_identifiers", "reference_video_asset_identifiers"]),
+    violated: (f) =>
+      !anyGiven(f, ["reference_images", "reference_image_asset_identifiers", "reference_video_asset_identifiers"]),
   },
   {
     id: "reference-images-or-assets",
-    operations: new Set(["post_generate_video_seed_dance25_reference_to_video", "post_generate_video_seed_dance2_reference_to_video", "post_edit_video_minimax_h3_reference_to_video"]),
+    operations: new Set([
+      "post_generate_video_seed_dance25_reference_to_video",
+      "post_generate_video_seed_dance2_reference_to_video",
+      "post_edit_video_minimax_h3_reference_to_video",
+    ]),
     anchor: { field: "reference_image_asset_identifiers", phrase: /Cannot be combined with `reference_images`/ },
     text: "reference_images and reference_image_asset_identifiers cannot be combined; give one",
     violated: (f) => given(f, "reference_images") && given(f, "reference_image_asset_identifiers"),
@@ -390,19 +440,31 @@ export const CONSTRAINTS: readonly Constraint[] = [
     operations: new Set(["post_edit_video_minimax_h3_reference_to_video"]),
     anchor: { field: "reference_audios", phrase: /At most 12 references across images, videos, and audio/ },
     text: "MiniMax takes at most 12 references across reference_images (or reference_image_asset_identifiers), reference_video_asset_identifiers and reference_audios",
-    violated: (f) => countOf(f, ["reference_images", "reference_image_asset_identifiers", "reference_video_asset_identifiers", "reference_audios"]) > 12,
+    violated: (f) =>
+      countOf(f, [
+        "reference_images",
+        "reference_image_asset_identifiers",
+        "reference_video_asset_identifiers",
+        "reference_audios",
+      ]) > 12,
   },
   {
     id: "masks-or-assets",
     operations: new Set(["post_colorways", "post_material_swap"]),
-    anchor: { field: "mask_asset_identifiers", phrase: /Provide\s+exactly\s+one\s+of\s+`mask_asset_identifiers`\s+or\s+`masks`/ },
+    anchor: {
+      field: "mask_asset_identifiers",
+      phrase: /Provide\s+exactly\s+one\s+of\s+`mask_asset_identifiers`\s+or\s+`masks`/,
+    },
     text: "exactly one of masks and mask_asset_identifiers: give one of them",
     violated: (f) => given(f, "masks") === given(f, "mask_asset_identifiers"),
   },
   {
     id: "materials-or-assets",
     operations: new Set(["post_material_swap"]),
-    anchor: { field: "material_asset_identifiers", phrase: /Provide\s+exactly\s+one\s+of\s+`material_asset_identifiers`\s+or\s+`materials`/ },
+    anchor: {
+      field: "material_asset_identifiers",
+      phrase: /Provide\s+exactly\s+one\s+of\s+`material_asset_identifiers`\s+or\s+`materials`/,
+    },
     text: "exactly one of materials and material_asset_identifiers: give one of them",
     violated: (f) => given(f, "materials") === given(f, "material_asset_identifiers"),
   },
@@ -423,7 +485,10 @@ export const CONSTRAINTS: readonly Constraint[] = [
   {
     id: "try-on-person-or-asset",
     operations: new Set(["post_virtual_try_on"]),
-    anchor: { field: "person_image", phrase: /Provide\s+exactly\s+one\s+of\s+`person_asset_identifier`\s+or\s+`person_image`/ },
+    anchor: {
+      field: "person_image",
+      phrase: /Provide\s+exactly\s+one\s+of\s+`person_asset_identifier`\s+or\s+`person_image`/,
+    },
     text: "exactly one of person_image and person_asset_identifier: give one of them",
     violated: (f) => given(f, "person_image") === given(f, "person_asset_identifier"),
     coversSource: true,
@@ -431,14 +496,24 @@ export const CONSTRAINTS: readonly Constraint[] = [
   {
     id: "try-on-garments-or-assets",
     operations: new Set(["post_virtual_try_on"]),
-    anchor: { field: "garment_images", phrase: /Provide\s+exactly\s+one\s+of\s+`garment_asset_identifiers`\s+or\s+`garment_images`/ },
+    anchor: {
+      field: "garment_images",
+      phrase: /Provide\s+exactly\s+one\s+of\s+`garment_asset_identifiers`\s+or\s+`garment_images`/,
+    },
     text: "exactly one of garment_images and garment_asset_identifiers: give one of them",
     violated: (f) => given(f, "garment_images") === given(f, "garment_asset_identifiers"),
   },
   {
     // The v1 Ideogram 4.0 / 4.5 generations take a natural-language prompt or a structured one, never both, never none.
     id: "prompt-choice",
-    operations: new Set(["post_generate_image_v4_cfg_distilled_async", "post_generate_image_v4_cfg_distilled", "post_generate_image_v4_fp8", "post_generate_image_v4_stable", "post_generate_image_v45_async", "post_generate_image_v45"]),
+    operations: new Set([
+      "post_generate_image_v4_cfg_distilled_async",
+      "post_generate_image_v4_cfg_distilled",
+      "post_generate_image_v4_fp8",
+      "post_generate_image_v4_stable",
+      "post_generate_image_v45_async",
+      "post_generate_image_v45",
+    ]),
     anchor: { field: "text_prompt", phrase: /Mutually\s+exclusive\s+with\s+`json_prompt`/ },
     text: "exactly one of text_prompt and json_prompt: give one of them",
     violated: (f) => given(f, "text_prompt") === given(f, "json_prompt"),
@@ -456,7 +531,10 @@ export const CONSTRAINTS: readonly Constraint[] = [
   {
     id: "materials-per-mask",
     operations: new Set(["post_material_swap"]),
-    anchor: { field: "materials", phrase: /Send\s+one\s+material\s+for\s+every\s+mask,\s+or\s+exactly\s+one\s+per\s+mask,\s+paired\s+by\s+position/ },
+    anchor: {
+      field: "materials",
+      phrase: /Send\s+one\s+material\s+for\s+every\s+mask,\s+or\s+exactly\s+one\s+per\s+mask,\s+paired\s+by\s+position/,
+    },
     text: "materials are one for every mask, or exactly one per mask: give one material or as many as masks",
     violated: (f) => {
       const materials = Math.max(countOf(f, ["materials"]), countOf(f, ["material_asset_identifiers"]));
@@ -474,7 +552,12 @@ export const CONSTRAINTS: readonly Constraint[] = [
   {
     // The start frame is one of a file and an asset ("in place of uploading `image`"), as remix's image-or-asset rule.
     id: "video-image-or-asset",
-    operations: new Set(["post_generate_video_kling_v3_standard_image_to_video", "post_generate_video_minimax_h3_image_to_video", "post_generate_video_seed_dance25_image_to_video", "post_generate_video_seed_dance2_image_to_video"]),
+    operations: new Set([
+      "post_generate_video_kling_v3_standard_image_to_video",
+      "post_generate_video_minimax_h3_image_to_video",
+      "post_generate_video_seed_dance25_image_to_video",
+      "post_generate_video_seed_dance2_image_to_video",
+    ]),
     anchor: { field: "image_asset_identifier", phrase: /in place of uploading `image`/ },
     text: "image and image_asset_identifier are alternatives; give one",
     violated: (f) => given(f, "image") && given(f, "image_asset_identifier"),
@@ -482,8 +565,16 @@ export const CONSTRAINTS: readonly Constraint[] = [
   {
     // The end frame likewise: the asset is "an optional final frame, as a reference to an image already stored".
     id: "video-end-image-or-asset",
-    operations: new Set(["post_generate_video_kling_v3_standard_image_to_video", "post_generate_video_minimax_h3_image_to_video", "post_generate_video_seed_dance25_image_to_video", "post_generate_video_seed_dance2_image_to_video"]),
-    anchor: { field: "end_image_asset_identifier", phrase: /An optional final frame, as a reference to an image already stored/ },
+    operations: new Set([
+      "post_generate_video_kling_v3_standard_image_to_video",
+      "post_generate_video_minimax_h3_image_to_video",
+      "post_generate_video_seed_dance25_image_to_video",
+      "post_generate_video_seed_dance2_image_to_video",
+    ]),
+    anchor: {
+      field: "end_image_asset_identifier",
+      phrase: /An optional final frame, as a reference to an image already stored/,
+    },
     text: "end_image and end_image_asset_identifier are alternatives; give one",
     violated: (f) => given(f, "end_image") && given(f, "end_image_asset_identifier"),
   },
@@ -498,7 +589,13 @@ export const CONSTRAINTS: readonly Constraint[] = [
 
 /** The fields that carry an operation's source image: a local file (or a URL), an Ideogram asset, or the v1 edit's
  * Ideogram image URLs. */
-export const SOURCE_FIELDS: readonly string[] = ["image", "images", "image_asset_identifier", "image_asset_identifiers", "image_urls"];
+export const SOURCE_FIELDS: readonly string[] = [
+  "image",
+  "images",
+  "image_asset_identifier",
+  "image_asset_identifiers",
+  "image_urls",
+];
 
 /** How each source field is said in the rule's sentence. */
 const SOURCE_FIELD_TEXT: Readonly<Record<string, string>> = {
@@ -516,19 +613,50 @@ function imageSourceText(op: Operation): string {
   return `needs a source image: ${present.map((f) => SOURCE_FIELD_TEXT[f]).join(" or ")}`;
 }
 
-const GHOST_MANNEQUIN_PHOTOS: readonly string[] = ["front_image", "back_image", "left_image", "right_image", "top_image", "bottom_image", "front_asset_identifier", "back_asset_identifier", "left_asset_identifier", "right_asset_identifier", "top_asset_identifier", "bottom_asset_identifier", "garment_images", "garment_asset_identifiers"];
+const GHOST_MANNEQUIN_PHOTOS: readonly string[] = [
+  "front_image",
+  "back_image",
+  "left_image",
+  "right_image",
+  "top_image",
+  "bottom_image",
+  "front_asset_identifier",
+  "back_asset_identifier",
+  "left_asset_identifier",
+  "right_asset_identifier",
+  "top_asset_identifier",
+  "bottom_asset_identifier",
+  "garment_images",
+  "garment_asset_identifiers",
+];
 
 /** The operations whose source is not `image`: the fields that carry it (a file or an asset) and the rule's sentence.
  * The specification leaves them optional because the asset is the alternative (ghost mannequin: "Supply at least one
  * garment image"); the one source rule says so before any request. */
-const SOURCE_IMAGE_TEXT = "source_image (a local file or a public https URL) or source_asset_identifier (an Ideogram asset)";
+const SOURCE_IMAGE_TEXT =
+  "source_image (a local file or a public https URL) or source_asset_identifier (an Ideogram asset)";
 
 const SOURCE_BY_OPERATION: Readonly<Record<string, { readonly fields: readonly string[]; readonly text: string }>> = {
-  post_model_pose_variants: { fields: ["source_image", "source_asset_identifier"], text: `needs the fashion image: ${SOURCE_IMAGE_TEXT}` },
-  post_model_swap: { fields: ["source_image", "source_asset_identifier"], text: `needs the working image: ${SOURCE_IMAGE_TEXT}` },
-  post_precise_masked_edit: { fields: ["source_image", "source_asset_identifier"], text: `needs the source: ${SOURCE_IMAGE_TEXT}` },
-  post_virtual_try_on: { fields: ["person_image", "person_asset_identifier"], text: "needs the person: person_image (a local file or a public https URL) or person_asset_identifier (an Ideogram asset)" },
-  post_sketch_to_render: { fields: ["sketch_image", "sketch_asset_identifier"], text: "needs the sketch: sketch_image (a local file or a public https URL) or sketch_asset_identifier (an Ideogram asset)" },
+  post_model_pose_variants: {
+    fields: ["source_image", "source_asset_identifier"],
+    text: `needs the fashion image: ${SOURCE_IMAGE_TEXT}`,
+  },
+  post_model_swap: {
+    fields: ["source_image", "source_asset_identifier"],
+    text: `needs the working image: ${SOURCE_IMAGE_TEXT}`,
+  },
+  post_precise_masked_edit: {
+    fields: ["source_image", "source_asset_identifier"],
+    text: `needs the source: ${SOURCE_IMAGE_TEXT}`,
+  },
+  post_virtual_try_on: {
+    fields: ["person_image", "person_asset_identifier"],
+    text: "needs the person: person_image (a local file or a public https URL) or person_asset_identifier (an Ideogram asset)",
+  },
+  post_sketch_to_render: {
+    fields: ["sketch_image", "sketch_asset_identifier"],
+    text: "needs the sketch: sketch_image (a local file or a public https URL) or sketch_asset_identifier (an Ideogram asset)",
+  },
   post_ghost_mannequin: {
     fields: GHOST_MANNEQUIN_PHOTOS,
     text: "needs at least one garment photo: a view (front_image, back_image, left_image, right_image, top_image, bottom_image — files or URLs — or its *_asset_identifier) or garment_images / garment_asset_identifiers",
@@ -559,7 +687,10 @@ export function sourceRefusal(op: Operation, fields: BodyFields): string | null 
 /** Every rule the server enforces for the operation beyond its schema, as sentences: the source rule, then the constraints. */
 export function rulesOf(op: Operation): string[] {
   const source = sourceOf(op);
-  return [...(source === null ? [] : [source.text]), ...CONSTRAINTS.filter((c) => c.operations.has(op.id)).map((c) => c.text)];
+  return [
+    ...(source === null ? [] : [source.text]),
+    ...CONSTRAINTS.filter((c) => c.operations.has(op.id)).map((c) => c.text),
+  ];
 }
 
 /** The sentences of every constraint the fields break for the operation; empty when none. */

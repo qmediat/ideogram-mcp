@@ -34,7 +34,8 @@ export const QUOTE_TOOL: ToolDefinition = {
   }),
   handler: async (ctx, args) => {
     const spec = FAMILY_TOOLS.find((s) => s.name === args.tool);
-    if (spec === undefined) return textResult(`Unknown tool ${String(args.tool)}; one of ${TOOL_NAMES.join(", ")}`, true);
+    if (spec === undefined)
+      return textResult(`Unknown tool ${String(args.tool)}; one of ${TOOL_NAMES.join(", ")}`, true);
     const given = (args.arguments ?? {}) as Record<string, unknown>;
     // the quote refusal first: an unquotable operation (describe) is refused before any file is read or sized
     const model = resolveModel(spec.family, given, spec.defaultModel).model;

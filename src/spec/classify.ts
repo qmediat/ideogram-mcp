@@ -27,7 +27,11 @@ export const OPERATION_CLASSES: readonly OperationClass[] = [
 ];
 
 /** The classes an API key can reach and this server may expose (curated or through the raw call). */
-export const EXPOSABLE_CLASSES: ReadonlySet<OperationClass> = new Set<OperationClass>(["documented", "spec_only", "v1_only"]);
+export const EXPOSABLE_CLASSES: ReadonlySet<OperationClass> = new Set<OperationClass>([
+  "documented",
+  "spec_only",
+  "v1_only",
+]);
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -169,7 +173,9 @@ const INTERNAL_PREFIXES: readonly string[] = ["/manage/", "/mini-apps/", "/inter
 /** True when every requirement that applies is satisfied by BearerAuth alone (an API key satisfies none of them). */
 export function isBearerOnly(effective: readonly SecurityRequirement[]): boolean {
   if (effective.length === 0) return false;
-  return effective.every((requirement) => requirement.length > 0 && requirement.every((scheme) => scheme === "BearerAuth"));
+  return effective.every(
+    (requirement) => requirement.length > 0 && requirement.every((scheme) => scheme === "BearerAuth"),
+  );
 }
 
 /** The class of one operation; `documentSecurity` is the specification's top-level `security`. */

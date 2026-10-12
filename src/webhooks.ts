@@ -56,8 +56,14 @@ function single(value: HeaderValue): string | null {
 }
 
 /** The message Ideogram signs; null when one of its parts is missing or repeated. */
-export function canonicalMessage(delivery: Pick<WebhookDelivery, "body" | "requestId" | "userId" | "timestamp">): Buffer | null {
-  const [requestId, userId, timestamp] = [single(delivery.requestId), single(delivery.userId), single(delivery.timestamp)];
+export function canonicalMessage(
+  delivery: Pick<WebhookDelivery, "body" | "requestId" | "userId" | "timestamp">,
+): Buffer | null {
+  const [requestId, userId, timestamp] = [
+    single(delivery.requestId),
+    single(delivery.userId),
+    single(delivery.timestamp),
+  ];
   if (requestId === null || userId === null || timestamp === null) return null;
   const digest = createHash("sha256").update(delivery.body).digest("hex");
   return Buffer.from(`${requestId}\n${userId}\n${timestamp}\n${digest}`, "utf8");
@@ -90,7 +96,11 @@ function timestampMs(text: string): number {
 
 /** The id of the key the signature verifies against (the header's key first, then every other), or null: a missing
  * or malformed signature, a key set without an Ed25519 key, or a timestamp past `maxAgeS` is null, never a throw. */
-export function verifyWebhook(delivery: WebhookDelivery, jwks: WebhookJwks, options: VerifyOptions = {}): string | null {
+export function verifyWebhook(
+  delivery: WebhookDelivery,
+  jwks: WebhookJwks,
+  options: VerifyOptions = {},
+): string | null {
   const signature = single(delivery.signature);
   const timestamp = single(delivery.timestamp);
   const message = canonicalMessage(delivery);

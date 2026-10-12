@@ -161,7 +161,14 @@ function asyncKindOf(facts: SpecOperationFacts): AsyncKind {
   return acknowledgement ? "only" : "none";
 }
 
-const ACKNOWLEDGEMENT_PROPERTIES: ReadonlySet<string> = new Set(["generation_id", "created", "status", "seed", "width", "height"]);
+const ACKNOWLEDGEMENT_PROPERTIES: ReadonlySet<string> = new Set([
+  "generation_id",
+  "created",
+  "status",
+  "seed",
+  "width",
+  "height",
+]);
 
 /** The generated schemas by lower-cased export name (the generator's names are a case transform of operationId). */
 const GENERATED_BY_NAME: ReadonlyMap<string, ZodType> = new Map(

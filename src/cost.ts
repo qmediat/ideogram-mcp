@@ -61,7 +61,10 @@ export async function quote(client: IdeogramClient, req: ApiRequest, budget: Cal
       credits: millisToCredits(q.credit_millis),
       qualifier: q.qualifier,
       upperBoundUsd: q.upper_bound_usd_micros === undefined ? null : microsToUsd(q.upper_bound_usd_micros),
-      caveat: req.body?.fields.generate_audio === true ? "the dry run does not price generate_audio (Ideogram: an audio track roughly doubles the cost)" : null,
+      caveat:
+        req.body?.fields.generate_audio === true
+          ? "the dry run does not price generate_audio (Ideogram: an audio track roughly doubles the cost)"
+          : null,
     },
   };
 }

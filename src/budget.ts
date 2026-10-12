@@ -75,7 +75,10 @@ export class CallBudget {
     const controller = new AbortController();
     // a referenced timer: the poll clears it in its finally, so nothing lingers — unref'd, a test awaiting the signal alone
     // had no live handle and Node 22 ended the event loop under it ("Promise resolution is still pending")
-    const timer = setTimeout(() => controller.abort(new WaitEnded()), Math.max(1, Math.ceil(deadline - this.clock.now())));
+    const timer = setTimeout(
+      () => controller.abort(new WaitEnded()),
+      Math.max(1, Math.ceil(deadline - this.clock.now())),
+    );
     const signal = AbortSignal.any([this.signal, controller.signal]);
     return new CallBudget(deadline, signal, this.clock, "wait", () => clearTimeout(timer));
   }
@@ -113,6 +116,5 @@ export function sleepWithin(budget: CallBudget, ms: number): Promise<void> {
       done();
     };
     budget.clock.sleep(ms, budget.signal).then(wake, wake); // a clock that fails still ends the sleep
-
   });
 }

@@ -55,7 +55,8 @@ type RawArgs = z.infer<typeof RawInput>;
 export function rawRefusal(op: Operation, allowUndocumented: boolean): string | null {
   const byClass = CLASS_REFUSAL[op.class];
   if (byClass !== undefined) return `${op.id} ${byClass}`;
-  if (!servedByRawCall(op)) return `${op.id} is ${supportOf(op)} for a later release of this server, not served by this release`;
+  if (!servedByRawCall(op))
+    return `${op.id} is ${supportOf(op)} for a later release of this server, not served by this release`;
   if (op.class === "spec_only" && !allowUndocumented) {
     return `${op.id} is in Ideogram's specification but not in its documentation; set allow_undocumented: true to call it anyway`;
   }
@@ -67,7 +68,9 @@ function checkHeaders(op: Operation, headers: Readonly<Record<string, string>>):
   const declared = op.facts.parameters.filter((p) => p.location === "header").map((p) => p.name.toLowerCase());
   const unknown = Object.keys(headers).filter((name) => !declared.includes(name.toLowerCase()));
   if (unknown.length > 0) {
-    throw new Error(`headers: ${op.id} takes ${declared.length === 0 ? "no header parameters" : `only ${declared.join(", ")}`}; not ${unknown.join(", ")}`);
+    throw new Error(
+      `headers: ${op.id} takes ${declared.length === 0 ? "no header parameters" : `only ${declared.join(", ")}`}; not ${unknown.join(", ")}`,
+    );
   }
 }
 
@@ -79,7 +82,8 @@ function check(label: string, schema: ZodType | null, value: Readonly<Record<str
   if (schema instanceof z.ZodObject) {
     const known = Object.keys(schema.shape);
     const unknown = Object.keys(value).filter((key) => !known.includes(key));
-    if (unknown.length > 0) throw new Error(`${label}: unknown field(s) ${unknown.join(", ")}; the fields: ${known.join(", ")}`);
+    if (unknown.length > 0)
+      throw new Error(`${label}: unknown field(s) ${unknown.join(", ")}; the fields: ${known.join(", ")}`);
   }
   const parsed = schema.safeParse(value);
   if (!parsed.success) {
@@ -88,7 +92,11 @@ function check(label: string, schema: ZodType | null, value: Readonly<Record<str
 }
 
 /** The body's fields with every upload's path under its field (an array field collects the paths given for it). */
-function withFileFields(op: Operation, body: Readonly<Record<string, unknown>>, files: NonNullable<RawArgs["files"]>): Record<string, unknown> {
+function withFileFields(
+  op: Operation,
+  body: Readonly<Record<string, unknown>>,
+  files: NonNullable<RawArgs["files"]>,
+): Record<string, unknown> {
   const arrayFields = new Set(op.facts.fileFields.filter((f) => f.array).map((f) => f.name));
   const grouped: Record<string, unknown> = {};
   for (const f of files) {
@@ -105,19 +113,25 @@ async function buildRawRequest(op: Operation, args: RawArgs, remote: RemoteFetch
   const body = params.body ?? {};
   const withFiles = withFileFields(op, body, files);
   const media = files.length === 0 && op.facts.bodies.includes("json") ? "json" : "multipart";
-  if ("dry_run" in (params.query ?? {})) throw new Error("query.dry_run: use the dry_run argument of ideogram_api (the quote path checks the answer as a PriceQuote)");
+  if ("dry_run" in (params.query ?? {}))
+    throw new Error(
+      "query.dry_run: use the dry_run argument of ideogram_api (the quote path checks the answer as a PriceQuote)",
+    );
   check("path", op.schemas.path, params.path ?? {});
   check("query", op.schemas.query, params.query ?? {});
   checkHeaders(op, params.headers ?? {});
   if (op.body === "none") {
-    if (Object.keys(withFiles).length > 0) throw new Error(`body: ${op.id} takes no body; given ${Object.keys(withFiles).join(", ")}`);
+    if (Object.keys(withFiles).length > 0)
+      throw new Error(`body: ${op.id} takes no body; given ${Object.keys(withFiles).join(", ")}`);
   } else check("body", bodySchemaFor(op, media), withFiles);
   const noSource = sourceRefusal(op, withFiles); // null when a family rule names the missing source itself
   const violations = [...constraintViolations(op, withFiles), ...(noSource === null ? [] : [noSource])];
   if (violations.length > 0) throw new Error(violations.join("\n"));
   if (body.async === false && args.dry_run !== true) {
     // a quote prices the request as given; a run with async: false would carry its result only in the POST answer
-    throw new Error("async: false is not served: a synchronous generation returns its result only in the POST answer, which this server cannot wait for inside one call; omit async (the job is accepted, then polled) or set wait_s");
+    throw new Error(
+      "async: false is not served: a synchronous generation returns its result only in the POST answer, which this server cannot wait for inside one call; omit async (the job is accepted, then polled) or set wait_s",
+    );
   }
   const uploads = await loadUploads(op, files, remote);
   return {
@@ -139,7 +153,8 @@ async function runRaw(ctx: ToolContext, input: ToolArguments): Promise<CallToolR
   const refusal = rawRefusal(op, args.allow_undocumented === true);
   if (refusal !== null) return textResult(refusal, true);
   const req = await buildRawRequest(op, args, ctx.remote);
-  const notes = op.class === "spec_only" ? [`${op.id} is undocumented (spec_only): its behaviour may change without notice`] : [];
+  const notes =
+    op.class === "spec_only" ? [`${op.id} is undocumented (spec_only): its behaviour may change without notice`] : [];
   if (args.dry_run === true) {
     const priced = await quote(ctx.client, req, ctx.budget);
     if (priced.kind !== "quote") return outcomeResult(ctx, priced, notes);
@@ -158,10 +173,22 @@ export const RAW_TOOL: ToolDefinition = {
     "Advanced: call an Ideogram operation by id (from ideogram_operations) when no curated tool covers it — a model the documentation index does not list (allow_undocumented), or a call with webhook_url / target_collection_id. params holds path, query, headers and body apart; files maps local files or public https URLs to file fields. Checked against the operation's own schema before anything is sent; dry_run prices it instead.",
   inputSchema: z.object({
     operation: z.string().min(1).describe("The operation id, e.g. post_precise_edit_image_v2_ideogram45"),
-    params: z.record(z.string(), z.unknown()).optional().describe("{path?, query?, headers?, body?}: each an object of that location's parameters"),
-    files: z.array(z.object({ field: z.string(), path: z.string() })).optional().describe("Files for the file fields: each a local path or a public https URL"),
+    params: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .describe("{path?, query?, headers?, body?}: each an object of that location's parameters"),
+    files: z
+      .array(z.object({ field: z.string(), path: z.string() }))
+      .optional()
+      .describe("Files for the file fields: each a local path or a public https URL"),
     dry_run: z.boolean().optional().describe("Price the call instead of running it (only operations that offer it)"),
-    wait_s: z.number().int().min(0).max(WAIT_MAX_S).optional().describe("Seconds to wait for the result (0-50, default 45)"),
+    wait_s: z
+      .number()
+      .int()
+      .min(0)
+      .max(WAIT_MAX_S)
+      .optional()
+      .describe("Seconds to wait for the result (0-50, default 45)"),
     allow_undocumented: z.boolean().optional().describe("Allow an operation Ideogram's documentation does not list"),
     inline_images: z.boolean().optional().describe(INLINE_TEXT),
   }),

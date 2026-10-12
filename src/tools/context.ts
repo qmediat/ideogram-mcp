@@ -33,7 +33,11 @@ export function remoteFetcherFor(server: ServerContext, budget: CallBudget): Rem
 }
 
 export function contextFromConfig(config: Config): ServerContext {
-  return { client: new IdeogramClient(defaultClientOptions(config.apiKey)), outputDir: config.outputDir, clock: SYSTEM_CLOCK };
+  return {
+    client: new IdeogramClient(defaultClientOptions(config.apiKey)),
+    outputDir: config.outputDir,
+    clock: SYSTEM_CLOCK,
+  };
 }
 
 /** The context of one call: the caller's cancellation signal (when the transport gives one) joins the server's limit. */

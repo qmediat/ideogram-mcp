@@ -67,7 +67,13 @@ export type Payload =
   | { readonly kind: "images"; readonly items: readonly ImageItem[] }
   | { readonly kind: "videos"; readonly items: readonly VideoItem[] }
   | { readonly kind: "layered"; readonly items: readonly LayeredItem[] }
-  | { readonly kind: "description"; readonly descriptionId: string; readonly texts: readonly string[]; readonly jsonPrompt: unknown; readonly aspectRatio: string | null }
+  | {
+      readonly kind: "description";
+      readonly descriptionId: string;
+      readonly texts: readonly string[];
+      readonly jsonPrompt: unknown;
+      readonly aspectRatio: string | null;
+    }
   | { readonly kind: "record"; readonly body: unknown };
 
 export interface ContractMismatch {
@@ -80,7 +86,12 @@ export interface ContractMismatch {
 }
 
 export type Outcome =
-  | { readonly kind: "completed"; readonly generationId: string | null; readonly payload: Payload; readonly usageCostUsdMicros: bigint | null }
+  | {
+      readonly kind: "completed";
+      readonly generationId: string | null;
+      readonly payload: Payload;
+      readonly usageCostUsdMicros: bigint | null;
+    }
   | { readonly kind: "pending"; readonly generationId: string; readonly note: string | null }
   | { readonly kind: "failed"; readonly generationId: string; readonly failureReason: string }
   | ContractMismatch;
@@ -144,16 +155,30 @@ export function contractMismatch(status: number, body: unknown, error: ZodError)
   COUNTERS.contractMismatches += 1;
   const issues = issueLines(error, "(root)").slice(0, 10);
   const text = JSON.stringify(body) ?? String(body);
-  return { kind: "contract_mismatch", status, generationId: generationIdOf(body), issues, bodyExcerpt: text.slice(0, 300) };
+  return {
+    kind: "contract_mismatch",
+    status,
+    generationId: generationIdOf(body),
+    issues,
+    bodyExcerpt: text.slice(0, 300),
+  };
 }
 
 function imageItems(data: readonly unknown[]): ImageItem[] | null {
   const items: ImageItem[] = [];
   for (const raw of data) {
     const item = ImageItemShape.safeParse(raw);
-    if (!item.success || (item.data.object_type !== undefined && !item.data.object_type.startsWith("image"))) return null;
+    if (!item.success || (item.data.object_type !== undefined && !item.data.object_type.startsWith("image")))
+      return null;
     const d = item.data;
-    items.push({ url: d.url ?? null, assetId: d.asset_id ?? null, resolution: d.resolution ?? null, seed: d.seed ?? null, prompt: d.prompt ?? null, isImageSafe: d.is_image_safe ?? d.url != null });
+    items.push({
+      url: d.url ?? null,
+      assetId: d.asset_id ?? null,
+      resolution: d.resolution ?? null,
+      seed: d.seed ?? null,
+      prompt: d.prompt ?? null,
+      isImageSafe: d.is_image_safe ?? d.url != null,
+    });
   }
   return items;
 }
@@ -164,7 +189,13 @@ function videoItems(data: readonly unknown[]): VideoItem[] | null {
     const item = VideoItemShape.safeParse(raw);
     if (!item.success) return null;
     const d = item.data;
-    items.push({ url: d.url ?? null, prompt: d.prompt ?? null, resolution: d.resolution ?? null, aspectRatio: d.aspect_ratio ?? null, durationS: d.duration ?? null });
+    items.push({
+      url: d.url ?? null,
+      prompt: d.prompt ?? null,
+      resolution: d.resolution ?? null,
+      aspectRatio: d.aspect_ratio ?? null,
+      durationS: d.duration ?? null,
+    });
   }
   return items;
 }
@@ -181,7 +212,9 @@ function layeredItems(data: readonly unknown[]): LayeredItem[] | null {
       htmlUrl: d.html_url ?? null,
       resolution: d.resolution ?? null,
       seed: d.seed ?? null,
-      isImageSafe: d.is_image_safe ?? (d.base_image_url != null || d.url != null || d.html_url != null || (d.text_blocks ?? []).length > 0), // the flag is required by the schema; absent, anything listed counts as safe
+      isImageSafe:
+        d.is_image_safe ??
+        (d.base_image_url != null || d.url != null || d.html_url != null || (d.text_blocks ?? []).length > 0), // the flag is required by the schema; absent, anything listed counts as safe
       textBlocks: d.text_blocks ?? [],
       blocksKind: "text blocks",
     });
@@ -196,11 +229,31 @@ export function payloadOf(body: unknown): Payload | null {
   const b = parsed.data;
   if (b.descriptions !== undefined || b.json_prompt !== undefined) {
     const texts = (b.descriptions ?? []).map((d) => d.text);
-    return { kind: "description", descriptionId: b.description_id ?? "", texts, jsonPrompt: b.json_prompt ?? null, aspectRatio: typeof b.aspect_ratio === "string" ? b.aspect_ratio : null }; // a magic prompt names the ratio the model picked
+    return {
+      kind: "description",
+      descriptionId: b.description_id ?? "",
+      texts,
+      jsonPrompt: b.json_prompt ?? null,
+      aspectRatio: typeof b.aspect_ratio === "string" ? b.aspect_ratio : null,
+    }; // a magic prompt names the ratio the model picked
   }
   if (Array.isArray(b.layers)) {
     // layerize logos (v1): one design — the text-free base image and the detected layers, each naming the reference it matched
-    return { kind: "layered", items: [{ baseImageUrl: typeof b.base_image_url === "string" ? b.base_image_url : null, url: null, htmlUrl: null, resolution: null, seed: null, isImageSafe: true, textBlocks: b.layers, blocksKind: "layers" }] };
+    return {
+      kind: "layered",
+      items: [
+        {
+          baseImageUrl: typeof b.base_image_url === "string" ? b.base_image_url : null,
+          url: null,
+          htmlUrl: null,
+          resolution: null,
+          seed: null,
+          isImageSafe: true,
+          textBlocks: b.layers,
+          blocksKind: "layers",
+        },
+      ],
+    };
   }
   if (b.data === undefined) return b.generation_id === undefined ? { kind: "record", body } : null;
   const items = imageItems(b.data);
@@ -247,7 +300,8 @@ export async function execute(client: IdeogramClient, req: ApiRequest, options: 
   if (payload !== null) return { kind: "completed", generationId, payload, usageCostUsdMicros: null };
   // an operation that is no job (provenance verify) answers a record that may NAME a generation (the one that made the
   // image): nothing to poll — the body is the answer
-  if (req.op.async === "none") return { kind: "completed", generationId: null, payload: { kind: "record", body }, usageCostUsdMicros: null };
+  if (req.op.async === "none")
+    return { kind: "completed", generationId: null, payload: { kind: "record", body }, usageCostUsdMicros: null };
   if (generationId === null) throw new Error(`${req.op.id} answered without a payload or a generation id`);
   const deadline = started + clampWait(options.waitS) * 1000;
   return poll(client, generationId, deadline, POLL_CAP_MS, options.budget);
@@ -275,13 +329,21 @@ function transientPollFailure(error: IdeogramApiError): boolean {
 /** One poll; a transient failure keeps the id (pending, with the error as its note) and is counted. A poll the WAIT cuts
  * in flight is the wait ending, not a poll failure: the id is pending with nothing to note (the caller collects it with
  * ideogram_generation) — Grok r5. */
-export async function fetchGeneration(client: IdeogramClient, generationId: string, budget: CallBudget): Promise<Outcome> {
+export async function fetchGeneration(
+  client: IdeogramClient,
+  generationId: string,
+  budget: CallBudget,
+): Promise<Outcome> {
   if (GENERATION_OP === null) throw new Error("the snapshot lacks get_generation_v2");
   let result;
   try {
-    result = await client.call({ op: GENERATION_OP, path: { generation_id: generationId }, query: {}, headers: {}, body: null, dryRun: false }, budget);
+    result = await client.call(
+      { op: GENERATION_OP, path: { generation_id: generationId }, query: {}, headers: {}, body: null, dryRun: false },
+      budget,
+    );
   } catch (error) {
-    if (error instanceof IdeogramApiError && error.code === "WAIT_TIMEOUT") return { kind: "pending", generationId, note: null };
+    if (error instanceof IdeogramApiError && error.code === "WAIT_TIMEOUT")
+      return { kind: "pending", generationId, note: null };
     if (!(error instanceof IdeogramApiError) || !transientPollFailure(error)) throw error;
     COUNTERS.pollErrors += 1;
     return { kind: "pending", generationId, note: `the last poll failed: ${error.toMcpError()}` };
@@ -296,7 +358,9 @@ export function withImageKind(body: unknown): unknown {
   const parsed = BodyShape.safeParse(body);
   if (!parsed.success || parsed.data.data === undefined) return body;
   const data = parsed.data.data.map((item) =>
-    item !== null && typeof item === "object" && !("object_type" in item) ? { ...item, object_type: "duration" in item ? "video.generation" : "image.generation" } : item,
+    item !== null && typeof item === "object" && !("object_type" in item)
+      ? { ...item, object_type: "duration" in item ? "video.generation" : "image.generation" }
+      : item,
   );
   return { ...(body as Record<string, unknown>), data };
 }
@@ -305,7 +369,8 @@ function generationOutcome(generationId: string, status: number, body: unknown):
   const parsed = zGetGenerationV2Response.safeParse(withImageKind(body));
   if (!parsed.success) return contractMismatch(status, body, parsed.error);
   const g = parsed.data;
-  if (g.status === "failed") return { kind: "failed", generationId, failureReason: g.failure_reason ?? "(no reason given)" };
+  if (g.status === "failed")
+    return { kind: "failed", generationId, failureReason: g.failure_reason ?? "(no reason given)" };
   if (g.status === "pending") return { kind: "pending", generationId, note: null };
   const payload = payloadOf({ data: g.data ?? [] }) ?? { kind: "record", body };
   return { kind: "completed", generationId, payload, usageCostUsdMicros: g.usage_cost_usd_micros ?? null };
@@ -313,7 +378,14 @@ function generationOutcome(generationId: string, status: number, body: unknown):
 
 /** Polls until the wait's deadline or the call's, whichever is first: a poll never outlives either. A wait that ends
  * reports the last transient failure (`note`) the caller saw, never silence in its place. */
-async function poll(client: IdeogramClient, generationId: string, waitDeadline: number, capMs: number, budget: CallBudget, note: string | null = null): Promise<Outcome> {
+async function poll(
+  client: IdeogramClient,
+  generationId: string,
+  waitDeadline: number,
+  capMs: number,
+  budget: CallBudget,
+  note: string | null = null,
+): Promise<Outcome> {
   const bounded = boundedBy(budget, waitDeadline);
   const clock = bounded.clock;
   let delay = POLL_FIRST_MS;

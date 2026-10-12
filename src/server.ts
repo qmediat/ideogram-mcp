@@ -17,7 +17,15 @@ const { version } = createRequire(import.meta.url)("../package.json") as { versi
 
 /** Every tool of this release, in the order tools/list shows them. */
 export function toolDefinitions(): ToolDefinition[] {
-  return [...curatedDefinitions(), QUOTE_TOOL, GENERATION_TOOL, ...ACCOUNT_TOOLS, ...TRAINING_TOOLS, OPERATIONS_TOOL, RAW_TOOL];
+  return [
+    ...curatedDefinitions(),
+    QUOTE_TOOL,
+    GENERATION_TOOL,
+    ...ACCOUNT_TOOLS,
+    ...TRAINING_TOOLS,
+    OPERATIONS_TOOL,
+    RAW_TOOL,
+  ];
 }
 
 /** A tool failure as the text the client sees: the API's typed error, or the refusal's own sentence. */

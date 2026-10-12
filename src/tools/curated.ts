@@ -86,7 +86,10 @@ export const FAMILY_TOOLS: readonly FamilyToolSpec[] = [
     description:
       "Describe an image in words (Ideogram 3.0) or as a structured JSON prompt (Ideogram 4.0). Takes a local file, a public https URL or an Ideogram asset. Describe has no price quote (the API offers no dry run for it).",
     legacyInputs: {
-      describe_model_version: z.enum(["V_2", "V_3"]).optional().describe("1.x name of the model, deprecated: V_3 = model ideogram-3"),
+      describe_model_version: z
+        .enum(["V_2", "V_3"])
+        .optional()
+        .describe("1.x name of the model, deprecated: V_3 = model ideogram-3"),
     },
   },
   {
@@ -122,7 +125,8 @@ export const FAMILY_TOOLS: readonly FamilyToolSpec[] = [
 
 async function runFamilyTool(spec: FamilyToolSpec, ctx: ToolContext, args: ToolArguments): Promise<CallToolResult> {
   const call = await prepare(spec, args, ctx.remote);
-  if (answersWithFile(call.req.op)) return fileAnswer(spec.name, ctx, call.req, args.inline_images === true, call.notes); // the answer IS the file (snap mask's PNG)
+  if (answersWithFile(call.req.op))
+    return fileAnswer(spec.name, ctx, call.req, args.inline_images === true, call.notes); // the answer IS the file (snap mask's PNG)
   const run = await executeTold(ctx, call.req, call.waitS);
   if (run.kind === "result") return run.result;
   return outcomeResult(ctx, run.outcome, call.notes, { inlineImages: args.inline_images === true });
@@ -145,7 +149,8 @@ const INPAINT = FAMILY_TOOLS.find((spec) => spec.name === "ideogram_inpaint") as
 export const EDIT_ALIAS: ToolDefinition = {
   name: "ideogram_edit",
   title: "Inpaint an image (1.x name)",
-  description: "Deprecated alias of ideogram_inpaint, kept through 2.x for 1.x callers: the same arguments and models (see ideogram_inpaint's schema).",
+  description:
+    "Deprecated alias of ideogram_inpaint, kept through 2.x for 1.x callers: the same arguments and models (see ideogram_inpaint's schema).",
   inputSchema: z.looseObject({}),
   handler: (ctx, args) => runFamilyTool(INPAINT, ctx, args),
 };
