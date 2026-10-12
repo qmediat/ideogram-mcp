@@ -43,14 +43,24 @@ function greyPng(size = 1024, fill = () => 128) {
   ihdr.writeUInt32BE(size, 0);
   ihdr.writeUInt32BE(size, 4);
   ihdr[8] = 8;
-  const rows = Buffer.concat(Array.from({ length: size }, (_, y) => Buffer.concat([Buffer.from([0]), Buffer.alloc(size, fill(y))])));
-  return Buffer.concat([Buffer.from("89504e470d0a1a0a", "hex"), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(rows)), chunk("IEND", Buffer.alloc(0))]);
+  const rows = Buffer.concat(
+    Array.from({ length: size }, (_, y) => Buffer.concat([Buffer.from([0]), Buffer.alloc(size, fill(y))])),
+  );
+  return Buffer.concat([
+    Buffer.from("89504e470d0a1a0a", "hex"),
+    chunk("IHDR", ihdr),
+    chunk("IDAT", deflateSync(rows)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
 }
 
 const image = join(dir, "grey.png");
 await writeFile(image, greyPng());
 const mask = join(dir, "mask.png"); // black (edit) on top, white (keep) below: a mask must hold both regions
-await writeFile(mask, greyPng(1024, (y) => (y < 512 ? 0 : 255)));
+await writeFile(
+  mask,
+  greyPng(1024, (y) => (y < 512 ? 0 : 255)),
+);
 
 /** Values for the fields a model requires; a required field not listed here makes the model skipped, with its name. */
 const MINIMAL = {
@@ -89,7 +99,8 @@ function minimalArguments(spec, variant) {
   const source = ["image", "images"].find((f) => fileFields.has(f));
   if (source !== undefined && !(source in args) && spec.family !== "generate") args[source] = MINIMAL[source]; // generate is quoted as text-to-image
   if (spec.family === "inpaint" || spec.family === "remove_object") args.mask = mask;
-  if (variant.fields.has("character_reference_images")) args.character_reference_images = MINIMAL.character_reference_images; // the API requires one; the schema does not say so
+  if (variant.fields.has("character_reference_images"))
+    args.character_reference_images = MINIMAL.character_reference_images; // the API requires one; the schema does not say so
   if (spec.family === "video_reference") args.reference_images = [image]; // the API requires a reference image or video; the prose says so, the schema does not
   if (spec.family.startsWith("video")) args.duration = minimumDuration(variant); // omitted, Seedance is quoted at its MAXIMUM length (measured 2026-10-11): the smallest request names the minimum
   return { args };
@@ -97,7 +108,11 @@ function minimalArguments(spec, variant) {
 
 function minimumDuration(variant) {
   const duration = z.toJSONSchema(variant.schema, { io: "input", unrepresentable: "any" }).properties?.duration;
-  assert.equal(typeof duration?.minimum, "number", `${variant.model}: the schema states no minimum duration — the smallest request cannot be named`);
+  assert.equal(
+    typeof duration?.minimum,
+    "number",
+    `${variant.model}: the schema states no minimum duration — the smallest request cannot be named`,
+  );
   return duration.minimum;
 }
 
@@ -117,56 +132,77 @@ test("every curated quotable operation has a minimal request its tool accepts, o
     assert.equal(call.req.op.id, c.variant.op.id);
   }
   const skipped = cases.filter((x) => x.skip).map((x) => `${x.variant.model}: ${x.skip}`);
-  assert.ok(skipped.every((line) => /custom_model_uri|stacked_custom_models/.test(line)), `only custom models are skipped: ${skipped.join("; ")}`);
+  assert.ok(
+    skipped.every((line) => /custom_model_uri|stacked_custom_models/.test(line)),
+    `only custom models are skipped: ${skipped.join("; ")}`,
+  );
 });
 
-test("live: every curated quotable operation returns a PriceQuote; the quotes go to docs/PRICES-<date>.md", { skip: process.env.IDEOGRAM_API_KEY ? false : "IDEOGRAM_API_KEY is not set (and the account needs a non-zero balance: a quote may check it)" }, async () => {
-  const client = new IdeogramClient(defaultClientOptions(process.env.IDEOGRAM_API_KEY));
-  const rows = [];
-  const failures = [];
-  for (const c of quotableCases()) {
-    if (c.skip) {
-      rows.push(`| ${c.spec.name} | ${c.variant.model} | — | — | — | skipped: ${c.skip} |`);
-      continue;
-    }
-    const call = await prepare(c.spec, c.args, undefined);
-    let outcome;
-    try {
-      outcome = await quote(client, call.req, openBudget());
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      // an account-level refusal (a feature flag, an operation this account is not authorized for) is a fact of the key, not a failure of the tool
-      if (error instanceof IdeogramApiError && (error.status === 403 || /not authorized for this operation|Required feature flag/i.test(message))) {
-        rows.push(`| ${c.spec.name} | ${c.variant.model} | — | — | — | not available to this account: ${message.slice(0, 120)} |`);
+test(
+  "live: every curated quotable operation returns a PriceQuote; the quotes go to docs/PRICES-<date>.md",
+  {
+    skip: process.env.IDEOGRAM_API_KEY
+      ? false
+      : "IDEOGRAM_API_KEY is not set (and the account needs a non-zero balance: a quote may check it)",
+  },
+  async () => {
+    const client = new IdeogramClient(defaultClientOptions(process.env.IDEOGRAM_API_KEY));
+    const rows = [];
+    const failures = [];
+    for (const c of quotableCases()) {
+      if (c.skip) {
+        rows.push(`| ${c.spec.name} | ${c.variant.model} | — | — | — | skipped: ${c.skip} |`);
         continue;
       }
-      failures.push(`${c.variant.op.id}: ${message}`);
-      rows.push(`| ${c.spec.name} | ${c.variant.model} | — | — | — | FAILED: ${message.slice(0, 120)} |`);
-      continue;
+      const call = await prepare(c.spec, c.args, undefined);
+      let outcome;
+      try {
+        outcome = await quote(client, call.req, openBudget());
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        // an account-level refusal (a feature flag, an operation this account is not authorized for) is a fact of the key, not a failure of the tool
+        if (
+          error instanceof IdeogramApiError &&
+          (error.status === 403 || /not authorized for this operation|Required feature flag/i.test(message))
+        ) {
+          rows.push(
+            `| ${c.spec.name} | ${c.variant.model} | — | — | — | not available to this account: ${message.slice(0, 120)} |`,
+          );
+          continue;
+        }
+        failures.push(`${c.variant.op.id}: ${message}`);
+        rows.push(`| ${c.spec.name} | ${c.variant.model} | — | — | — | FAILED: ${message.slice(0, 120)} |`);
+        continue;
+      }
+      if (outcome.kind !== "quote") {
+        failures.push(`${c.variant.op.id}: ${JSON.stringify(outcome).slice(0, 200)}`);
+        rows.push(`| ${c.spec.name} | ${c.variant.model} | — | — | — | FAILED: ${outcome.kind} |`);
+        continue;
+      }
+      const q = outcome.quote;
+      rows.push(
+        `| ${c.spec.name} | ${c.variant.model} | ${q.usd}${q.upperBoundUsd ? ` (≤ ${q.upperBoundUsd})` : ""} | ${q.credits} | ${q.qualifier} | ${q.billingIdentifier} × ${q.quantity} |`,
+      );
     }
-    if (outcome.kind !== "quote") {
-      failures.push(`${c.variant.op.id}: ${JSON.stringify(outcome).slice(0, 200)}`);
-      rows.push(`| ${c.spec.name} | ${c.variant.model} | — | — | — | FAILED: ${outcome.kind} |`);
-      continue;
-    }
-    const q = outcome.quote;
-    rows.push(`| ${c.spec.name} | ${c.variant.model} | ${q.usd}${q.upperBoundUsd ? ` (≤ ${q.upperBoundUsd})` : ""} | ${q.credits} | ${q.qualifier} | ${q.billingIdentifier} × ${q.quantity} |`);
-  }
-  const date = new Date().toISOString().slice(0, 10);
-  const doc = [
-    `# Ideogram prices — quotes of ${date}`,
-    "",
-    "Each row is the API's own `dry_run` quote of the smallest request the curated tool sends for that model (one image,",
-    "default options, a 1024×1024 grey source image where one is needed, generate quoted as text-to-image). Your account's",
-    "prices may differ; `ideogram_quote` asks",
-    "for yours, per request.",
-    "",
-    "| tool | model | USD | credits | qualifier | billing identifier × quantity |",
-    "|---|---|---|---|---|---|",
-    ...rows,
-    "",
-  ].join("\n");
-  await writeFile(new URL(`../docs/PRICES-${date}.md`, import.meta.url), doc);
-  assert.deepEqual(failures, [], `every row is in docs/PRICES-${date}.md; these failed:\n${failures.join("\n")}`);
-  assert.ok(rows.filter((r) => / exact | estimate /.test(r)).length >= 30, "at least 30 quotes answered: a key-wide refusal is not a pass");
-});
+    const date = new Date().toISOString().slice(0, 10);
+    const doc = [
+      `# Ideogram prices — quotes of ${date}`,
+      "",
+      "Each row is the API's own `dry_run` quote of the smallest request the curated tool sends for that model (one image,",
+      "default options, a 1024×1024 grey source image where one is needed, generate quoted as text-to-image). Your account's",
+      "prices may differ; `ideogram_quote` asks",
+      "for yours, per request.",
+      "",
+      "| tool | model | USD | credits | qualifier | billing identifier × quantity |",
+      "|---|---|---|---|---|---|",
+      ...rows,
+      "",
+    ].join("\n");
+    await writeFile(new URL(`../docs/PRICES-${date}.md`, import.meta.url), doc);
+    assert.deepEqual(failures, [], `every row is in docs/PRICES-${date}.md; these failed:\n${failures.join("\n")}`);
+    assert.ok(
+      rows.filter((r) => / exact | estimate /.test(r)).length >= 30,
+      "at least 30 quotes answered: a key-wide refusal is not a pass",
+    );
+  },
+);

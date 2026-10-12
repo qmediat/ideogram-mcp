@@ -5,9 +5,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const { classify, isBearerOnly, DOCUMENTED, V1_ONLY, EXPOSABLE_CLASSES, OPERATION_CLASSES, operationKey } = await import(
-  "../dist/spec/classify.js"
-);
+const { classify, isBearerOnly, DOCUMENTED, V1_ONLY, EXPOSABLE_CLASSES, OPERATION_CLASSES, operationKey } =
+  await import("../dist/spec/classify.js");
 const { SPEC_OPERATIONS, SPEC_DOCUMENT_SECURITY } = await import("../dist/generated/operations.gen.js");
 
 const classOf = (op) => classify(op, SPEC_DOCUMENT_SECURITY);
@@ -70,7 +69,9 @@ test("a Bearer-only operation is never exposable, whatever its path", () => {
     assert.equal(EXPOSABLE_CLASSES.has(classOf(op)), false);
   }
   assert.deepEqual(
-    keysOf("bearer_only").filter((k) => k.includes("/v2/")).sort(),
+    keysOf("bearer_only")
+      .filter((k) => k.includes("/v2/"))
+      .sort(),
     ["GET /v2/integrations", "POST /v2/integrations/{integration_type}/assets/search"],
     "a /v2 path does not make a Bearer-only operation documented",
   );
@@ -85,10 +86,21 @@ test("the document default (API key OR Bearer) is not Bearer-only; an operation 
 
 test("class follows capability and auth, not URL age: /datasets and /models are v1_only, /generate is legacy", () => {
   const byKey = new Map(SPEC_OPERATIONS.map((op) => [operationKey(op), classOf(op)]));
-  for (const key of ["GET /datasets", "POST /datasets/{dataset_id}/train_model", "GET /models", "GET /models/{model_id}"]) {
+  for (const key of [
+    "GET /datasets",
+    "POST /datasets/{dataset_id}/train_model",
+    "GET /models",
+    "GET /models/{model_id}",
+  ]) {
     assert.equal(byKey.get(key), "v1_only", key);
   }
-  for (const key of ["POST /generate", "POST /edit", "POST /describe", "POST /v1/ideogram-v3/generate", "POST /v1/ideogram-v3/inpaint"]) {
+  for (const key of [
+    "POST /generate",
+    "POST /edit",
+    "POST /describe",
+    "POST /v1/ideogram-v3/generate",
+    "POST /v1/ideogram-v3/inpaint",
+  ]) {
     assert.equal(byKey.get(key), "legacy", key);
   }
   assert.equal(byKey.get("POST /mini-apps/publish"), "internal", "an API-key path the provider keeps for itself");

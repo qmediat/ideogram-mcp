@@ -39,7 +39,13 @@ test("ideogram_generate defaults to ideogram-3 and sends the fields as given, as
 });
 
 test("each model goes to its own path with its own fields: 4.5 takes quality and source images", async () => {
-  const { requests } = await call("ideogram_generate", { model: "ideogram-4-5", prompt: "edit it", images: [png], quality: "high", wait_s: 0 });
+  const { requests } = await call("ideogram_generate", {
+    model: "ideogram-4-5",
+    prompt: "edit it",
+    images: [png],
+    quality: "high",
+    wait_s: 0,
+  });
   assert.equal(requests[0].url, "/v2/image/generate/ideogram-4-5");
   assert.match(requests[0].headers["content-type"], /^multipart\/form-data; boundary=/);
   const body = requests[0].body.toString("latin1");
@@ -60,10 +66,19 @@ test("a field the chosen model does not take is refused before any request, nami
       () => generate.handler(ctx, { model: "ideogram-4", prompt: "x", style_codes: ["ABCD1234"] }),
       /`style_codes` is not a parameter of ideogram-4; the models that take it: .*ideogram-3\b/,
     );
-    await assert.rejects(() => generate.handler(ctx, { prompt: "x", denoise: 0.5 }), /no ideogram_generate model takes it/);
+    await assert.rejects(
+      () => generate.handler(ctx, { prompt: "x", denoise: 0.5 }),
+      /no ideogram_generate model takes it/,
+    );
     await assert.rejects(() => generate.handler(ctx, { prompt: "x", async: true }), /managed by this tool: use wait_s/);
-    await assert.rejects(() => generate.handler(ctx, { prompt: "x", webhook_url: "https://example.com" }), /through ideogram_api only/);
-    await assert.rejects(() => generate.handler(ctx, { model: "ideogram-9", prompt: "x" }), /has no model ideogram-9; one of: auto/);
+    await assert.rejects(
+      () => generate.handler(ctx, { prompt: "x", webhook_url: "https://example.com" }),
+      /through ideogram_api only/,
+    );
+    await assert.rejects(
+      () => generate.handler(ctx, { model: "ideogram-9", prompt: "x" }),
+      /has no model ideogram-9; one of: auto/,
+    );
     await assert.rejects(() => generate.handler(ctx, { prompt: "" }), /ideogram-3 refuses the input:\nprompt:/);
     assert.equal(api.requests.length, 0);
   } finally {
@@ -73,21 +88,45 @@ test("a field the chosen model does not take is refused before any request, nami
 
 test("the 1.x adapter: model 3.0, uppercase speed / magic prompt / style type are mapped, and the result says so", async () => {
   const { requests, result } = await call("ideogram_generate", {
-    model: "3.0", prompt: "x", rendering_speed: "TURBO", magic_prompt: "OFF", style_type: "REALISTIC", wait_s: 0,
+    model: "3.0",
+    prompt: "x",
+    rendering_speed: "TURBO",
+    magic_prompt: "OFF",
+    style_type: "REALISTIC",
+    wait_s: 0,
   });
   assert.equal(requests[0].url, "/v2/image/generate/ideogram-3");
-  assert.deepEqual(sentJson(requests), { prompt: "x", rendering_speed: "turbo", magic_prompt: "off", style_type: "realistic", private: true, async: true });
-  assert.match(text(result), /Mapped from the 1.x inputs: model "3.0" → ideogram-3; rendering_speed TURBO → turbo; magic_prompt OFF → off; style_type REALISTIC → realistic/);
+  assert.deepEqual(sentJson(requests), {
+    prompt: "x",
+    rendering_speed: "turbo",
+    magic_prompt: "off",
+    style_type: "realistic",
+    private: true,
+    async: true,
+  });
+  assert.match(
+    text(result),
+    /Mapped from the 1.x inputs: model "3.0" → ideogram-3; rendering_speed TURBO → turbo; magic_prompt OFF → off; style_type REALISTIC → realistic/,
+  );
 });
 
 test("the 1.x adapter: a 1.x palette preset name (EMBER) becomes v2's ember", async () => {
-  const { requests, result } = await call("ideogram_generate", { prompt: "x", color_palette: { name: "EMBER" }, wait_s: 0 });
+  const { requests, result } = await call("ideogram_generate", {
+    prompt: "x",
+    color_palette: { name: "EMBER" },
+    wait_s: 0,
+  });
   assert.deepEqual(sentJson(requests).color_palette, { name: "ember" });
   assert.match(text(result), /color_palette EMBER → ember/);
 });
 
 test("the 1.x adapter: QUALITY on Ideogram 4.5 becomes quality high; 4.0 keeps rendering_speed; FLASH is refused", async () => {
-  const v45 = await call("ideogram_generate", { model: "ideogram-4-5", prompt: "x", rendering_speed: "QUALITY", wait_s: 0 });
+  const v45 = await call("ideogram_generate", {
+    model: "ideogram-4-5",
+    prompt: "x",
+    rendering_speed: "QUALITY",
+    wait_s: 0,
+  });
   assert.deepEqual(sentJson(v45.requests), { prompt: "x", quality: "high", private: true, async: true });
   assert.match(text(v45.result), /rendering_speed QUALITY → quality high/);
   const v4 = await call("ideogram_generate", { model: "4.0", prompt: "x", rendering_speed: "DEFAULT", wait_s: 0 });
@@ -99,7 +138,9 @@ test("the 1.x adapter: QUALITY on Ideogram 4.5 becomes quality high; 4.0 keeps r
 
 test("describe: describe_model_version V_3 names ideogram-3, V_2 is refused; the description is returned", async () => {
   const body = { created: "2026-10-07T00:00:00Z", description_id: "d", descriptions: [{ text: "a red door" }] };
-  const { requests, result } = await call("ideogram_describe", { image: png, describe_model_version: "V_3" }, () => ({ json: body }));
+  const { requests, result } = await call("ideogram_describe", { image: png, describe_model_version: "V_3" }, () => ({
+    json: body,
+  }));
   assert.equal(requests[0].url, "/v2/image/describe/ideogram-3");
   assert.match(text(result), /1\. a red door/);
   assert.match(text(result), /describe_model_version V_3 → model ideogram-3/);
@@ -120,10 +161,27 @@ test("a completed generation: safe images saved, unsafe ones counted, the id and
     if (req.method === "POST") return accepted("g7");
     return {
       json: {
-        generation_id: "g7", status: "completed", created: "2026-10-07T00:00:00Z", usage_cost_usd_micros: 120000,
+        generation_id: "g7",
+        status: "completed",
+        created: "2026-10-07T00:00:00Z",
+        usage_cost_usd_micros: 120000,
         data: [
-          { object_type: "image.generation", url: `${api.base}/img/a.png`, prompt: "p", resolution: "1024x1024", is_image_safe: true, seed: 5 },
-          { object_type: "image.generation", url: null, prompt: "p", resolution: "1024x1024", is_image_safe: false, seed: 6 },
+          {
+            object_type: "image.generation",
+            url: `${api.base}/img/a.png`,
+            prompt: "p",
+            resolution: "1024x1024",
+            is_image_safe: true,
+            seed: 5,
+          },
+          {
+            object_type: "image.generation",
+            url: null,
+            prompt: "p",
+            resolution: "1024x1024",
+            is_image_safe: false,
+            seed: 6,
+          },
         ],
       },
     };
@@ -140,34 +198,77 @@ test("a completed generation: safe images saved, unsafe ones counted, the id and
 
 test("a generation still running is returned with its id and how to collect it; a failed one is an error", async () => {
   const { result } = await call("ideogram_generate", { prompt: "x", wait_s: 0 });
-  assert.match(text(result), /Accepted: generation g is still running\.\nCollect it with ideogram_generation \{"generation_id": "g"\}/);
+  assert.match(
+    text(result),
+    /Accepted: generation g is still running\.\nCollect it with ideogram_generation \{"generation_id": "g"\}/,
+  );
   const failed = await call("ideogram_generate", { prompt: "x" }, (req) =>
-    req.method === "POST" ? accepted("g8") : { json: { generation_id: "g8", status: "failed", created: "2026-10-07T00:00:00Z", failure_reason: "content_policy_violation" } },
+    req.method === "POST"
+      ? accepted("g8")
+      : {
+          json: {
+            generation_id: "g8",
+            status: "failed",
+            created: "2026-10-07T00:00:00Z",
+            failure_reason: "content_policy_violation",
+          },
+        },
   );
   assert.equal(failed.result.isError, true);
   assert.match(text(failed.result), /g8 failed: content_policy_violation/);
 });
 
 test("ideogram_generation collects an id; a contract mismatch is an error that keeps the id", async () => {
-  const { requests, result } = await call("ideogram_generation", { generation_id: "abc", wait_s: 0 }, () => pending("abc"));
+  const { requests, result } = await call("ideogram_generation", { generation_id: "abc", wait_s: 0 }, () =>
+    pending("abc"),
+  );
   assert.equal(requests[0].url, "/v2/generations/abc");
   assert.match(text(result), /generation abc is still running/);
-  const broken = await call("ideogram_generate", { prompt: "x" }, () => ({ json: { generation_id: "g9", seed: "nine" } }));
+  const broken = await call("ideogram_generate", { prompt: "x" }, () => ({
+    json: { generation_id: "g9", seed: "nine" },
+  }));
   assert.equal(broken.result.isError, true);
   assert.match(text(broken.result), /does not match its own specification/);
   assert.match(text(broken.result), /Generation id: g9/);
 });
 
 test("ideogram_quote prices exactly the tool's call with dry_run and refuses describe locally", async () => {
-  const priceQuote = { object: "price_quote", billing_identifier: "ideogram-3-turbo", quantity: 1, usd_micros: 30000, credit_millis: 30, qualifier: "exact" };
-  const { requests, result } = await call("ideogram_quote", { tool: "ideogram_generate", arguments: { prompt: "x", rendering_speed: "TURBO" } }, () => ({ json: priceQuote }));
+  const priceQuote = {
+    object: "price_quote",
+    billing_identifier: "ideogram-3-turbo",
+    quantity: 1,
+    usd_micros: 30000,
+    credit_millis: 30,
+    qualifier: "exact",
+  };
+  const { requests, result } = await call(
+    "ideogram_quote",
+    { tool: "ideogram_generate", arguments: { prompt: "x", rendering_speed: "TURBO" } },
+    () => ({ json: priceQuote }),
+  );
   assert.equal(requests[0].url, "/v2/image/generate/ideogram-3?dry_run=true");
-  assert.deepEqual(sentJson(requests), { prompt: "x", rendering_speed: "turbo", private: true, async: true }, "exactly the request the tool would send");
+  assert.deepEqual(
+    sentJson(requests),
+    { prompt: "x", rendering_speed: "turbo", private: true, async: true },
+    "exactly the request the tool would send",
+  );
   assert.match(text(result), /0\.030000 USD exact/);
   assert.match(text(result), /Nothing was generated or billed/);
-  const audio = await call("ideogram_quote", { tool: "ideogram_video_text", arguments: { prompt: "x", duration: 4, generate_audio: true } }, () => ({ json: { ...priceQuote, usd_micros: 924000, credit_millis: 924 } }));
-  assert.match(text(audio.result), /0\.924000 USD exact; the dry run does not price generate_audio \(Ideogram: an audio track roughly doubles the cost\)\./, "a quote with audio asked says what the dry run leaves out");
-  const silent = await call("ideogram_quote", { tool: "ideogram_video_text", arguments: { prompt: "x", duration: 4 } }, () => ({ json: { ...priceQuote, usd_micros: 924000, credit_millis: 924 } }));
+  const audio = await call(
+    "ideogram_quote",
+    { tool: "ideogram_video_text", arguments: { prompt: "x", duration: 4, generate_audio: true } },
+    () => ({ json: { ...priceQuote, usd_micros: 924000, credit_millis: 924 } }),
+  );
+  assert.match(
+    text(audio.result),
+    /0\.924000 USD exact; the dry run does not price generate_audio \(Ideogram: an audio track roughly doubles the cost\)\./,
+    "a quote with audio asked says what the dry run leaves out",
+  );
+  const silent = await call(
+    "ideogram_quote",
+    { tool: "ideogram_video_text", arguments: { prompt: "x", duration: 4 } },
+    () => ({ json: { ...priceQuote, usd_micros: 924000, credit_millis: 924 } }),
+  );
   assert.doesNotMatch(text(silent.result), /generate_audio/, "no caveat when no audio was asked");
   const describe = await call("ideogram_quote", { tool: "ideogram_describe", arguments: { image: png } });
   assert.equal(describe.result.isError, true);
@@ -192,15 +293,37 @@ test("ideogram_api refuses by class, by the support table and undocumented opera
 });
 
 test("ideogram_api checks the body against the operation's schema and runs a served operation", async () => {
-  const unknown = await call("ideogram_api", { operation: "post_remove_background_v2", files: [{ field: "image", path: png }], params: { body: { seed: 1 } } }).catch((e) => e);
+  const unknown = await call("ideogram_api", {
+    operation: "post_remove_background_v2",
+    files: [{ field: "image", path: png }],
+    params: { body: { seed: 1 } },
+  }).catch((e) => e);
   assert.match(unknown.message, /body: unknown field\(s\) seed; the fields: async, image, image_asset_identifier/);
-  const wrongType = await call("ideogram_api", { operation: "post_precise_edit_image_v2_ideogram45", params: { body: { prompt: 5 } } }).catch((e) => e);
+  const wrongType = await call("ideogram_api", {
+    operation: "post_precise_edit_image_v2_ideogram45",
+    params: { body: { prompt: 5 } },
+  }).catch((e) => e);
   assert.match(wrongType.message, /body: prompt: Invalid input: expected string/);
-  const byAsset = await call("ideogram_api", { operation: "post_remove_background_v2", params: { body: {} } }).catch((e) => e);
-  assert.match(byAsset.message, /image_asset_identifier/, "a JSON call (no file) is checked against the JSON body, which needs the asset");
-  const { requests, result } = await call("ideogram_api", {
-    operation: "post_reframe_image_auto", allow_undocumented: true, files: [{ field: "image", path: png }], params: { body: { aspect_ratio: "16:9" } }, wait_s: 0,
-  }, (req) => (req.method === "POST" ? { json: { generation_id: "r1", seed: 1, width: 1024, height: 1024 } } : pending("r1")));
+  const byAsset = await call("ideogram_api", { operation: "post_remove_background_v2", params: { body: {} } }).catch(
+    (e) => e,
+  );
+  assert.match(
+    byAsset.message,
+    /image_asset_identifier/,
+    "a JSON call (no file) is checked against the JSON body, which needs the asset",
+  );
+  const { requests, result } = await call(
+    "ideogram_api",
+    {
+      operation: "post_reframe_image_auto",
+      allow_undocumented: true,
+      files: [{ field: "image", path: png }],
+      params: { body: { aspect_ratio: "16:9" } },
+      wait_s: 0,
+    },
+    (req) =>
+      req.method === "POST" ? { json: { generation_id: "r1", seed: 1, width: 1024, height: 1024 } } : pending("r1"),
+  );
   assert.equal(requests[0].url, "/v2/image/reframe/auto");
   assert.match(text(result), /undocumented \(spec_only\)/);
 });
@@ -211,7 +334,12 @@ test("ideogram_api refuses a header parameter the operation does not declare, be
     const ctx = await testContext(api.base, dir);
     const raw = await tool("ideogram_api");
     await assert.rejects(
-      () => raw.handler(ctx, { operation: "post_remove_background_v2", params: { headers: { "X-Forwarded-For": "1.2.3.4" }, body: {} }, files: [{ field: "image", path: png }] }),
+      () =>
+        raw.handler(ctx, {
+          operation: "post_remove_background_v2",
+          params: { headers: { "X-Forwarded-For": "1.2.3.4" }, body: {} },
+          files: [{ field: "image", path: png }],
+        }),
       /headers: post_remove_background_v2 takes no header parameters; not X-Forwarded-For/,
     );
     assert.equal(api.requests.length, 0);
@@ -221,24 +349,37 @@ test("ideogram_api refuses a header parameter the operation does not declare, be
 });
 
 test("a model that is not a string is refused, never silently the default (quote arguments and the edit alias bypass the SDK schema)", async () => {
-  const quote = await call("ideogram_quote", { tool: "ideogram_generate", arguments: { model: 4.5, prompt: "x" } }).catch((e) => e);
+  const quote = await call("ideogram_quote", {
+    tool: "ideogram_generate",
+    arguments: { model: 4.5, prompt: "x" },
+  }).catch((e) => e);
   assert.match(quote.message, /model must be a string, got 4\.5/);
   const edit = await call("ideogram_edit", { model: 3, image: png, mask: png, prompt: "x" }).catch((e) => e);
   assert.match(edit.message, /model must be a string/);
 });
 
 test("ideogram_api: dry_run inside params.query is refused (the dry_run argument is the quote path); a .gif upload is refused", async () => {
-  const q = await call("ideogram_api", { operation: "post_remove_background_v2", params: { query: { dry_run: true }, body: {} }, files: [{ field: "image", path: png }] }).catch((e) => e);
+  const q = await call("ideogram_api", {
+    operation: "post_remove_background_v2",
+    params: { query: { dry_run: true }, body: {} },
+    files: [{ field: "image", path: png }],
+  }).catch((e) => e);
   assert.match(q.message, /query\.dry_run: use the dry_run argument/);
   const gif = join(dir, "a.gif");
   await writeFile(gif, PNG);
   const g = await call("ideogram_remix", { image: gif, prompt: "x" }).catch((e) => e);
-  assert.match(g.message, /unsupported file type \.gif; one of \.png, \.jpg, \.jpeg, \.webp$/, "an image field takes images only");
+  assert.match(
+    g.message,
+    /unsupported file type \.gif; one of \.png, \.jpg, \.jpeg, \.webp$/,
+    "an image field takes images only",
+  );
 });
 
 test("a completed generation that lists no image says so instead of '0 of 0 saved'", async () => {
   const { result } = await call("ideogram_generate", { prompt: "x" }, (req) =>
-    req.method === "POST" ? accepted("g0") : { json: { generation_id: "g0", status: "completed", created: "2026-10-07T00:00:00Z", data: [] } },
+    req.method === "POST"
+      ? accepted("g0")
+      : { json: { generation_id: "g0", status: "completed", created: "2026-10-07T00:00:00Z", data: [] } },
   );
   assert.equal(result.isError, true);
   assert.match(text(result), /listed no image or video for this generation/);
@@ -246,15 +387,28 @@ test("a completed generation that lists no image says so instead of '0 of 0 save
 
 test("a legacy input of another tool is a foreign field: describe_model_version on ideogram_generate is refused by name", async () => {
   const error = await call("ideogram_generate", { prompt: "x", describe_model_version: "V_3" }).catch((e) => e);
-  assert.match(error.message, /`describe_model_version` is not a parameter of ideogram-3; no ideogram_generate model takes it/);
+  assert.match(
+    error.message,
+    /`describe_model_version` is not a parameter of ideogram-3; no ideogram_generate model takes it/,
+  );
 });
 
 test("ideogram_api: a misspelled location is refused, and several files of one array field are checked as an array and sent as parts", async () => {
-  const typo = await call("ideogram_api", { operation: "post_remove_background_v2", params: { bodyy: {} }, files: [{ field: "image", path: png }] });
+  const typo = await call("ideogram_api", {
+    operation: "post_remove_background_v2",
+    params: { bodyy: {} },
+    files: [{ field: "image", path: png }],
+  });
   assert.equal(typo.result.isError, true);
   assert.match(text(typo.result), /params: Unrecognized key.*bodyy/);
   const two = await call("ideogram_api", {
-    operation: "post_generate_image_v2_gpt_image2", params: { body: { prompt: "x" } }, files: [{ field: "images", path: png }, { field: "images", path: png }], wait_s: 0,
+    operation: "post_generate_image_v2_gpt_image2",
+    params: { body: { prompt: "x" } },
+    files: [
+      { field: "images", path: png },
+      { field: "images", path: png },
+    ],
+    wait_s: 0,
   });
   assert.equal(two.requests[0].url, "/v2/image/generate/gpt-image-2");
   const body = two.requests[0].body.toString("latin1");
@@ -262,49 +416,99 @@ test("ideogram_api: a misspelled location is refused, and several files of one a
 });
 
 test("ideogram_api on get_generation_v2 reads the status it returns: a failed generation is Failed, not 'still running'", async () => {
-  const { requests, result } = await call("ideogram_api", { operation: "get_generation_v2", params: { path: { generation_id: "gF" } }, wait_s: 0 }, () => ({
-    json: { generation_id: "gF", status: "failed", created: "2026-10-07T00:00:00Z", failure_reason: "content_policy_violation" },
-  }));
+  const { requests, result } = await call(
+    "ideogram_api",
+    { operation: "get_generation_v2", params: { path: { generation_id: "gF" } }, wait_s: 0 },
+    () => ({
+      json: {
+        generation_id: "gF",
+        status: "failed",
+        created: "2026-10-07T00:00:00Z",
+        failure_reason: "content_policy_violation",
+      },
+    }),
+  );
   assert.equal(requests[0].url, "/v2/generations/gF");
   assert.equal(result.isError, true);
   assert.match(text(result), /gF failed: content_policy_violation/);
 });
 
 test("a 1.x alias and the field it maps to, both given, are refused (quality + rendering_speed on Ideogram 4.5)", async () => {
-  const both = await call("ideogram_generate", { model: "ideogram-4-5", prompt: "x", quality: "very_low", rendering_speed: "QUALITY" }).catch((e) => e);
+  const both = await call("ideogram_generate", {
+    model: "ideogram-4-5",
+    prompt: "x",
+    quality: "very_low",
+    rendering_speed: "QUALITY",
+  }).catch((e) => e);
   assert.match(both.message, /rendering_speed QUALITY maps to quality, which is also given \("very_low"\); give one/);
 });
 
 test("ideogram_api refuses a body for an operation that takes none (get_generation_v2) instead of dropping it", async () => {
-  const { result, requests } = await call("ideogram_api", { operation: "get_generation_v2", params: { path: { generation_id: "g" }, body: { prompt: "x" } }, wait_s: 0 }).catch((e) => ({ result: { isError: true, content: [{ text: e.message }] }, requests: [] }));
+  const { result, requests } = await call("ideogram_api", {
+    operation: "get_generation_v2",
+    params: { path: { generation_id: "g" }, body: { prompt: "x" } },
+    wait_s: 0,
+  }).catch((e) => ({ result: { isError: true, content: [{ text: e.message }] }, requests: [] }));
   assert.match(text(result), /body: get_generation_v2 takes no body; given prompt/);
   assert.equal(requests.length, 0);
 });
 
 test("ideogram_quote refuses an unquotable tool before any file is read: describe with a missing file gets the dry_run refusal", async () => {
-  const { result, requests } = await call("ideogram_quote", { tool: "ideogram_describe", arguments: { image: join(dir, "does-not-exist.png") } });
+  const { result, requests } = await call("ideogram_quote", {
+    tool: "ideogram_describe",
+    arguments: { image: join(dir, "does-not-exist.png") },
+  });
   assert.equal(result.isError, true);
   assert.match(text(result), /does not declare dry_run/);
   assert.equal(requests.length, 0);
 });
 
 test("ideogram_api on get_generation_v2 with a wait polls a still-pending generation until it completes", async () => {
-  const done = { generation_id: "gW", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "image.generation", url: null, is_image_safe: false, seed: 1, prompt: "p", resolution: "1024x1024" }] };
-  const { requests, result } = await call("ideogram_api", { operation: "get_generation_v2", params: { path: { generation_id: "gW" } }, wait_s: 20 }, (_req, n) => (n < 3 ? pending("gW") : { json: done }));
+  const done = {
+    generation_id: "gW",
+    status: "completed",
+    created: "2026-10-07T00:00:00Z",
+    data: [
+      {
+        object_type: "image.generation",
+        url: null,
+        is_image_safe: false,
+        seed: 1,
+        prompt: "p",
+        resolution: "1024x1024",
+      },
+    ],
+  };
+  const { requests, result } = await call(
+    "ideogram_api",
+    { operation: "get_generation_v2", params: { path: { generation_id: "gW" } }, wait_s: 20 },
+    (_req, n) => (n < 3 ? pending("gW") : { json: done }),
+  );
   assert.equal(requests.length, 3, "the first lookup, then two polls");
   assert.match(text(result), /Generation gW completed/);
 });
 
 test("ideogram_operations lists a family and details one operation with its fields and limits", async () => {
   const family = await call("ideogram_operations", { family: "generate" });
-  assert.equal(text(family.result).split("\n").filter((l) => l.includes("/v2/image/generate/")).length, 18);
+  assert.equal(
+    text(family.result)
+      .split("\n")
+      .filter((l) => l.includes("/v2/image/generate/")).length,
+    18,
+  );
   const one = await call("ideogram_operations", { operation: "post_describe_image_ideogram_v3" });
   assert.match(text(one.result), /image: local file path/);
   assert.match(text(one.result), /image: 10 MB/);
   assert.doesNotMatch(text(one.result), /quotable/);
-  assert.match(text(one.result), /Rules:\n  needs a source image: image \(a local file or a public https URL\) or image_asset_identifier/);
+  assert.match(
+    text(one.result),
+    /Rules:\n  needs a source image: image \(a local file or a public https URL\) or image_asset_identifier/,
+  );
   const query = await call("ideogram_operations", { operation: "get_asset_reference_usage" });
-  assert.match(text(query.result), /Parameters:\n  limit \(query\)\n  collection_ids \(query, repeated\)\n  include_collections \(query\)\n  start_date \(query, required\)/);
+  assert.match(
+    text(query.result),
+    /Parameters:\n  limit \(query\)\n  collection_ids \(query, repeated\)\n  include_collections \(query\)\n  start_date \(query, required\)/,
+  );
   const gen = await call("ideogram_operations", { operation: "post_generate_image_v2_ideogram_v3" });
   assert.doesNotMatch(text(gen.result), /needs a source image/, "generate has no source rule");
 });
@@ -315,7 +519,23 @@ test("a download the call's budget cuts is 'Not saved' with the way to collect i
     if (req.method === "POST") return accepted("g10");
     if (req.url.startsWith("/v2/generations/")) {
       ctx.clock.t += 60_000; // the poll is answered as the call's 55 s run out: the result is known, the download cannot start
-      return { json: { generation_id: "g10", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ url: `${api.base}/img.png`, prompt: "x", resolution: "1024x1024", is_image_safe: true, seed: 1, object_type: "image.generation" }] } };
+      return {
+        json: {
+          generation_id: "g10",
+          status: "completed",
+          created: "2026-10-07T00:00:00Z",
+          data: [
+            {
+              url: `${api.base}/img.png`,
+              prompt: "x",
+              resolution: "1024x1024",
+              is_image_safe: true,
+              seed: 1,
+              object_type: "image.generation",
+            },
+          ],
+        },
+      };
     }
     return { status: 200, headers: { "content-type": "image/png" }, body: PNG };
   });
@@ -323,7 +543,10 @@ test("a download the call's budget cuts is 'Not saved' with the way to collect i
     ctx = await testContext(api.base, join(dir, "cut"));
     const result = await (await tool("ideogram_generate")).handler(ctx, { prompt: "x" });
     assert.match(text(result), /Generation g10 completed\./);
-    assert.match(text(result), /Not saved: .*img\.png — the call's time ran out before this request could be made \(ideogram_generation with the id above saves the generation's files in a new call\)/);
+    assert.match(
+      text(result),
+      /Not saved: .*img\.png — the call's time ran out before this request could be made \(ideogram_generation with the id above saves the generation's files in a new call\)/,
+    );
     assert.equal(api.requests.filter((r) => r.url === "/img.png").length, 0, "no download started past the deadline");
   } finally {
     await api.close();
@@ -334,21 +557,44 @@ test("ideogram_api refuses async: false for a run (its result would arrive only 
   const api = await startFakeApi(() => accepted("g"));
   try {
     const ctx = await testContext(api.base, dir);
-    await assert.rejects(async () => (await tool("ideogram_api")).handler(ctx, { operation: "post_generate_image_v2_ideogram_v3", params: { body: { prompt: "x", async: false } } }), /async: false is not served/);
+    await assert.rejects(
+      async () =>
+        (await tool("ideogram_api")).handler(ctx, {
+          operation: "post_generate_image_v2_ideogram_v3",
+          params: { body: { prompt: "x", async: false } },
+        }),
+      /async: false is not served/,
+    );
     assert.equal(api.requests.length, 0, "nothing sent");
   } finally {
     await api.close();
   }
-  const priceQuote = { object: "price_quote", billing_identifier: "ideogram-3", quantity: 1, usd_micros: 60000, credit_millis: 60, qualifier: "exact" };
-  const quoted = await call("ideogram_api", { operation: "post_generate_image_v2_ideogram_v3", params: { body: { prompt: "x", async: false } }, dry_run: true }, () => ({ json: priceQuote }));
+  const priceQuote = {
+    object: "price_quote",
+    billing_identifier: "ideogram-3",
+    quantity: 1,
+    usd_micros: 60000,
+    credit_millis: 60,
+    qualifier: "exact",
+  };
+  const quoted = await call(
+    "ideogram_api",
+    { operation: "post_generate_image_v2_ideogram_v3", params: { body: { prompt: "x", async: false } }, dry_run: true },
+    () => ({ json: priceQuote }),
+  );
   assert.equal(quoted.result.isError, undefined, text(quoted.result));
   assert.equal(quoted.requests.length, 1);
   assert.match(quoted.requests[0].url, /dry_run=true/);
 });
 
 test("ideogram_precise_edit: Ideogram 4.5 by default, the image, mask and reference images as parts, the rules before any request", async () => {
-  const acceptedEdit = (req) => (req.method === "POST" ? { json: { generation_id: "e", seed: 1, generation_kind: "sampling" } } : pending("e"));
-  const { requests, result } = await call("ideogram_precise_edit", { prompt: "swap the sign", image: png, mask: png, reference_images: [png, png], context_window: "auto", wait_s: 0 }, acceptedEdit);
+  const acceptedEdit = (req) =>
+    req.method === "POST" ? { json: { generation_id: "e", seed: 1, generation_kind: "sampling" } } : pending("e");
+  const { requests, result } = await call(
+    "ideogram_precise_edit",
+    { prompt: "swap the sign", image: png, mask: png, reference_images: [png, png], context_window: "auto", wait_s: 0 },
+    acceptedEdit,
+  );
   assert.equal(result.isError, undefined, text(result));
   assert.match(text(result), /Accepted: generation e is still running/);
   assert.equal(requests[0].url, "/v2/image/precise-edit/ideogram-4-5");
@@ -358,10 +604,20 @@ test("ideogram_precise_edit: Ideogram 4.5 by default, the image, mask and refere
   assert.equal(body.split('name="reference_images"; filename="reference_images.png"').length - 1, 2);
   assert.match(body, /name="context_window"\r\n\r\nauto\r\n/);
   assert.match(body, /name="async"\r\n\r\ntrue\r\n/);
-  const noMask = await call("ideogram_precise_edit", { prompt: "x", image: png, context_window: "auto" }).catch((e) => e);
+  const noMask = await call("ideogram_precise_edit", { prompt: "x", image: png, context_window: "auto" }).catch(
+    (e) => e,
+  );
   assert.match(noMask.message, /context_window "auto" needs a mask/);
-  const speed = await call("ideogram_precise_edit", { prompt: "x", image: png, rendering_speed: "TURBO", wait_s: 0 }, acceptedEdit);
-  assert.match(speed.requests[0].body.toString("latin1"), /name="quality"\r\n\r\nlow\r\n/, "the 1.x speed maps to quality on 4.5");
+  const speed = await call(
+    "ideogram_precise_edit",
+    { prompt: "x", image: png, rendering_speed: "TURBO", wait_s: 0 },
+    acceptedEdit,
+  );
+  assert.match(
+    speed.requests[0].body.toString("latin1"),
+    /name="quality"\r\n\r\nlow\r\n/,
+    "the 1.x speed maps to quality on 4.5",
+  );
   assert.match(text(speed.result), /rendering_speed TURBO → quality low/);
 });
 
@@ -372,11 +628,18 @@ test("ideogram_remove_background and ideogram_remove_object go to their ideogram
   const obj = await call("ideogram_remove_object", { image: png, mask: png, seed: 7, wait_s: 0 });
   assert.equal(obj.requests[0].url, "/v2/image/remove-object/ideogram-1");
   assert.match(obj.requests[0].body.toString("latin1"), /name="seed"\r\n\r\n7\r\n/);
-  assert.doesNotMatch(obj.requests[0].body.toString("latin1"), /name="async"/, "remove object takes no async field: it is a job by construction");
+  assert.doesNotMatch(
+    obj.requests[0].body.toString("latin1"),
+    /name="async"/,
+    "remove object takes no async field: it is a job by construction",
+  );
   const missing = await call("ideogram_remove_object", { image: png }).catch((e) => e);
   assert.match(missing.message, /remove object needs the source .* and the mask/);
   const prompt = await call("ideogram_remove_background", { image: png, prompt: "x" }).catch((e) => e);
-  assert.match(prompt.message, /`prompt` is not a parameter of ideogram-1; no ideogram_remove_background model takes it/);
+  assert.match(
+    prompt.message,
+    /`prompt` is not a parameter of ideogram-1; no ideogram_remove_background model takes it/,
+  );
 });
 
 test("ideogram_layerize: font files go under font_candidate_files as fonts, an image there is refused, and the result saves the base image and lists the text blocks", async () => {
@@ -387,14 +650,45 @@ test("ideogram_layerize: font files go under font_candidate_files as fonts, an i
     if (req.method === "POST") return accepted("L1");
     return {
       json: {
-        generation_id: "L1", status: "completed", created: "2026-10-07T00:00:00Z",
-        data: [{ object_type: "layerized_image", base_image_url: `${api.base}/img/base.png`, is_image_safe: true, resolution: "1024x1024", seed: 3, text_blocks: [{ text: "SALE", font_name: "Brand", font_size: 72, color: "#212121", alignment: "left", formatting: ["bold"], x: 10, y: 20, width: 300, height: 80 }] }],
+        generation_id: "L1",
+        status: "completed",
+        created: "2026-10-07T00:00:00Z",
+        data: [
+          {
+            object_type: "layerized_image",
+            base_image_url: `${api.base}/img/base.png`,
+            is_image_safe: true,
+            resolution: "1024x1024",
+            seed: 3,
+            text_blocks: [
+              {
+                text: "SALE",
+                font_name: "Brand",
+                font_size: 72,
+                color: "#212121",
+                alignment: "left",
+                formatting: ["bold"],
+                x: 10,
+                y: 20,
+                width: 300,
+                height: 80,
+              },
+            ],
+          },
+        ],
       },
     };
   };
-  const { requests, result, ctx } = await call("ideogram_layerize", { image: png, font_candidate_files: [ttf], prompt: "a poster" }, handler);
+  const { requests, result, ctx } = await call(
+    "ideogram_layerize",
+    { image: png, font_candidate_files: [ttf], prompt: "a poster" },
+    handler,
+  );
   assert.equal(requests[0].url, "/v2/design/layerize/ideogram-3");
-  assert.match(requests[0].body.toString("latin1"), /name="font_candidate_files"; filename="font_candidate_files.ttf"\r\nContent-Type: font\/ttf/);
+  assert.match(
+    requests[0].body.toString("latin1"),
+    /name="font_candidate_files"; filename="font_candidate_files.ttf"\r\nContent-Type: font\/ttf/,
+  );
   const out = text(result);
   assert.match(out, /Generation L1 completed\./);
   assert.match(out, /1 of 1 base image\(s\) saved \(1 design\(s\)\)\./);
@@ -403,14 +697,33 @@ test("ideogram_layerize: font files go under font_candidate_files as fonts, an i
   assert.equal(result.isError, undefined);
   assert.equal((await readdir(ctx.outputDir)).length, 1);
   const notFont = await call("ideogram_layerize", { image: png, font_candidate_files: [png] }).catch((e) => e);
-  assert.match(notFont.message, /font_candidate_files: unsupported file type \.png; one of \.ttf, \.otf, \.woff, \.woff2/);
+  assert.match(
+    notFont.message,
+    /font_candidate_files: unsupported file type \.png; one of \.ttf, \.otf, \.woff, \.woff2/,
+  );
   const fontAsImage = await call("ideogram_layerize", { image: ttf }).catch((e) => e);
   assert.match(fontAsImage.message, /image: unsupported file type \.ttf; one of \.png, \.jpg, \.jpeg, \.webp/);
 });
 
 test("ideogram_generation shows a layerized design collected by id the same way; a design Ideogram withheld is an error, nothing fetched", async () => {
-  const done = { generation_id: "L2", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "layerized_image", base_image_url: null, is_image_safe: false, resolution: "1024x1024", seed: 1, text_blocks: [] }] };
-  const { result, requests } = await call("ideogram_generation", { generation_id: "L2", wait_s: 0 }, () => ({ json: done }));
+  const done = {
+    generation_id: "L2",
+    status: "completed",
+    created: "2026-10-07T00:00:00Z",
+    data: [
+      {
+        object_type: "layerized_image",
+        base_image_url: null,
+        is_image_safe: false,
+        resolution: "1024x1024",
+        seed: 1,
+        text_blocks: [],
+      },
+    ],
+  };
+  const { result, requests } = await call("ideogram_generation", { generation_id: "L2", wait_s: 0 }, () => ({
+    json: done,
+  }));
   assert.equal(result.isError, true, "nothing usable");
   assert.match(text(result), /0 of 0 base image\(s\) saved \(1 design\(s\)\)\./);
   assert.match(text(result), /Design 1 withheld by Ideogram's safety check \(nothing shown, nothing downloaded\)/);
@@ -419,8 +732,19 @@ test("ideogram_generation shows a layerized design collected by id the same way;
 });
 
 test("ideogram_quote prices the new tools through their own dry run", async () => {
-  const priceQuote = { object: "price_quote", billing_identifier: "remove-background", quantity: 1, usd_micros: 10000, credit_millis: 10, qualifier: "exact" };
-  const { requests, result } = await call("ideogram_quote", { tool: "ideogram_remove_background", arguments: { image: png } }, () => ({ json: priceQuote }));
+  const priceQuote = {
+    object: "price_quote",
+    billing_identifier: "remove-background",
+    quantity: 1,
+    usd_micros: 10000,
+    credit_millis: 10,
+    qualifier: "exact",
+  };
+  const { requests, result } = await call(
+    "ideogram_quote",
+    { tool: "ideogram_remove_background", arguments: { image: png } },
+    () => ({ json: priceQuote }),
+  );
   assert.equal(requests[0].url, "/v2/image/remove-background/ideogram-1?dry_run=true");
   assert.match(text(result), /0\.010000 USD exact/);
 });
@@ -428,32 +752,85 @@ test("ideogram_quote prices the new tools through their own dry run", async () =
 test("private is sent as true unless the caller says otherwise, on every model that takes it (remove background follows the plan's setting when omitted)", async () => {
   const bg = await call("ideogram_remove_background", { image: png, wait_s: 0 });
   assert.match(bg.requests[0].body.toString("latin1"), /name="private"\r\n\r\ntrue\r\n/);
-  const published = await call("ideogram_replace_background", { image: png, prompt: "a beach", private: false, wait_s: 0 });
-  assert.match(published.requests[0].body.toString("latin1"), /name="private"\r\n\r\nfalse\r\n/, "the caller's false goes through");
+  const published = await call("ideogram_replace_background", {
+    image: png,
+    prompt: "a beach",
+    private: false,
+    wait_s: 0,
+  });
+  assert.match(
+    published.requests[0].body.toString("latin1"),
+    /name="private"\r\n\r\nfalse\r\n/,
+    "the caller's false goes through",
+  );
   const gen = await call("ideogram_generate", { prompt: "x", wait_s: 0 });
   assert.deepEqual(sentJson(gen.requests), { prompt: "x", private: true, async: true });
   const noField = await call("ideogram_remove_object", { image: png, mask: png, wait_s: 0 });
-  assert.doesNotMatch(noField.requests[0].body.toString("latin1"), /name="private"/, "remove object takes no private field: nothing is invented");
-  const raw = await call("ideogram_api", { operation: "post_remove_background_v2", files: [{ field: "image", path: png }], params: { body: {} }, wait_s: 0 });
-  assert.doesNotMatch(raw.requests[0].body.toString("latin1"), /name="private"/, "ideogram_api sends what the caller gave");
+  assert.doesNotMatch(
+    noField.requests[0].body.toString("latin1"),
+    /name="private"/,
+    "remove object takes no private field: nothing is invented",
+  );
+  const raw = await call("ideogram_api", {
+    operation: "post_remove_background_v2",
+    files: [{ field: "image", path: png }],
+    params: { body: {} },
+    wait_s: 0,
+  });
+  assert.doesNotMatch(
+    raw.requests[0].body.toString("latin1"),
+    /name="private"/,
+    "ideogram_api sends what the caller gave",
+  );
 });
 
 test("a tool that works on an image refuses a call without a source, before any request; a JSON call is checked against the JSON schema", async () => {
-  for (const [name, args] of [["ideogram_remove_background", {}], ["ideogram_precise_edit", { prompt: "x" }], ["ideogram_layerize", {}], ["ideogram_remix", { prompt: "x" }], ["ideogram_upscale", {}], ["ideogram_describe", {}]]) {
-    const { result, requests } = await call(name, args).catch((e) => ({ result: { isError: true, content: [{ text: e.message }] }, requests: [] }));
-    assert.match(text(result), /needs a source image: image \(a local file or a public https URL\) or image_asset_identifier/, name);
+  for (const [name, args] of [
+    ["ideogram_remove_background", {}],
+    ["ideogram_precise_edit", { prompt: "x" }],
+    ["ideogram_layerize", {}],
+    ["ideogram_remix", { prompt: "x" }],
+    ["ideogram_upscale", {}],
+    ["ideogram_describe", {}],
+  ]) {
+    const { result, requests } = await call(name, args).catch((e) => ({
+      result: { isError: true, content: [{ text: e.message }] },
+      requests: [],
+    }));
+    assert.match(
+      text(result),
+      /needs a source image: image \(a local file or a public https URL\) or image_asset_identifier/,
+      name,
+    );
     assert.equal(requests.length, 0, name);
   }
   const { buildRequest } = await import("../dist/tools/family.js");
   const { operationById } = await import("../dist/spec/operations.js");
-  await assert.rejects(() => buildRequest(operationById("post_remove_background_v2"), {}, undefined), /post_remove_background_v2 sent as json refuses the input:\nimage_asset_identifier/);
+  await assert.rejects(
+    () => buildRequest(operationById("post_remove_background_v2"), {}, undefined),
+    /post_remove_background_v2 sent as json refuses the input:\nimage_asset_identifier/,
+  );
 });
 
 test("a completed remove-background generation (an image without prompt or seed, as the API lists it) is saved like any image", async () => {
   const handler = (req, _n, api) => {
     if (req.url.startsWith("/img/")) return { status: 200, headers: { "content-type": "image/png" }, body: PNG };
     if (req.method === "POST") return accepted("bg1");
-    return { json: { generation_id: "bg1", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "image.without-prompt-or-seed", url: `${api.base}/img/fg.png`, resolution: "1024x1024", is_image_safe: true }] } };
+    return {
+      json: {
+        generation_id: "bg1",
+        status: "completed",
+        created: "2026-10-07T00:00:00Z",
+        data: [
+          {
+            object_type: "image.without-prompt-or-seed",
+            url: `${api.base}/img/fg.png`,
+            resolution: "1024x1024",
+            is_image_safe: true,
+          },
+        ],
+      },
+    };
   };
   const { result, ctx } = await call("ideogram_remove_background", { image: png }, handler);
   assert.equal(result.isError, undefined, text(result));
@@ -463,9 +840,28 @@ test("a completed remove-background generation (an image without prompt or seed,
 });
 
 test("a layerized design generation shows the design's own link and its editable page beside the base image", async () => {
-  const done = { generation_id: "L3", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "layerized_design.generation", base_image_url: null, url: "https://ideogram.ai/d/L3.psd", html_url: "https://ideogram.ai/d/L3.html", is_image_safe: true, resolution: "1024x1024", seed: 2, text_blocks: [] }] };
+  const done = {
+    generation_id: "L3",
+    status: "completed",
+    created: "2026-10-07T00:00:00Z",
+    data: [
+      {
+        object_type: "layerized_design.generation",
+        base_image_url: null,
+        url: "https://ideogram.ai/d/L3.psd",
+        html_url: "https://ideogram.ai/d/L3.html",
+        is_image_safe: true,
+        resolution: "1024x1024",
+        seed: 2,
+        text_blocks: [],
+      },
+    ],
+  };
   const { result } = await call("ideogram_generation", { generation_id: "L3", wait_s: 0 }, () => ({ json: done }));
-  assert.match(text(result), /Design 1: https:\/\/ideogram\.ai\/d\/L3\.psd \(Ideogram's links expire; download it to keep it\)/);
+  assert.match(
+    text(result),
+    /Design 1: https:\/\/ideogram\.ai\/d\/L3\.psd \(Ideogram's links expire; download it to keep it\)/,
+  );
   assert.match(text(result), /Editable page of design 1: https:\/\/ideogram\.ai\/d\/L3\.html/);
   assert.equal(result.isError, undefined, "a safe design with a link is a success even without a base image");
   assert.match(text(result), /Design 1: no base image listed by Ideogram/);
@@ -473,7 +869,11 @@ test("a layerized design generation shows the design's own link and its editable
 });
 
 test("the source rule is one rule: ideogram_api refuses a precise edit without a source as the curated tool does; a quote too", async () => {
-  const { result, requests } = await call("ideogram_api", { operation: "post_precise_edit_image_v2_ideogram45", params: { body: { prompt: "x" } }, files: [{ field: "reference_images", path: png }] }).catch((e) => ({ result: { isError: true, content: [{ text: e.message }] }, requests: [] }));
+  const { result, requests } = await call("ideogram_api", {
+    operation: "post_precise_edit_image_v2_ideogram45",
+    params: { body: { prompt: "x" } },
+    files: [{ field: "reference_images", path: png }],
+  }).catch((e) => ({ result: { isError: true, content: [{ text: e.message }] }, requests: [] }));
   assert.match(text(result), /post_precise_edit_image_v2_ideogram45 needs a source image/);
   assert.equal(requests.length, 0);
   const quote = await call("ideogram_quote", { tool: "ideogram_remove_background", arguments: {} }).catch((e) => e);
@@ -482,7 +882,10 @@ test("the source rule is one rule: ideogram_api refuses a precise edit without a
 
 test("the schema inliner ends on a cycle of aliases and keeps the $ref that cannot be inlined", async () => {
   const { inlineSmallDefinitions } = await import("../dist/tools/family.js");
-  const json = { oneOf: [{ type: "object", properties: { a: { $ref: "#/definitions/x" } } }], definitions: { x: { $ref: "#/definitions/y" }, y: { $ref: "#/definitions/x" }, z: { type: "string" } } };
+  const json = {
+    oneOf: [{ type: "object", properties: { a: { $ref: "#/definitions/x" } } }],
+    definitions: { x: { $ref: "#/definitions/y" }, y: { $ref: "#/definitions/x" }, z: { type: "string" } },
+  };
   inlineSmallDefinitions(json);
   const refs = JSON.stringify(json).match(/#\/definitions\/[a-z]/g) ?? [];
   for (const ref of refs) assert.ok(ref.replace("#/definitions/", "") in json.definitions, `${ref} resolves`);
@@ -495,18 +898,52 @@ test("private: null is 'not set' and becomes true; an image flagged unsafe is no
   const handler = (req, _n, api) => {
     if (req.url.startsWith("/img/")) return { status: 200, headers: { "content-type": "image/png" }, body: PNG };
     if (req.method === "POST") return accepted("s1");
-    return { json: { generation_id: "s1", status: "completed", created: "2026-10-07T00:00:00Z", data: [
-      { object_type: "image.generation", url: `${api.base}/img/flagged.png`, prompt: "p", resolution: "1024x1024", is_image_safe: false, seed: 1 },
-    ] } };
+    return {
+      json: {
+        generation_id: "s1",
+        status: "completed",
+        created: "2026-10-07T00:00:00Z",
+        data: [
+          {
+            object_type: "image.generation",
+            url: `${api.base}/img/flagged.png`,
+            prompt: "p",
+            resolution: "1024x1024",
+            is_image_safe: false,
+            seed: 1,
+          },
+        ],
+      },
+    };
   };
   const { result, requests } = await call("ideogram_generate", { prompt: "x" }, handler);
   assert.equal(requests.filter((r) => r.url.startsWith("/img/")).length, 0, "nothing downloaded");
   assert.match(text(result), /1 image\(s\) withheld by Ideogram's safety check \(nothing downloaded\)/);
   assert.equal(result.isError, true);
-  const withheldDesign = { generation_id: "L5", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "layerized_image", base_image_url: null, url: "https://ideogram.ai/d/L5.psd", is_image_safe: false, resolution: "1024x1024", seed: 1, text_blocks: [{ text: "X", alignment: "left", formatting: [], x: 0, y: 0, width: 1, height: 1 }] }] };
-  const design = await call("ideogram_generation", { generation_id: "L5", wait_s: 0 }, () => ({ json: withheldDesign }));
+  const withheldDesign = {
+    generation_id: "L5",
+    status: "completed",
+    created: "2026-10-07T00:00:00Z",
+    data: [
+      {
+        object_type: "layerized_image",
+        base_image_url: null,
+        url: "https://ideogram.ai/d/L5.psd",
+        is_image_safe: false,
+        resolution: "1024x1024",
+        seed: 1,
+        text_blocks: [{ text: "X", alignment: "left", formatting: [], x: 0, y: 0, width: 1, height: 1 }],
+      },
+    ],
+  };
+  const design = await call("ideogram_generation", { generation_id: "L5", wait_s: 0 }, () => ({
+    json: withheldDesign,
+  }));
   assert.equal(design.result.isError, true);
-  assert.match(text(design.result), /Design 1 withheld by Ideogram's safety check \(nothing shown, nothing downloaded\)/);
+  assert.match(
+    text(design.result),
+    /Design 1 withheld by Ideogram's safety check \(nothing shown, nothing downloaded\)/,
+  );
   assert.doesNotMatch(text(design.result), /L5\.psd|Text blocks/, "nothing of a withheld design is shown");
   const { payloadOf } = await import("../dist/lifecycle.js");
   const blocksOnly = payloadOf({ data: [{ object_type: "layerized_image", text_blocks: [{ text: "Y" }] }] });
@@ -515,84 +952,231 @@ test("private: null is 'not set' and becomes true; an image flagged unsafe is no
 
 test("a safe layerized design that lists only text blocks is a result, not an error; a flag Ideogram omitted is inferred from what is listed", async () => {
   const blocks = [{ text: "SALE", alignment: "left", formatting: [], x: 1, y: 2, width: 30, height: 8 }];
-  const only = { generation_id: "L4", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "layerized_image", base_image_url: null, is_image_safe: true, resolution: "1024x1024", seed: 1, text_blocks: blocks }] };
+  const only = {
+    generation_id: "L4",
+    status: "completed",
+    created: "2026-10-07T00:00:00Z",
+    data: [
+      {
+        object_type: "layerized_image",
+        base_image_url: null,
+        is_image_safe: true,
+        resolution: "1024x1024",
+        seed: 1,
+        text_blocks: blocks,
+      },
+    ],
+  };
   const { result } = await call("ideogram_generation", { generation_id: "L4", wait_s: 0 }, () => ({ json: only }));
   assert.equal(result.isError, undefined, text(result));
   assert.match(text(result), /Text blocks of design 1 \(1\)/);
   const { payloadOf } = await import("../dist/lifecycle.js");
-  const inferred = payloadOf({ data: [{ object_type: "layerized_design.generation", html_url: "https://ideogram.ai/d/x.html", text_blocks: [] }] });
+  const inferred = payloadOf({
+    data: [{ object_type: "layerized_design.generation", html_url: "https://ideogram.ai/d/x.html", text_blocks: [] }],
+  });
   assert.equal(inferred.kind, "layered");
   assert.equal(inferred.items[0].isImageSafe, true, "a listed page counts as safe when the flag is absent");
 });
 
 test("ideogram_api says the missing source once: the inpaint rule names it, the shared rule does not repeat it", async () => {
-  const { result } = await call("ideogram_api", { operation: "post_inpaint_image_v2_ideogram_v3", params: { body: { prompt: "x" } }, files: [{ field: "mask", path: png }] }).catch((e) => ({ result: { isError: true, content: [{ text: e.message }] } }));
+  const { result } = await call("ideogram_api", {
+    operation: "post_inpaint_image_v2_ideogram_v3",
+    params: { body: { prompt: "x" } },
+    files: [{ field: "mask", path: png }],
+  }).catch((e) => ({ result: { isError: true, content: [{ text: e.message }] } }));
   const lines = text(result).split("\n");
   assert.equal(lines.filter((l) => /source/.test(l)).length, 1, text(result));
   assert.match(text(result), /inpaint needs the source/);
 });
 
 test("a file field takes a URL: fetched under the field's limit and sent as the upload the local file would be; a local file that fails stops everything first", async () => {
-  const handler = (req) => (req.url === "/remote/a.png" ? { status: 200, headers: { "content-type": "image/png" }, body: PNG } : req.method === "POST" ? accepted("u1") : pending("u1"));
-  const { requests } = await call("ideogram_remix", { prompt: "x", image: "__BASE__/remote/a.png", wait_s: 0 }, handler);
+  const handler = (req) =>
+    req.url === "/remote/a.png"
+      ? { status: 200, headers: { "content-type": "image/png" }, body: PNG }
+      : req.method === "POST"
+        ? accepted("u1")
+        : pending("u1");
+  const { requests } = await call(
+    "ideogram_remix",
+    { prompt: "x", image: "__BASE__/remote/a.png", wait_s: 0 },
+    handler,
+  );
   assert.equal(requests[0].url, "/remote/a.png", "the image is fetched first");
   assert.equal(requests[1].url, "/v2/image/remix/ideogram-3");
   assert.match(requests[1].body.toString("latin1"), /name="image"; filename="image.png"\r\nContent-Type: image\/png/);
   const seen = [];
-  const typo = await call("ideogram_remix", { prompt: "x", image: "__BASE__/remote/a.png", style_reference_images: [join(dir, "missing.png")] }, (req) => { seen.push(req.url); return handler(req); }).catch((e) => e);
+  const typo = await call(
+    "ideogram_remix",
+    { prompt: "x", image: "__BASE__/remote/a.png", style_reference_images: [join(dir, "missing.png")] },
+    (req) => {
+      seen.push(req.url);
+      return handler(req);
+    },
+  ).catch((e) => e);
   assert.match(typo.message, /ENOENT|no such file/);
   assert.deepEqual(seen, [], "a failing local file stops the call before any fetch");
   const original = join(dir, "original.png");
   await writeFile(original, PNG);
-  const swapped = await call("ideogram_api", { operation: "post_generate_image_v2_gpt_image2", params: { body: { prompt: "x" } }, files: [{ field: "images", path: original }, { field: "images", path: "__BASE__/remote/a.png" }], wait_s: 0 }, async (req) => {
-    if (req.url === "/remote/a.png") { await writeFile(original, Buffer.alloc(64, 1)); return { status: 200, headers: { "content-type": "image/png" }, body: PNG }; } // the local file changes while the remote one downloads
-    return handler(req);
-  });
+  const swapped = await call(
+    "ideogram_api",
+    {
+      operation: "post_generate_image_v2_gpt_image2",
+      params: { body: { prompt: "x" } },
+      files: [
+        { field: "images", path: original },
+        { field: "images", path: "__BASE__/remote/a.png" },
+      ],
+      wait_s: 0,
+    },
+    async (req) => {
+      if (req.url === "/remote/a.png") {
+        await writeFile(original, Buffer.alloc(64, 1));
+        return { status: 200, headers: { "content-type": "image/png" }, body: PNG };
+      } // the local file changes while the remote one downloads
+      return handler(req);
+    },
+  );
   const sent = swapped.requests.find((r) => r.url.startsWith("/v2/")).body.toString("latin1");
-  assert.equal(sent.split(PNG.toString("latin1")).length - 1, 2, "both parts carry the ORIGINAL bytes: the local file was read before any fetch");
-  const roomy = await call("ideogram_api", { operation: "post_generate_image_v2_gpt_image2", params: { body: { prompt: "x" } }, files: [{ field: "images", path: "__BASE__/remote/a.png" }, { field: "images", path: "__BASE__/remote/a.png" }], wait_s: 0 }, handler);
-  assert.equal(roomy.requests.filter((r) => r.url === "/remote/a.png").length, 2, "remote inputs are fetched one after another");
-  assert.ok(roomy.requests.findIndex((r) => r.url === "/remote/a.png") < roomy.requests.findIndex((r) => r.url.startsWith("/v2/")));
-  const html = await call("ideogram_remix", { prompt: "x", image: "__BASE__/remote/page" }, (req) => (req.url === "/remote/page" ? { status: 200, headers: { "content-type": "text/html" }, body: "<p>" } : accepted("u2"))).catch((e) => e);
+  assert.equal(
+    sent.split(PNG.toString("latin1")).length - 1,
+    2,
+    "both parts carry the ORIGINAL bytes: the local file was read before any fetch",
+  );
+  const roomy = await call(
+    "ideogram_api",
+    {
+      operation: "post_generate_image_v2_gpt_image2",
+      params: { body: { prompt: "x" } },
+      files: [
+        { field: "images", path: "__BASE__/remote/a.png" },
+        { field: "images", path: "__BASE__/remote/a.png" },
+      ],
+      wait_s: 0,
+    },
+    handler,
+  );
+  assert.equal(
+    roomy.requests.filter((r) => r.url === "/remote/a.png").length,
+    2,
+    "remote inputs are fetched one after another",
+  );
+  assert.ok(
+    roomy.requests.findIndex((r) => r.url === "/remote/a.png") <
+      roomy.requests.findIndex((r) => r.url.startsWith("/v2/")),
+  );
+  const html = await call("ideogram_remix", { prompt: "x", image: "__BASE__/remote/page" }, (req) =>
+    req.url === "/remote/page"
+      ? { status: 200, headers: { "content-type": "text/html" }, body: "<p>" }
+      : accepted("u2"),
+  ).catch((e) => e);
   assert.match(html.message, /image: .*is text\/html, not one of image\/png/);
 });
 
 test("inline_images: each saved image comes back as image content beside the text; a large one is listed by path only; nothing inline by default", async () => {
   const handler = (req, _n, api) => {
     if (req.url === "/img/small.png") return { status: 200, headers: { "content-type": "image/png" }, body: PNG };
-    if (req.url === "/img/big.png") return { status: 200, headers: { "content-type": "image/png" }, body: Buffer.alloc(3_750_001, 7) };
+    if (req.url === "/img/big.png")
+      return { status: 200, headers: { "content-type": "image/png" }, body: Buffer.alloc(3_750_001, 7) };
     if (req.method === "POST") return accepted("i1");
-    return { json: { generation_id: "i1", status: "completed", created: "2026-10-07T00:00:00Z", data: [
-      { object_type: "image.generation", url: `${api.base}/img/small.png`, prompt: "p", resolution: "1024x1024", is_image_safe: true, seed: 1 },
-      { object_type: "image.generation", url: `${api.base}/img/big.png`, prompt: "p", resolution: "4096x4096", is_image_safe: true, seed: 2 },
-    ] } };
+    return {
+      json: {
+        generation_id: "i1",
+        status: "completed",
+        created: "2026-10-07T00:00:00Z",
+        data: [
+          {
+            object_type: "image.generation",
+            url: `${api.base}/img/small.png`,
+            prompt: "p",
+            resolution: "1024x1024",
+            is_image_safe: true,
+            seed: 1,
+          },
+          {
+            object_type: "image.generation",
+            url: `${api.base}/img/big.png`,
+            prompt: "p",
+            resolution: "4096x4096",
+            is_image_safe: true,
+            seed: 2,
+          },
+        ],
+      },
+    };
   };
   const { result } = await call("ideogram_generate", { prompt: "x", inline_images: true }, handler);
   assert.equal(result.content[0].type, "text");
   assert.match(result.content[0].text, /2 of 2 image\(s\) saved\./);
-  assert.match(result.content[0].text, /Not returned inline: .*\.png is 3750001 bytes, over 3\.75 MB \(3750000 bytes\)/);
+  assert.match(
+    result.content[0].text,
+    /Not returned inline: .*\.png is 3750001 bytes, over 3\.75 MB \(3750000 bytes\)/,
+  );
   assert.equal(result.content.length, 2, "one image item: the small one");
   assert.deepEqual(result.content[1], { type: "image", data: PNG.toString("base64"), mimeType: "image/png" });
   const plain = await call("ideogram_generate", { prompt: "x" }, handler);
   assert.equal(plain.result.content.length, 1, "text only by default");
   const collected = await call("ideogram_generation", { generation_id: "i1", wait_s: 0, inline_images: true }, handler);
   assert.equal(collected.result.content.length, 2);
-  const raw = await call("ideogram_api", { operation: "post_generate_image_v2_ideogram_v3", params: { body: { prompt: "x" } }, inline_images: true }, handler);
+  const raw = await call(
+    "ideogram_api",
+    { operation: "post_generate_image_v2_ideogram_v3", params: { body: { prompt: "x" } }, inline_images: true },
+    handler,
+  );
   assert.equal(raw.result.content.length, 2, "ideogram_api inlines the same way");
   const bad = await call("ideogram_generate", { prompt: "x", inline_images: "yes" }).catch((e) => e);
   assert.match(bad.message, /inline_images must be true or false/);
   const many = (req, _n, api) => {
-    if (req.url.startsWith("/img/")) return { status: 200, headers: { "content-type": "image/jpg; charset=binary" }, body: Buffer.alloc(3_000_000, 9) };
+    if (req.url.startsWith("/img/"))
+      return {
+        status: 200,
+        headers: { "content-type": "image/jpg; charset=binary" },
+        body: Buffer.alloc(3_000_000, 9),
+      };
     if (req.method === "POST") return accepted("i2");
-    return { json: { generation_id: "i2", status: "completed", created: "2026-10-07T00:00:00Z", data: [1, 2, 3, 4].map((n) => ({ object_type: "image.generation", url: `${api.base}/img/${n}.jpg`, prompt: "p", resolution: "1024x1024", is_image_safe: true, seed: n })) } };
+    return {
+      json: {
+        generation_id: "i2",
+        status: "completed",
+        created: "2026-10-07T00:00:00Z",
+        data: [1, 2, 3, 4].map((n) => ({
+          object_type: "image.generation",
+          url: `${api.base}/img/${n}.jpg`,
+          prompt: "p",
+          resolution: "1024x1024",
+          is_image_safe: true,
+          seed: n,
+        })),
+      },
+    };
   };
   const capped = await call("ideogram_generate", { prompt: "x", inline_images: true }, many);
   assert.equal(capped.result.content.length, 4, "three of four 3 MB images fit under the 10 MB total");
   assert.equal(capped.result.content[1].mimeType, "image/jpeg", "the media type is normalized");
   const svg = (req, _n, api) => {
-    if (req.url.startsWith("/img/")) return { status: 200, headers: { "content-type": "image/svg+xml" }, body: "<svg xmlns='http://www.w3.org/2000/svg'/>" };
+    if (req.url.startsWith("/img/"))
+      return {
+        status: 200,
+        headers: { "content-type": "image/svg+xml" },
+        body: "<svg xmlns='http://www.w3.org/2000/svg'/>",
+      };
     if (req.method === "POST") return accepted("i4");
-    return { json: { generation_id: "i4", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "image.generation", url: `${api.base}/img/v.svg`, prompt: "p", resolution: "1024x1024", is_image_safe: true, seed: 1 }] } };
+    return {
+      json: {
+        generation_id: "i4",
+        status: "completed",
+        created: "2026-10-07T00:00:00Z",
+        data: [
+          {
+            object_type: "image.generation",
+            url: `${api.base}/img/v.svg`,
+            prompt: "p",
+            resolution: "1024x1024",
+            is_image_safe: true,
+            seed: 1,
+          },
+        ],
+      },
+    };
   };
   const vector = await call("ideogram_generate", { prompt: "x", inline_images: true }, svg);
   assert.equal(vector.result.content.length, 1, "an SVG is saved, never inlined as image content");
@@ -604,14 +1188,32 @@ test("an inline read failure is an omission with its reason, never the loss of t
   const handler = (req, _n, api) => {
     if (req.url.startsWith("/img/")) return { status: 200, headers: { "content-type": "image/png" }, body: PNG };
     if (req.method === "POST") return accepted("i3");
-    return { json: { generation_id: "i3", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "image.generation", url: `${api.base}/img/a.png`, prompt: "p", resolution: "1024x1024", is_image_safe: true, seed: 1 }] } };
+    return {
+      json: {
+        generation_id: "i3",
+        status: "completed",
+        created: "2026-10-07T00:00:00Z",
+        data: [
+          {
+            object_type: "image.generation",
+            url: `${api.base}/img/a.png`,
+            prompt: "p",
+            resolution: "1024x1024",
+            is_image_safe: true,
+            seed: 1,
+          },
+        ],
+      },
+    };
   };
   const api = await startFakeApi((req, n) => handler(req, n, api));
   try {
     const ctx = await testContext(api.base, join(dir, "gone"));
     const client = Object.create(ctx.client);
     client.download = async () => ({ path: join(dir, "gone", "vanished.png"), bytes: 10, contentType: "image/png" }); // saved, then gone before the read-back
-    const result = await (await tool("ideogram_generate")).handler({ ...ctx, client }, { prompt: "x", inline_images: true });
+    const result = await (
+      await tool("ideogram_generate")
+    ).handler({ ...ctx, client }, { prompt: "x", inline_images: true });
     assert.equal(result.isError, undefined);
     assert.match(text(result), /Generation i3 completed\./);
     assert.match(text(result), /Not returned inline: .*vanished\.png could not be read back \(ENOENT/);
@@ -623,10 +1225,49 @@ test("an inline read failure is an omission with its reason, never the loss of t
 
 test("a saved image's Asset line is the whole identifier a later *_asset_identifier input takes; an image link that answers a video is refused", async () => {
   const created = "2026-10-07T00:00:00Z";
-  const handler = (req, _n, api) => (req.url === "/i/a.png" ? { status: 200, headers: { "content-type": "image/png" }, body: PNG } : req.url === "/i/v.png" ? { status: 200, headers: { "content-type": "video/mp4" }, body: PNG } : req.method === "POST" ? accepted("g9") : { json: { generation_id: "g9", status: "completed", created, data: [{ object_type: "image.generation", url: `${api.base}/i/a.png`, prompt: "p", resolution: "1024x1024", seed: 7, is_image_safe: true, asset_id: "AAAAAAAAAAAAAAAAAAAAAA" }, { object_type: "image.generation", url: `${api.base}/i/v.png`, prompt: "p", resolution: "1024x1024", seed: 8, is_image_safe: true }] } });
+  const handler = (req, _n, api) =>
+    req.url === "/i/a.png"
+      ? { status: 200, headers: { "content-type": "image/png" }, body: PNG }
+      : req.url === "/i/v.png"
+        ? { status: 200, headers: { "content-type": "video/mp4" }, body: PNG }
+        : req.method === "POST"
+          ? accepted("g9")
+          : {
+              json: {
+                generation_id: "g9",
+                status: "completed",
+                created,
+                data: [
+                  {
+                    object_type: "image.generation",
+                    url: `${api.base}/i/a.png`,
+                    prompt: "p",
+                    resolution: "1024x1024",
+                    seed: 7,
+                    is_image_safe: true,
+                    asset_id: "AAAAAAAAAAAAAAAAAAAAAA",
+                  },
+                  {
+                    object_type: "image.generation",
+                    url: `${api.base}/i/v.png`,
+                    prompt: "p",
+                    resolution: "1024x1024",
+                    seed: 8,
+                    is_image_safe: true,
+                  },
+                ],
+              },
+            };
   const { result } = await call("ideogram_generate", { prompt: "p" }, handler);
-  assert.match(text(result), /Saved: .*\.png\n  Resolution: 1024x1024\n  Seed: 7\n  Asset: \{"asset_type":"RESPONSE","asset_id":"AAAAAAAAAAAAAAAAAAAAAA"\} \(an \*_asset_identifier input of a later call\)/);
-  assert.match(text(result), /Not saved: .*v\.png — Expected an image, got: video\/mp4/, "an image link that answers a video is refused");
+  assert.match(
+    text(result),
+    /Saved: .*\.png\n  Resolution: 1024x1024\n  Seed: 7\n  Asset: \{"asset_type":"RESPONSE","asset_id":"AAAAAAAAAAAAAAAAAAAAAA"\} \(an \*_asset_identifier input of a later call\)/,
+  );
+  assert.match(
+    text(result),
+    /Not saved: .*v\.png — Expected an image, got: video\/mp4/,
+    "an image link that answers a video is refused",
+  );
   assert.match(text(result), /^Generation g9 completed\.\n1 of 2 image\(s\) saved\./);
 });
 
@@ -635,67 +1276,256 @@ test("ideogram_video_text sends the model's JSON body async-only, a finished vid
   const handler = (req, _n, api) => {
     if (req.url === "/v/a.mp4") return { status: 200, headers: { "content-type": "video/mp4" }, body: mp4 };
     if (req.method === "POST") return { json: { generation_id: "v1", created: "2026-10-07T00:00:00Z" } };
-    return { json: { generation_id: "v1", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "video.generation", url: `${api.base}/v/a.mp4`, prompt: "a sunrise", resolution: "720p", aspect_ratio: "16:9", duration: 5 }] } };
+    return {
+      json: {
+        generation_id: "v1",
+        status: "completed",
+        created: "2026-10-07T00:00:00Z",
+        data: [
+          {
+            object_type: "video.generation",
+            url: `${api.base}/v/a.mp4`,
+            prompt: "a sunrise",
+            resolution: "720p",
+            aspect_ratio: "16:9",
+            duration: 5,
+          },
+        ],
+      },
+    };
   };
-  const { requests, result, ctx } = await call("ideogram_video_text", { prompt: "a sunrise", duration: 5, aspect_ratio: "16x9", inline_images: true }, handler);
+  const { requests, result, ctx } = await call(
+    "ideogram_video_text",
+    { prompt: "a sunrise", duration: 5, aspect_ratio: "16x9", inline_images: true },
+    handler,
+  );
   assert.equal(requests[0].url, "/v2/video/generate/seedance-2-5-text-to-video");
   assert.deepEqual(sentJson(requests), { prompt: "a sunrise", duration: 5, aspect_ratio: "16x9", private: true });
-  assert.match(text(result), /Generation v1 completed\.\n1 of 1 video\(s\) saved\.\nSaved: .*\.mp4\n  Duration: 5 s · Resolution: 720p · Aspect: 16:9 · Size: 0\.0 MB\n  Prompt used: a sunrise\nA video is saved, never returned inline: inline_images has no effect here\./, "the size is said; inline_images asked on a video is answered, not ignored");
+  assert.match(
+    text(result),
+    /Generation v1 completed\.\n1 of 1 video\(s\) saved\.\nSaved: .*\.mp4\n  Duration: 5 s · Resolution: 720p · Aspect: 16:9 · Size: 0\.0 MB\n  Prompt used: a sunrise\nA video is saved, never returned inline: inline_images has no effect here\./,
+    "the size is said; inline_images asked on a video is answered, not ignored",
+  );
   assert.equal(result.content.length, 1, "a video is never inline image content");
   const quiet = await call("ideogram_video_text", { prompt: "a sunrise", duration: 5 }, handler);
   assert.doesNotMatch(text(quiet.result), /inline_images has no effect/, "the note only when inline_images was asked");
-  const several = await call("ideogram_video_text", { prompt: "two", duration: 5 }, (req, _n, api) => (req.url === "/v/a.mp4" ? { status: 200, headers: { "content-type": "video/mp4" }, body: mp4 } : req.method === "POST" ? { json: { generation_id: "v3", created: "2026-10-07T00:00:00Z" } } : { json: { generation_id: "v3", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "video.generation", url: `${api.base}/v/a.mp4`, prompt: "two", resolution: "720p", aspect_ratio: "16:9", duration: 5 }, { object_type: "video.generation", url: null, prompt: "two", resolution: "720p", aspect_ratio: "16:9", duration: 5 }] } }));
-  assert.match(text(several.result), /^Generation v3 completed\.\n1 of 2 video\(s\) saved\.\nSaved: .*\.mp4\n  Duration: 5 s · Resolution: 720p · Aspect: 16:9 · Size: 0\.0 MB\n  Prompt used: two\n1 video\(s\) listed without a link \(nothing downloaded\)$/, "several videos: one without a link is counted, not fetched");
+  const several = await call("ideogram_video_text", { prompt: "two", duration: 5 }, (req, _n, api) =>
+    req.url === "/v/a.mp4"
+      ? { status: 200, headers: { "content-type": "video/mp4" }, body: mp4 }
+      : req.method === "POST"
+        ? { json: { generation_id: "v3", created: "2026-10-07T00:00:00Z" } }
+        : {
+            json: {
+              generation_id: "v3",
+              status: "completed",
+              created: "2026-10-07T00:00:00Z",
+              data: [
+                {
+                  object_type: "video.generation",
+                  url: `${api.base}/v/a.mp4`,
+                  prompt: "two",
+                  resolution: "720p",
+                  aspect_ratio: "16:9",
+                  duration: 5,
+                },
+                {
+                  object_type: "video.generation",
+                  url: null,
+                  prompt: "two",
+                  resolution: "720p",
+                  aspect_ratio: "16:9",
+                  duration: 5,
+                },
+              ],
+            },
+          },
+  );
+  assert.match(
+    text(several.result),
+    /^Generation v3 completed\.\n1 of 2 video\(s\) saved\.\nSaved: .*\.mp4\n  Duration: 5 s · Resolution: 720p · Aspect: 16:9 · Size: 0\.0 MB\n  Prompt used: two\n1 video\(s\) listed without a link \(nothing downloaded\)$/,
+    "several videos: one without a link is counted, not fetched",
+  );
   assert.equal(several.result.isError, undefined, "one saved video is a success");
-  const none = await call("ideogram_video_text", { prompt: "none", duration: 5 }, (req) => (req.method === "POST" ? { json: { generation_id: "v4", created: "2026-10-07T00:00:00Z" } } : { json: { generation_id: "v4", status: "completed", created: "2026-10-07T00:00:00Z", data: [] } }));
-  const bareVideo = await call("ideogram_video_text", { prompt: "bare", duration: 5 }, (req, _n, api) => (req.url === "/v/a.mp4" ? { status: 200, headers: { "content-type": "video/mp4" }, body: mp4 } : req.method === "POST" ? { json: { generation_id: "v5", created: "2026-10-07T00:00:00Z" } } : { json: { generation_id: "v5", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ url: `${api.base}/v/a.mp4`, prompt: "bare", resolution: "720p", aspect_ratio: "16:9", duration: 5 }] } }));
-  assert.match(text(bareVideo.result), /1 of 1 video\(s\) saved\.\nSaved: .*\.mp4\n  Duration: 5 s/, "an entry without object_type that carries a duration is a video, not an image (the spec leaves the type optional)");
-  const placeholder = await call("ideogram_video_text", { prompt: "ph", duration: 5 }, (req, _n, api) => (req.url === "/v/a.mp4" ? { status: 200, headers: { "content-type": "image/png" }, body: PNG } : req.method === "POST" ? { json: { generation_id: "v6", created: "2026-10-07T00:00:00Z" } } : { json: { generation_id: "v6", status: "completed", created: "2026-10-07T00:00:00Z", data: [{ object_type: "video.generation", url: `${api.base}/v/a.mp4`, prompt: "ph", resolution: "720p", aspect_ratio: "16:9", duration: 5 }] } }));
-  assert.match(text(placeholder.result), /0 of 1 video\(s\) saved\.\nNot saved: .*a\.mp4 — Expected a video \(video\/mp4\), got: image\/png/, "a video link that answers an image is refused, never counted as a saved video");
+  const none = await call("ideogram_video_text", { prompt: "none", duration: 5 }, (req) =>
+    req.method === "POST"
+      ? { json: { generation_id: "v4", created: "2026-10-07T00:00:00Z" } }
+      : { json: { generation_id: "v4", status: "completed", created: "2026-10-07T00:00:00Z", data: [] } },
+  );
+  const bareVideo = await call("ideogram_video_text", { prompt: "bare", duration: 5 }, (req, _n, api) =>
+    req.url === "/v/a.mp4"
+      ? { status: 200, headers: { "content-type": "video/mp4" }, body: mp4 }
+      : req.method === "POST"
+        ? { json: { generation_id: "v5", created: "2026-10-07T00:00:00Z" } }
+        : {
+            json: {
+              generation_id: "v5",
+              status: "completed",
+              created: "2026-10-07T00:00:00Z",
+              data: [
+                { url: `${api.base}/v/a.mp4`, prompt: "bare", resolution: "720p", aspect_ratio: "16:9", duration: 5 },
+              ],
+            },
+          },
+  );
+  assert.match(
+    text(bareVideo.result),
+    /1 of 1 video\(s\) saved\.\nSaved: .*\.mp4\n  Duration: 5 s/,
+    "an entry without object_type that carries a duration is a video, not an image (the spec leaves the type optional)",
+  );
+  const placeholder = await call("ideogram_video_text", { prompt: "ph", duration: 5 }, (req, _n, api) =>
+    req.url === "/v/a.mp4"
+      ? { status: 200, headers: { "content-type": "image/png" }, body: PNG }
+      : req.method === "POST"
+        ? { json: { generation_id: "v6", created: "2026-10-07T00:00:00Z" } }
+        : {
+            json: {
+              generation_id: "v6",
+              status: "completed",
+              created: "2026-10-07T00:00:00Z",
+              data: [
+                {
+                  object_type: "video.generation",
+                  url: `${api.base}/v/a.mp4`,
+                  prompt: "ph",
+                  resolution: "720p",
+                  aspect_ratio: "16:9",
+                  duration: 5,
+                },
+              ],
+            },
+          },
+  );
+  assert.match(
+    text(placeholder.result),
+    /0 of 1 video\(s\) saved\.\nNot saved: .*a\.mp4 — Expected a video \(video\/mp4\), got: image\/png/,
+    "a video link that answers an image is refused, never counted as a saved video",
+  );
   assert.equal(placeholder.result.isError, true);
-  const negative = z.toJSONSchema((await tool("ideogram_video_text")).inputSchema, { io: "input", unrepresentable: "any" }).properties.negative_prompt;
+  const negative = z.toJSONSchema((await tool("ideogram_video_text")).inputSchema, {
+    io: "input",
+    unrepresentable: "any",
+  }).properties.negative_prompt;
   assert.match(negative.description, /out of the video/, "a shared field keeps the video wording on a video tool");
-  assert.doesNotMatch(z.toJSONSchema((await tool("ideogram_video_text")).inputSchema, { io: "input", unrepresentable: "any" }).properties.duration.description, /USD/, "no price in a tool text: the quote is the price");
+  assert.doesNotMatch(
+    z.toJSONSchema((await tool("ideogram_video_text")).inputSchema, { io: "input", unrepresentable: "any" }).properties
+      .duration.description,
+    /USD/,
+    "no price in a tool text: the quote is the price",
+  );
   assert.match(text(none.result), /Ideogram listed no image or video for this generation \(nothing to save\)/);
   assert.equal(none.result.isError, true);
-  const videoList = z.toJSONSchema((await tool("ideogram_video_text")).inputSchema, { io: "input", unrepresentable: "any" });
+  const videoList = z.toJSONSchema((await tool("ideogram_video_text")).inputSchema, {
+    io: "input",
+    unrepresentable: "any",
+  });
   assert.equal(videoList.properties.inline_images, undefined, "a video tool does not advertise inline_images");
-  assert.match(videoList.properties.duration.description, /QUOTED at its maximum/, "the duration text says what an omitted duration costs");
-  assert.match(videoList.properties.resolution.description, /resolution tier/, "the video tools show the video sentence for a shared field");
-  assert.match(z.toJSONSchema((await tool("ideogram_generate")).inputSchema, { io: "input", unrepresentable: "any" }).properties.resolution.description, /WIDTHxHEIGHT/, "the image tools keep theirs");
+  assert.match(
+    videoList.properties.duration.description,
+    /QUOTED at its maximum/,
+    "the duration text says what an omitted duration costs",
+  );
+  assert.match(
+    videoList.properties.resolution.description,
+    /resolution tier/,
+    "the video tools show the video sentence for a shared field",
+  );
+  assert.match(
+    z.toJSONSchema((await tool("ideogram_generate")).inputSchema, { io: "input", unrepresentable: "any" }).properties
+      .resolution.description,
+    /WIDTHxHEIGHT/,
+    "the image tools keep theirs",
+  );
   assert.equal((await readdir(ctx.outputDir)).length, 1);
-  const kling = await call("ideogram_video_text", { model: "kling-3-standard-text-to-video", prompt: "x", cfg_scale: 0.5, wait_s: 0 }, handler);
+  const kling = await call(
+    "ideogram_video_text",
+    { model: "kling-3-standard-text-to-video", prompt: "x", cfg_scale: 0.5, wait_s: 0 },
+    handler,
+  );
   assert.equal(kling.requests[0].url, "/v2/video/generate/kling-3-standard-text-to-video");
   const foreign = await call("ideogram_video_text", { prompt: "x", cfg_scale: 0.5 }).catch((e) => e);
-  assert.match(foreign.message, /`cfg_scale` is not a parameter of seedance-2-5-text-to-video; the models that take it: kling-3-standard-text-to-video/);
+  assert.match(
+    foreign.message,
+    /`cfg_scale` is not a parameter of seedance-2-5-text-to-video; the models that take it: kling-3-standard-text-to-video/,
+  );
 });
 
 test("ideogram_video_image takes the start and end images as parts; ideogram_video_reference sends audio references as MP3/WAV and refuses a PNG there", async () => {
-  const handler = (req) => (req.method === "POST" ? { json: { generation_id: "v2", created: "2026-10-07T00:00:00Z" } } : pending("v2"));
+  const handler = (req) =>
+    req.method === "POST" ? { json: { generation_id: "v2", created: "2026-10-07T00:00:00Z" } } : pending("v2");
   const img = await call("ideogram_video_image", { prompt: "pan", image: png, end_image: png, wait_s: 0 }, handler);
   assert.equal(img.requests[0].url, "/v2/video/generate/seedance-2-5-image-to-video");
   assert.match(img.requests[0].body.toString("latin1"), /name="image"; filename="image.png"/);
   assert.match(img.requests[0].body.toString("latin1"), /name="end_image"; filename="end_image.png"/);
   const wav = join(dir, "voice.wav");
   await writeFile(wav, Buffer.from("52494646", "hex"));
-  const ref = await call("ideogram_video_reference", { prompt: "sing", reference_images: [png], reference_audios: [wav], wait_s: 0 }, handler);
+  const ref = await call(
+    "ideogram_video_reference",
+    { prompt: "sing", reference_images: [png], reference_audios: [wav], wait_s: 0 },
+    handler,
+  );
   assert.equal(ref.requests[0].url, "/v2/video/generate/seedance-2-5-reference-to-video");
-  assert.match(ref.requests[0].body.toString("latin1"), /name="reference_audios"; filename="reference_audios.wav"\r\nContent-Type: audio\/wav/);
-  const notAudio = await call("ideogram_video_reference", { prompt: "sing", reference_images: [png], reference_audios: [png] }).catch((e) => e);
+  assert.match(
+    ref.requests[0].body.toString("latin1"),
+    /name="reference_audios"; filename="reference_audios.wav"\r\nContent-Type: audio\/wav/,
+  );
+  const notAudio = await call("ideogram_video_reference", {
+    prompt: "sing",
+    reference_images: [png],
+    reference_audios: [png],
+  }).catch((e) => e);
   assert.match(notAudio.message, /reference_audios: unsupported file type \.png; one of \.mp3, \.wav$/);
   assert.match(text(ref.result), /Accepted: generation v2 is still running/);
   const bare = await call("ideogram_video_reference", { prompt: "sing", reference_audios: [wav] }).catch((e) => e);
   assert.match(bare.message, /needs at least one reference image or video/);
-  const minimaxBare = await call("ideogram_video_reference", { model: "minimax-h3-reference-to-video", prompt: "sing", reference_audios: [wav] }).catch((e) => e);
+  const minimaxBare = await call("ideogram_video_reference", {
+    model: "minimax-h3-reference-to-video",
+    prompt: "sing",
+    reference_audios: [wav],
+  }).catch((e) => e);
   assert.match(minimaxBare.message, /needs at least one reference image or video/, "MiniMax needs a reference too");
-  const byVideo = await call("ideogram_video_reference", { prompt: "sing", reference_video_asset_identifiers: [{ asset_type: "RESPONSE", asset_id: "AAAAAAAAAAAAAAAAAAAAAA" }], wait_s: 0 }, handler);
-  assert.match(text(byVideo.result), /Accepted: generation v2 is still running/, "a reference video alone satisfies the rule");
-  const bothRefs = await call("ideogram_video_reference", { prompt: "sing", reference_images: [png], reference_image_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "AAAAAAAAAAAAAAAAAAAAAA" }] }).catch((e) => e);
+  const byVideo = await call(
+    "ideogram_video_reference",
+    {
+      prompt: "sing",
+      reference_video_asset_identifiers: [{ asset_type: "RESPONSE", asset_id: "AAAAAAAAAAAAAAAAAAAAAA" }],
+      wait_s: 0,
+    },
+    handler,
+  );
+  assert.match(
+    text(byVideo.result),
+    /Accepted: generation v2 is still running/,
+    "a reference video alone satisfies the rule",
+  );
+  const bothRefs = await call("ideogram_video_reference", {
+    prompt: "sing",
+    reference_images: [png],
+    reference_image_asset_identifiers: [{ asset_type: "UPLOAD", asset_id: "AAAAAAAAAAAAAAAAAAAAAA" }],
+  }).catch((e) => e);
   assert.match(bothRefs.message, /reference_images and reference_image_asset_identifiers cannot be combined/);
-  const bothStarts = await call("ideogram_video_image", { prompt: "pan", image: png, image_asset_identifier: { asset_type: "UPLOAD", asset_id: "AAAAAAAAAAAAAAAAAAAAAA" } }).catch((e) => e);
+  const bothStarts = await call("ideogram_video_image", {
+    prompt: "pan",
+    image: png,
+    image_asset_identifier: { asset_type: "UPLOAD", asset_id: "AAAAAAAAAAAAAAAAAAAAAA" },
+  }).catch((e) => e);
   assert.match(bothStarts.message, /image and image_asset_identifier are alternatives/);
-  const bothEnds = await call("ideogram_video_image", { prompt: "pan", image: png, end_image: png, end_image_asset_identifier: { asset_type: "UPLOAD", asset_id: "AAAAAAAAAAAAAAAAAAAAAA" } }).catch((e) => e);
+  const bothEnds = await call("ideogram_video_image", {
+    prompt: "pan",
+    image: png,
+    end_image: png,
+    end_image_asset_identifier: { asset_type: "UPLOAD", asset_id: "AAAAAAAAAAAAAAAAAAAAAA" },
+  }).catch((e) => e);
   assert.match(bothEnds.message, /end_image and end_image_asset_identifier are alternatives/);
-  const tooMany = await call("ideogram_video_reference", { model: "minimax-h3-reference-to-video", prompt: "x", reference_images: Array(9).fill(png), reference_video_asset_identifiers: Array(3).fill({ asset_type: "RESPONSE", asset_id: "AAAAAAAAAAAAAAAAAAAAAA" }), reference_audios: [wav] }).catch((e) => e);
-  assert.match(tooMany.message, /MiniMax takes at most 12 references/, "13 references across the three kinds are refused before upload");
+  const tooMany = await call("ideogram_video_reference", {
+    model: "minimax-h3-reference-to-video",
+    prompt: "x",
+    reference_images: Array(9).fill(png),
+    reference_video_asset_identifiers: Array(3).fill({ asset_type: "RESPONSE", asset_id: "AAAAAAAAAAAAAAAAAAAAAA" }),
+    reference_audios: [wav],
+  }).catch((e) => e);
+  assert.match(
+    tooMany.message,
+    /MiniMax takes at most 12 references/,
+    "13 references across the three kinds are refused before upload",
+  );
 });

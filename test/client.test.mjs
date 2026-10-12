@@ -33,7 +33,10 @@ test("a call sends the Api-Key header, the JSON body, and dry_run as a query par
   const api = await startFakeApi(() => ({ json: { object: "price_quote" } }));
   try {
     const { options } = testClientOptions(api.base);
-    const result = await new IdeogramClient(options).call(request(generateOp, { prompt: "a cat" }, { dryRun: true }), openBudget());
+    const result = await new IdeogramClient(options).call(
+      request(generateOp, { prompt: "a cat" }, { dryRun: true }),
+      openBudget(),
+    );
     assert.deepEqual(result.body, { object: "price_quote" });
     const [sent] = api.requests;
     assert.equal(sent.url, "/v2/image/generate/ideogram-3?dry_run=true");
@@ -47,10 +50,15 @@ test("a call sends the Api-Key header, the JSON body, and dry_run as a query par
 });
 
 test("a 402 is typed from GenerationErrorResponse, names the remedy and is never retried", async () => {
-  const api = await startFakeApi(() => ({ status: 402, json: { error: "Not enough credits", reject_reason: "insufficient_funds" } }));
+  const api = await startFakeApi(() => ({
+    status: 402,
+    json: { error: "Not enough credits", reject_reason: "insufficient_funds" },
+  }));
   try {
     const { options } = testClientOptions(api.base);
-    const error = await new IdeogramClient(options).call(request(generateOp, { prompt: "x" }), openBudget()).catch((e) => e);
+    const error = await new IdeogramClient(options)
+      .call(request(generateOp, { prompt: "x" }), openBudget())
+      .catch((e) => e);
     assert.ok(error instanceof IdeogramApiError);
     assert.deepEqual([error.status, error.details.rejectReason], [402, "insufficient_funds"]);
     assert.match(error.toMcpError(), /add credits/);
@@ -60,10 +68,19 @@ test("a 402 is typed from GenerationErrorResponse, names the remedy and is never
   }
 });
 
-const INFLIGHT = { error: "Too many in flight", reject_reason: "inflight_limit", max_inflight_requests: 2, task_completion_speed: "fast" };
+const INFLIGHT = {
+  error: "Too many in flight",
+  reject_reason: "inflight_limit",
+  max_inflight_requests: 2,
+  task_completion_speed: "fast",
+};
 
 test("a 429 is an explicit rejection before acceptance: it is retried after Retry-After", async () => {
-  const api = await startFakeApi((_req, n) => (n < 3 ? { status: 429, headers: { "retry-after": "7" }, json: INFLIGHT } : { json: { generation_id: "g", seed: 1 } }));
+  const api = await startFakeApi((_req, n) =>
+    n < 3
+      ? { status: 429, headers: { "retry-after": "7" }, json: INFLIGHT }
+      : { json: { generation_id: "g", seed: 1 } },
+  );
   try {
     const { options, sleeps, budget } = testClientOptions(api.base);
     const result = await new IdeogramClient(options).call(request(generateOp, { prompt: "x" }), budget);
@@ -79,7 +96,9 @@ test("a 429 that outlasts the retries is typed with the in-flight limit", async 
   const api = await startFakeApi(() => ({ status: 429, json: INFLIGHT }));
   try {
     const { options } = testClientOptions(api.base, { maxRetries: 1 });
-    const error = await new IdeogramClient(options).call(request(generateOp, { prompt: "x" }), openBudget()).catch((e) => e);
+    const error = await new IdeogramClient(options)
+      .call(request(generateOp, { prompt: "x" }), openBudget())
+      .catch((e) => e);
     assert.deepEqual([error.status, error.details.rejectReason, error.details.maxInflight], [429, "inflight_limit", 2]);
     assert.match(error.toMcpError(), /2 generation\(s\) at once/);
     assert.equal(api.requests.length, 2);
@@ -92,7 +111,9 @@ test("a POST answered 500 is not sent again: the job may have been accepted and 
   const api = await startFakeApi(() => ({ status: 500, json: { message: "boom" } }));
   try {
     const { options } = testClientOptions(api.base);
-    const error = await new IdeogramClient(options).call(request(generateOp, { prompt: "x" }), openBudget()).catch((e) => e);
+    const error = await new IdeogramClient(options)
+      .call(request(generateOp, { prompt: "x" }), openBudget())
+      .catch((e) => e);
     assert.equal(error.status, 500);
     assert.equal(api.requests.length, 1, "one attempt");
   } finally {
@@ -104,7 +125,9 @@ test("a POST whose connection drops after the body was sent is not sent again, a
   const api = await startFakeApi(() => (res, req) => req.socket.destroy());
   try {
     const { options } = testClientOptions(api.base);
-    const error = await new IdeogramClient(options).call(request(generateOp, { prompt: "x" }), openBudget()).catch((e) => e);
+    const error = await new IdeogramClient(options)
+      .call(request(generateOp, { prompt: "x" }), openBudget())
+      .catch((e) => e);
     assert.equal(error.code, "NETWORK_ERROR");
     assert.match(error.message, /may have reached Ideogram/);
     assert.equal(error.details.sent, true, "typed for the caller: the request may have reached Ideogram");
@@ -124,9 +147,16 @@ test("a POST whose connection was refused (never sent) is retried", async () => 
   const clock = {
     t: 0,
     now: () => clock.t,
-    sleep: async () => { // the server comes up during the retry sleep
+    sleep: async () => {
+      // the server comes up during the retry sleep
       if (api) return;
-      api = http.createServer((req, res) => { req.resume(); req.on("end", () => { res.writeHead(200, { "content-type": "application/json" }); res.end('{"generation_id":"g","seed":1}'); }); });
+      api = http.createServer((req, res) => {
+        req.resume();
+        req.on("end", () => {
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end('{"generation_id":"g","seed":1}');
+        });
+      });
       await new Promise((done) => api.listen(port, "127.0.0.1", done));
     },
   };
@@ -144,7 +174,10 @@ test("a GET (a poll) is retried on a 503", async () => {
     const { options } = testClientOptions(api.base);
     const op = operationById("get_generation_v2");
     const retriesBefore = COUNTERS.retries;
-    const result = await new IdeogramClient(options).call(request(op, null, { path: { generation_id: "a/b" } }), openBudget());
+    const result = await new IdeogramClient(options).call(
+      request(op, null, { path: { generation_id: "a/b" } }),
+      openBudget(),
+    );
     assert.deepEqual(result.body, { ok: true });
     assert.equal(api.requests[0].url, "/v2/generations/a%2Fb", "the path id is percent-encoded");
     assert.equal(COUNTERS.retries, retriesBefore + 1, "the retry is counted");
@@ -161,7 +194,11 @@ test("a download is streamed to disk and stops at the cap: the rest is never rea
     res.writeHead(200, { "content-type": "image/png" });
     while (written < total && !res.destroyed) {
       written += chunk.length;
-      if (!res.write(chunk)) await new Promise((done) => { res.once("drain", done); res.once("close", done); });
+      if (!res.write(chunk))
+        await new Promise((done) => {
+          res.once("drain", done);
+          res.once("close", done);
+        });
     }
     res.end();
   });
@@ -184,7 +221,9 @@ test("a download is saved under the output directory with the extension of its m
     const saved = await new IdeogramClient(options).download(`${api.base}/x`, join(dir, "ok"), openBudget());
     assert.match(saved.path, /ideogram-\d+-[0-9a-f]{8}\.webp$/);
     assert.equal(saved.bytes, PNG.length);
-    const refused = await new IdeogramClient(options).download("https://example.com/x.png", dir, openBudget()).catch((e) => e);
+    const refused = await new IdeogramClient(options)
+      .download("https://example.com/x.png", dir, openBudget())
+      .catch((e) => e);
     assert.equal(refused.code, "SSRF_BLOCKED");
   } finally {
     await api.close();
@@ -193,10 +232,16 @@ test("a download is saved under the output directory with the extension of its m
 
 test("a download redirect is never followed: the hop would skip the host allow-list (1.x blocked it too)", async () => {
   const target = await startFakeApi(() => ({ status: 200, headers: { "content-type": "image/png" }, body: PNG }));
-  const api = await startFakeApi(() => ({ status: 302, headers: { location: `${target.base}/elsewhere.png` }, body: "" }));
+  const api = await startFakeApi(() => ({
+    status: 302,
+    headers: { location: `${target.base}/elsewhere.png` },
+    body: "",
+  }));
   try {
     const { options } = testClientOptions(api.base);
-    const error = await new IdeogramClient(options).download(`${api.base}/x.png`, join(dir, "redirected"), openBudget()).catch((e) => e);
+    const error = await new IdeogramClient(options)
+      .download(`${api.base}/x.png`, join(dir, "redirected"), openBudget())
+      .catch((e) => e);
     assert.equal(error.code, "REDIRECT_BLOCKED");
     assert.match(error.message, /302/);
     assert.equal(target.requests.length, 0, "the redirect target was never fetched");
@@ -226,7 +271,9 @@ test("a 2xx whose body is cut off is a typed error that says the job may be runn
   });
   try {
     const { options } = testClientOptions(api.base);
-    const error = await new IdeogramClient(options).call(request(generateOp, { prompt: "x" }), openBudget()).catch((e) => e);
+    const error = await new IdeogramClient(options)
+      .call(request(generateOp, { prompt: "x" }), openBudget())
+      .catch((e) => e);
     assert.ok(error instanceof IdeogramApiError, `${error?.constructor?.name}: ${error?.message}`);
     assert.equal(error.code, "RESPONSE_READ_FAILED");
     assert.match(error.message, /may be running and billed/);
@@ -255,7 +302,9 @@ test("the call's budget bounds one attempt below the client's timeout: a hanging
     const { options } = testClientOptions(api.base, { maxRetries: 0, requestTimeoutMs: 60_000 });
     const op = operationById("get_generation_v2");
     const started = Date.now();
-    const error = await new IdeogramClient(options).call(request(op, null, { path: { generation_id: "g" } }), realBudget(150)).catch((e) => e);
+    const error = await new IdeogramClient(options)
+      .call(request(op, null, { path: { generation_id: "g" } }), realBudget(150))
+      .catch((e) => e);
     assert.equal(error.code, "CALL_TIMEOUT");
     assert.match(error.message, /time ran out while the request was in flight/);
     assert.ok(Date.now() - started < 5_000, "failed on the call's deadline, not the client's timeout");
@@ -265,10 +314,16 @@ test("the call's budget bounds one attempt below the client's timeout: a hanging
 });
 
 test("a 2xx POST answered with a non-JSON body is INVALID_JSON and says the job may be billed", async () => {
-  const api = await startFakeApi(() => ({ status: 200, headers: { "content-type": "text/html" }, body: "<html>gateway</html>" }));
+  const api = await startFakeApi(() => ({
+    status: 200,
+    headers: { "content-type": "text/html" },
+    body: "<html>gateway</html>",
+  }));
   try {
     const { options } = testClientOptions(api.base);
-    const error = await new IdeogramClient(options).call(request(generateOp, { prompt: "x" }), openBudget()).catch((e) => e);
+    const error = await new IdeogramClient(options)
+      .call(request(generateOp, { prompt: "x" }), openBudget())
+      .catch((e) => e);
     assert.equal(error.code, "INVALID_JSON");
     assert.match(error.message, /may be running and billed/);
   } finally {
@@ -282,9 +337,14 @@ test("the call's budget is the whole budget: a hanging poll is not retried past 
     const { options, sleeps } = testClientOptions(api.base, { maxRetries: 3, requestTimeoutMs: 60_000 });
     const op = operationById("get_generation_v2");
     const started = Date.now();
-    const error = await new IdeogramClient(options).call(request(op, null, { path: { generation_id: "g" } }), realBudget(300)).catch((e) => e);
+    const error = await new IdeogramClient(options)
+      .call(request(op, null, { path: { generation_id: "g" } }), realBudget(300))
+      .catch((e) => e);
     assert.equal(error.code, "CALL_TIMEOUT");
-    assert.ok(Date.now() - started < 3_000, `${Date.now() - started} ms: no second 300 ms attempt after the first used the budget`);
+    assert.ok(
+      Date.now() - started < 3_000,
+      `${Date.now() - started} ms: no second 300 ms attempt after the first used the budget`,
+    );
     assert.ok(api.requests.length <= 2, `${api.requests.length} attempts`);
     assert.deepEqual(sleeps, [], "no retry sleep: the budget was spent");
   } finally {
@@ -297,19 +357,35 @@ test("a POST is resent only with time for an attempt as long as the rejected one
     const slowApi = await startFakeApi(() => ({ status: 429, headers: { "retry-after": retryAfter }, json: INFLIGHT }));
     try {
       const { options, sleeps, clock, budget } = testClientOptions(slowApi.base);
-      slowApi.server.on("request", () => { clock.t += 20_000; }); // every attempt "takes" 20 s on the fake clock
-      const error = await new IdeogramClient(options).call(request(generateOp, { prompt: "x" }), budget).catch((e) => e);
+      slowApi.server.on("request", () => {
+        clock.t += 20_000;
+      }); // every attempt "takes" 20 s on the fake clock
+      const error = await new IdeogramClient(options)
+        .call(request(generateOp, { prompt: "x" }), budget)
+        .catch((e) => e);
       return [error.status, slowApi.requests.length, sleeps];
     } finally {
       await slowApi.close();
     }
   };
-  assert.deepEqual(await run("30"), [429, 1, []], "at 20 s: 30 s sleep + 20 s attempt + 1 s > the 35 s left (without the reserve, 31 s would fit)");
-  assert.deepEqual(await run("10"), [429, 2, [10000]], "at 20 s: 10 + 20 + 1 ≤ 35 → resent; at 50 s: 10 + 20 + 1 > 5 → reported");
+  assert.deepEqual(
+    await run("30"),
+    [429, 1, []],
+    "at 20 s: 30 s sleep + 20 s attempt + 1 s > the 35 s left (without the reserve, 31 s would fit)",
+  );
+  assert.deepEqual(
+    await run("10"),
+    [429, 2, [10000]],
+    "at 20 s: 10 + 20 + 1 ≤ 35 → resent; at 50 s: 10 + 20 + 1 > 5 → reported",
+  );
 });
 
 test("a download 429 honours Retry-After inside the download's deadline", async () => {
-  const api = await startFakeApi((_req, n) => (n === 1 ? { status: 429, headers: { "retry-after": "5" }, json: {} } : { status: 200, headers: { "content-type": "image/png" }, body: PNG }));
+  const api = await startFakeApi((_req, n) =>
+    n === 1
+      ? { status: 429, headers: { "retry-after": "5" }, json: {} }
+      : { status: 200, headers: { "content-type": "image/png" }, body: PNG },
+  );
   try {
     const { options, sleeps, budget } = testClientOptions(api.base);
     const saved = await new IdeogramClient(options).download(`${api.base}/x.png`, join(dir, "ra"), budget);
@@ -325,20 +401,40 @@ test("upload limits are the operation's: describe refuses an 11 MB image before 
   await writeFile(big, PNG);
   await truncate(big, 11 * 1024 * 1024);
   const describe = operationById("post_describe_image_ideogram_v3");
-  await assert.rejects(() => loadUploads(describe, [{ field: "image", path: big }], undefined), /over 10\.0 MB \(the limit Ideogram states/);
+  await assert.rejects(
+    () => loadUploads(describe, [{ field: "image", path: big }], undefined),
+    /over 10\.0 MB \(the limit Ideogram states/,
+  );
   const remix = operationById("post_remix_image_v2_ideogram_v3");
   const [part] = await loadUploads(remix, [{ field: "image", path: big }], undefined);
-  assert.deepEqual([part.field, part.filename, part.contentType, part.bytes.byteLength], ["image", "image.png", "image/png", 11 * 1024 * 1024]);
+  assert.deepEqual(
+    [part.field, part.filename, part.contentType, part.bytes.byteLength],
+    ["image", "image.png", "image/png", 11 * 1024 * 1024],
+  );
 });
 
 test("an upload to a field the operation lacks, or too many files, is refused naming the fields", async () => {
   const image = join(dir, "i.png");
   await writeFile(image, PNG);
   const generate45 = operationById("post_generate_image_v2_ideogram45");
-  await assert.rejects(() => loadUploads(generate45, [{ field: "image", path: image }], undefined), /not a file field .* images, mask/);
+  await assert.rejects(
+    () => loadUploads(generate45, [{ field: "image", path: image }], undefined),
+    /not a file field .* images, mask/,
+  );
   const six = Array.from({ length: 6 }, () => ({ field: "images", path: image }));
   await assert.rejects(() => loadUploads(generate45, six, undefined), /at most 5 files/);
-  await assert.rejects(() => loadUploads(generate45, [{ field: "mask", path: image }, { field: "mask", path: image }], undefined), /takes one file/);
+  await assert.rejects(
+    () =>
+      loadUploads(
+        generate45,
+        [
+          { field: "mask", path: image },
+          { field: "mask", path: image },
+        ],
+        undefined,
+      ),
+    /takes one file/,
+  );
 });
 
 test("the caller's cancellation aborts the attempt and nothing is resent: CANCELLED, one request", async () => {
@@ -378,7 +474,9 @@ test("a cancellation during a retry sleep ends the call at once (Retry-After 2 s
     const cancel = new AbortController();
     setTimeout(() => cancel.abort("the client gave up"), 100);
     const started = Date.now();
-    const error = await new IdeogramClient(options).call(request(generateOp, { prompt: "x" }), realBudget(10_000, cancel.signal)).catch((e) => e);
+    const error = await new IdeogramClient(options)
+      .call(request(generateOp, { prompt: "x" }), realBudget(10_000, cancel.signal))
+      .catch((e) => e);
     assert.deepEqual([error.code, api.requests.length], ["CANCELLED", 1]);
     assert.ok(Date.now() - started < 1_000, `${Date.now() - started} ms: the 2 s sleep was cut by the cancel`);
   } finally {
@@ -408,8 +506,13 @@ test("a download 429 the budget cannot wait out is DOWNLOAD_FAILED with its Retr
   const api = await startFakeApi(() => ({ status: 429, headers: { "retry-after": "900" }, body: "slow down" }));
   try {
     const { options, sleeps, budget } = testClientOptions(api.base);
-    const error = await new IdeogramClient(options).download(`${api.base}/x.png`, join(dir, "ra-900"), budget).catch((e) => e);
-    assert.deepEqual([error.code, error.status, error.details.retryAfterS, api.requests.length, sleeps], ["DOWNLOAD_FAILED", 429, 900, 1, []]);
+    const error = await new IdeogramClient(options)
+      .download(`${api.base}/x.png`, join(dir, "ra-900"), budget)
+      .catch((e) => e);
+    assert.deepEqual(
+      [error.code, error.status, error.details.retryAfterS, api.requests.length, sleeps],
+      ["DOWNLOAD_FAILED", 429, 900, 1, []],
+    );
     assert.match(error.message, /429 .*retry after 900 s/);
   } finally {
     await api.close();
@@ -435,7 +538,9 @@ test("a lagging clock cannot mistype a budget cut: with 100 ms left on the fake 
     const budget = toolCallBudget(clock, undefined, 150); // its real timer fires at 150 ms; the fake clock says 100 ms are left
     clock.t += 50;
     const op = operationById("get_generation_v2");
-    const error = await new IdeogramClient(options).call(request(op, null, { path: { generation_id: "g" } }), budget).catch((e) => e);
+    const error = await new IdeogramClient(options)
+      .call(request(op, null, { path: { generation_id: "g" } }), budget)
+      .catch((e) => e);
     assert.equal(error.code, "CALL_TIMEOUT", `${error.code}: ${error.message}`);
   } finally {
     await api.close();

@@ -17,18 +17,23 @@ const schemaOf = (name) => generatedComponent(name); // the generator's export n
 
 /** The provider's examples that do not match the provider's schemas (not this server's doing). */
 const EXAMPLES_CONTRADICTING_THEIR_SCHEMA = {
-  GenerateImageIdeogram45Response: "generation_kind is null in the example, an enum (sampling | workflow) in the schema",
-  PreciseEditImageIdeogram45Response: "generation_kind is null in the example, an enum (sampling | workflow) in the schema",
+  GenerateImageIdeogram45Response:
+    "generation_kind is null in the example, an enum (sampling | workflow) in the schema",
+  PreciseEditImageIdeogram45Response:
+    "generation_kind is null in the example, an enum (sampling | workflow) in the schema",
   ToolRemixResponse: 'seed is "" in the example, an integer in the schema',
   ListAccountApiKeysResponse: "status is null in the example, an enum (active | disabled | archived) in the schema",
   AssetReferenceUsageResponse: "attributes[].value_type is null in the example, an enum (TEXT | NUMBER) in the schema",
-  Dataset: "cover_asset_identifier.asset_type is null and collection_id a placeholder in the example, an enum and a 22-character id in the schema",
+  Dataset:
+    "cover_asset_identifier.asset_type is null and collection_id a placeholder in the example, an enum and a 22-character id in the schema",
   GetDatasetResponse: "dataset.cover_asset_identifier as in Dataset",
   ListDatasetsResponse: "datasets[].cover_asset_identifier as in Dataset",
   GetModelResponse: "model.status and training_runs[].status are null in the example, enums in the schema",
   ListModelsResponse: "models[].status and training_runs[].status as in GetModelResponse",
-  UploadDatasetAssetsResponse: "failed_assets[].failure_reason is null and successful_assets[].asset_identifier a string in the example, an enum and an object in the schema",
-  LayeredImageGenerationResponseV3: "data[] lacks is_image_safe and prompt and names a resolution outside the enum in the example (the v1 layerize design operation, raw since 2.5.0)",
+  UploadDatasetAssetsResponse:
+    "failed_assets[].failure_reason is null and successful_assets[].asset_identifier a string in the example, an enum and an object in the schema",
+  LayeredImageGenerationResponseV3:
+    "data[] lacks is_image_safe and prompt and names a resolution outside the enum in the example (the v1 layerize design operation, raw since 2.5.0)",
 };
 
 test("every served operation's response example parses with its generated schema, except the provider's own contradictions", () => {
@@ -47,7 +52,11 @@ test("every served operation's response example parses with its generated schema
     if (!result.success) failing[name] = result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
   }
   assert.ok(seen.size >= 40, `${seen.size} response schemas with an example`);
-  assert.deepEqual(Object.keys(failing).sort(), Object.keys(EXAMPLES_CONTRADICTING_THEIR_SCHEMA).sort(), JSON.stringify(failing, null, 1));
+  assert.deepEqual(
+    Object.keys(failing).sort(),
+    Object.keys(EXAMPLES_CONTRADICTING_THEIR_SCHEMA).sort(),
+    JSON.stringify(failing, null, 1),
+  );
 });
 
 test("the spec's GenerationResponse example (items without object_type) is a completed image generation once the prose rule is applied", () => {
@@ -63,13 +72,45 @@ test("the bodies the live API sends parse: acceptance, a completed poll with a +
   const acceptance = { generation_id: "A", seed: 1 };
   assert.equal(schemaOf("GenerateImageZImageResponse").safeParse(acceptance).success, true);
   const completed = {
-    created: "2026-10-07T15:09:24.239178+00:00", generation_id: "A", status: "completed", response_type: "url",
-    data: [{ asset_id: null, is_image_safe: true, object_type: "image.generation", prompt: "p", resolution: "1024x1024", seed: 1, url: "https://ideogram.ai/api/images/a.png" }],
+    created: "2026-10-07T15:09:24.239178+00:00",
+    generation_id: "A",
+    status: "completed",
+    response_type: "url",
+    data: [
+      {
+        asset_id: null,
+        is_image_safe: true,
+        object_type: "image.generation",
+        prompt: "p",
+        resolution: "1024x1024",
+        seed: 1,
+        url: "https://ideogram.ai/api/images/a.png",
+      },
+    ],
   };
   const poll = schemaOf("GenerationResponse").safeParse(completed);
   assert.equal(poll.success, true, JSON.stringify(poll.error?.issues));
-  const sync = { generation_id: "B", seed: 2, data: [{ url: "https://ideogram.ai/api/images/b.png", prompt: "p", resolution: "1024x1024", is_image_safe: true, seed: 2 }] };
+  const sync = {
+    generation_id: "B",
+    seed: 2,
+    data: [
+      {
+        url: "https://ideogram.ai/api/images/b.png",
+        prompt: "p",
+        resolution: "1024x1024",
+        is_image_safe: true,
+        seed: 2,
+      },
+    ],
+  };
   assert.equal(schemaOf("GenerateImageZImageResponse").safeParse(sync).success, true);
-  const quote = { object: "price_quote", billing_identifier: "z_image_generation", quantity: 1, usd_micros: 5000, credit_millis: 500, qualifier: "exact" };
+  const quote = {
+    object: "price_quote",
+    billing_identifier: "z_image_generation",
+    quantity: 1,
+    usd_micros: 5000,
+    credit_millis: 500,
+    qualifier: "exact",
+  };
   assert.equal(schemaOf("PriceQuote").safeParse(quote).success, true);
 });
