@@ -101,7 +101,11 @@ test("ideogram_usage: a bad time, a range over the API's span, a start after the
   assert.match(text(backwards.result), /is not before the end/);
   const none = await call("ideogram_usage", { sources: [] }, () => ({ json: usage }));
   assert.match(text(none.result), /sources/);
-  assert.equal(long.requests.length + longHourly.requests.length + backwards.requests.length + none.requests.length, 0);
+  // a date Date.parse reads but the operation's schema does not (no time): refused by the query schema, said whole
+  const dateOnly = await call("ideogram_usage", { start_time: "2026-10-01", end_time: "2026-10-08T00:00:00Z" }, () => ({ json: usage }));
+  assert.equal(dateOnly.result.isError, true);
+  assert.match(text(dateOnly.result), /^ideogram_usage: start_time: .+ \(RFC 3339 times, e\.g\. 2026-10-01T00:00:00Z\)$/);
+  assert.equal(long.requests.length + longHourly.requests.length + backwards.requests.length + none.requests.length + dateOnly.requests.length, 0);
   const off = await call("ideogram_usage", {}, () => ({ json: { buckets: [{ start_time: "x" }] } }));
   assert.equal(off.result.isError, true);
   assert.match(text(off.result), /does not match its own specification/);

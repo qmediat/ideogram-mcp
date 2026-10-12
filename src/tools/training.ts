@@ -170,7 +170,7 @@ const TrainInput = z.strictObject({
 const HYPERPARAMETERS = ["training_steps", "lora_rank", "ema", "learning_rate", "batch_size", "base_variant", "wandb_project"] as const;
 
 /** The training operation the arguments select (the advanced one when a hyperparameter is given) and its checked
- * body; a string says why the arguments are refused. */
+ * body; a string is the tool's refusal. */
 function trainRequest(model: TrainModel, rest: Omit<z.infer<typeof TrainInput>, "model">): { op: Operation; body: Record<string, unknown> } | string {
   const given = HYPERPARAMETERS.filter((h) => rest[h] !== undefined);
   const op = given.length > 0 ? TRAIN[model].advanced : TRAIN[model].plain;

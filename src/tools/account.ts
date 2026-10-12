@@ -134,15 +134,15 @@ function rangeOf(ctx: ToolContext, input: z.infer<typeof UsageInput>): { start: 
   return { start, end: input.end_time ?? toRfc3339(endMs) };
 }
 
-/** The query a usage request sends, checked against the operation's schema; a string says why it cannot be sent. */
+/** The query a usage request sends, checked against the operation's schema; a string is the tool's refusal. */
 function usageQuery(ctx: ToolContext, input: z.infer<typeof UsageInput>): Record<string, QueryValue> | string {
   const range = rangeOf(ctx, input);
-  if (typeof range === "string") return range;
+  if (typeof range === "string") return `ideogram_usage: ${range}`;
   const query: Record<string, QueryValue> = { start_time: range.start, end_time: range.end };
   if (input.bucket_width !== undefined) query.bucket_width = input.bucket_width;
   if (input.sources !== undefined) query.sources = input.sources;
   const checked = USAGE.schemas.query?.safeParse(query);
-  if (checked !== undefined && !checked.success) return `${checked.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")} (RFC 3339 times, e.g. 2026-10-01T00:00:00Z)`;
+  if (checked !== undefined && !checked.success) return `ideogram_usage: ${checked.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")} (RFC 3339 times, e.g. 2026-10-01T00:00:00Z)`;
   return query;
 }
 
@@ -150,7 +150,7 @@ async function runUsage(ctx: ToolContext, args: ToolArguments): Promise<CallTool
   const input = UsageInput.safeParse(args);
   if (!input.success) return textResult(`ideogram_usage: ${input.error.issues.map((i) => `${i.path.join(".") || "(input)"}: ${i.message}`).join("; ")}`, true);
   const query = usageQuery(ctx, input.data);
-  if (typeof query === "string") return textResult(`ideogram_usage: ${query}`, true);
+  if (typeof query === "string") return textResult(query, true);
   try {
     const answer = await readOperation(ctx, { op: USAGE, query }, zGetAccountUsageResponse);
     if (!answer.ok) return answer.result;
