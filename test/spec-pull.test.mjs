@@ -37,7 +37,11 @@ test("an exposed operation removed, one added, one changed through a referenced 
   assert.equal(run.status, 1, run.stderr);
   assert.match(run.stdout, /### Added \(1\)\n\n- `POST \/v2\/image\/generate\/new-model`/);
   assert.match(run.stdout, /### Removed \(1\)\n\n- `POST \/v2\/image\/upscale\/auto`/);
-  assert.match(run.stdout, /- `POST \/v2\/image\/generate\/ideogram-3`/, "ResolutionV3 is referenced by the ideogram-3 request");
+  assert.match(
+    run.stdout,
+    /- `POST \/v2\/image\/generate\/ideogram-3`/,
+    "ResolutionV3 is referenced by the ideogram-3 request",
+  );
   assert.doesNotMatch(run.stdout, /`POST \/v2\/image\/generate\/ideogram-4-5`/, "4.5 does not reference ResolutionV3");
 });
 

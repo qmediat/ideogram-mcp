@@ -22,7 +22,13 @@ const jsonRequest = (operation, fields) => ({
   body: { media: "json", fields, files: [], jsonParts: [] },
   dryRun: false,
 });
-const image = { url: "https://ideogram.ai/api/images/a.png", prompt: "p", resolution: "1024x1024", is_image_safe: true, seed: 3 };
+const image = {
+  url: "https://ideogram.ai/api/images/a.png",
+  prompt: "p",
+  resolution: "1024x1024",
+  is_image_safe: true,
+  seed: 3,
+};
 /** A polled item carries its kind (the spec's discriminator); a synchronous one does not. */
 const polledImage = { ...image, object_type: "image.generation" };
 
@@ -40,9 +46,18 @@ async function run(handler, req, waitS = 45) {
 
 test("a synchronous operation (describe) completes in one call", async () => {
   const body = { created: "2026-10-07T00:00:00Z", description_id: "d1", descriptions: [{ text: "a red door" }] };
-  const { outcome, requests } = await run(() => ({ json: body }), jsonRequest(op("post_describe_image_ideogram_v3"), {}));
+  const { outcome, requests } = await run(
+    () => ({ json: body }),
+    jsonRequest(op("post_describe_image_ideogram_v3"), {}),
+  );
   assert.equal(outcome.kind, "completed");
-  assert.deepEqual(outcome.payload, { kind: "description", descriptionId: "d1", texts: ["a red door"], jsonPrompt: null, aspectRatio: null });
+  assert.deepEqual(outcome.payload, {
+    kind: "description",
+    descriptionId: "d1",
+    texts: ["a red door"],
+    jsonPrompt: null,
+    aspectRatio: null,
+  });
   assert.equal(requests.length, 1);
   assert.equal(JSON.parse(requests[0].body).async, undefined, "describe takes no async field");
 });
@@ -51,15 +66,33 @@ test("an async-capable generation is sent with async: true, returns at acceptanc
   const handler = (req, n) => {
     if (req.method === "POST") return { json: { generation_id: "g1", seed: 3 } };
     if (n === 2) return { json: { generation_id: "g1", status: "pending", created: "2026-10-07T00:00:00Z" } };
-    return { json: { generation_id: "g1", status: "completed", created: "2026-10-07T00:00:00Z", response_type: "url", usage_cost_usd_micros: 60000, data: [polledImage] } };
+    return {
+      json: {
+        generation_id: "g1",
+        status: "completed",
+        created: "2026-10-07T00:00:00Z",
+        response_type: "url",
+        usage_cost_usd_micros: 60000,
+        data: [polledImage],
+      },
+    };
   };
-  const { outcome, requests, clock } = await run(handler, jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "a cat" }));
+  const { outcome, requests, clock } = await run(
+    handler,
+    jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "a cat" }),
+  );
   assert.equal(JSON.parse(requests[0].body).async, true);
-  assert.deepEqual(requests.slice(1).map((r) => r.url), ["/v2/generations/g1", "/v2/generations/g1"]);
+  assert.deepEqual(
+    requests.slice(1).map((r) => r.url),
+    ["/v2/generations/g1", "/v2/generations/g1"],
+  );
   assert.equal(outcome.kind, "completed");
   assert.equal(outcome.generationId, "g1");
   assert.equal(outcome.usageCostUsdMicros, 60000n);
-  assert.deepEqual(outcome.payload.items.map((i) => [i.url, i.seed, i.isImageSafe]), [[image.url, 3, true]]);
+  assert.deepEqual(
+    outcome.payload.items.map((i) => [i.url, i.seed, i.isImageSafe]),
+    [[image.url, 3, true]],
+  );
   assert.deepEqual(clock.sleeps, [2000, 3000], "2 s, then ×1.5");
 });
 
@@ -67,7 +100,14 @@ test("a failed generation is Failed with the API's reason", async () => {
   const handler = (req) =>
     req.method === "POST"
       ? { json: { generation_id: "g2", seed: 1 } }
-      : { json: { generation_id: "g2", status: "failed", created: "2026-10-07T00:00:00Z", failure_reason: "content_policy_violation" } };
+      : {
+          json: {
+            generation_id: "g2",
+            status: "failed",
+            created: "2026-10-07T00:00:00Z",
+            failure_reason: "content_policy_violation",
+          },
+        };
   const { outcome } = await run(handler, jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x" }));
   assert.deepEqual(outcome, { kind: "failed", generationId: "g2", failureReason: "content_policy_violation" });
 });
@@ -75,13 +115,20 @@ test("a failed generation is Failed with the API's reason", async () => {
 test("a wait that runs out ends Pending with the generation id, and the schedule is 2 s ×1.5", async () => {
   const pending = { generation_id: "g3", status: "pending", created: "2026-10-07T00:00:00Z" };
   const handler = (req) => (req.method === "POST" ? { json: { generation_id: "g3", seed: 1 } } : { json: pending });
-  const { outcome, clock } = await run(handler, jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x" }), 20);
+  const { outcome, clock } = await run(
+    handler,
+    jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x" }),
+    20,
+  );
   assert.deepEqual(outcome, { kind: "pending", generationId: "g3", note: null });
   assert.deepEqual(clock.sleeps, [2000, 3000, 4500, 6750], "the next delay (10.1 s) would pass the 20 s deadline");
 });
 
 test("wait_s 0 returns the id at acceptance without polling; wait_s over 50 is held to 50", async () => {
-  const handler = (req) => (req.method === "POST" ? { json: { generation_id: "g4", seed: 1 } } : { json: { generation_id: "g4", status: "pending", created: "2026-10-07T00:00:00Z" } });
+  const handler = (req) =>
+    req.method === "POST"
+      ? { json: { generation_id: "g4", seed: 1 } }
+      : { json: { generation_id: "g4", status: "pending", created: "2026-10-07T00:00:00Z" } };
   const zero = await run(handler, jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x" }), 0);
   assert.deepEqual([zero.outcome.kind, zero.requests.length], ["pending", 1]);
   const long = await run(handler, jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x" }), 600);
@@ -93,14 +140,20 @@ test("an acknowledgement-only operation (replace background) is polled although 
     req.method === "POST"
       ? { json: { generation_id: "g5" } }
       : { json: { generation_id: "g5", status: "completed", created: "2026-10-07T00:00:00Z", data: [polledImage] } };
-  const { outcome, requests } = await run(handler, jsonRequest(op("post_replace_background_ideogram_v3"), { prompt: "beach" }));
+  const { outcome, requests } = await run(
+    handler,
+    jsonRequest(op("post_replace_background_ideogram_v3"), { prompt: "beach" }),
+  );
   assert.equal(JSON.parse(requests[0].body).async, undefined);
   assert.equal(outcome.kind, "completed");
 });
 
 test("a 2xx body the generated schema rejects is a ContractMismatch, never a success, and it is counted", async () => {
   const before = COUNTERS.contractMismatches;
-  const { outcome } = await run(() => ({ json: { generation_id: "g6", seed: "not-a-number", data: [] } }), jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x" }));
+  const { outcome } = await run(
+    () => ({ json: { generation_id: "g6", seed: "not-a-number", data: [] } }),
+    jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x" }),
+  );
   assert.equal(outcome.kind, "contract_mismatch");
   assert.equal(outcome.generationId, "g6", "the id is kept so the paid job is not lost");
   assert.match(outcome.issues.join("\n"), /^seed: /m);
@@ -108,7 +161,21 @@ test("a 2xx body the generated schema rejects is a ContractMismatch, never a suc
 });
 
 test("the body probe never rejects a body for a top-level field of another shape: images beside an aspect_ratio null are still images", () => {
-  const payload = payloadOf({ generation_id: "g", aspect_ratio: null, layers: null, data: [{ object_type: "image.generation", url: "https://ideogram.ai/a.png", prompt: "p", resolution: "1024x1024", seed: 1, is_image_safe: true }] });
+  const payload = payloadOf({
+    generation_id: "g",
+    aspect_ratio: null,
+    layers: null,
+    data: [
+      {
+        object_type: "image.generation",
+        url: "https://ideogram.ai/a.png",
+        prompt: "p",
+        resolution: "1024x1024",
+        seed: 1,
+        is_image_safe: true,
+      },
+    ],
+  });
   assert.equal(payload.kind, "images");
   assert.equal(payload.items.length, 1);
 });
@@ -116,8 +183,21 @@ test("the body probe never rejects a body for a top-level field of another shape
 test("a completed poll in the API's real shape (created with a +00:00 offset and microseconds, asset_id null) is Completed", async () => {
   // Captured live 2026-10-07 (values anonymised): the spec's example and the generator's z.iso.datetime() disagree on the offset form.
   const real = {
-    created: "2026-10-07T15:09:24.239178+00:00", generation_id: "gReal", status: "completed", response_type: "url",
-    data: [{ asset_id: null, is_image_safe: true, object_type: "image.generation", prompt: "p", resolution: "1024x1024", seed: 7, url: "https://ideogram.ai/api/images/a.png" }],
+    created: "2026-10-07T15:09:24.239178+00:00",
+    generation_id: "gReal",
+    status: "completed",
+    response_type: "url",
+    data: [
+      {
+        asset_id: null,
+        is_image_safe: true,
+        object_type: "image.generation",
+        prompt: "p",
+        resolution: "1024x1024",
+        seed: 7,
+        url: "https://ideogram.ai/api/images/a.png",
+      },
+    ],
   };
   const handler = (req) => (req.method === "POST" ? { json: { generation_id: "gReal", seed: 7 } } : { json: real });
   const { outcome } = await run(handler, jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x" }));
@@ -129,10 +209,18 @@ test("a poll answered 503 keeps the id as pending with the error; a 404 is the a
   const flaky = await startFakeApi(() => ({ status: 503, json: { message: "upstream" } }));
   const gone = await startFakeApi(() => ({ status: 404, json: { message: "no such generation" } }));
   try {
-    const pending = await resume(new IdeogramClient(testClientOptions(flaky.base).options), "gX", waitOptions(fakeClock(), 10));
+    const pending = await resume(
+      new IdeogramClient(testClientOptions(flaky.base).options),
+      "gX",
+      waitOptions(fakeClock(), 10),
+    );
     assert.equal(pending.kind, "pending");
     assert.match(pending.note, /upstream/);
-    const error = await resume(new IdeogramClient(testClientOptions(gone.base).options), "gX", waitOptions(fakeClock(), 10)).catch((e) => e);
+    const error = await resume(
+      new IdeogramClient(testClientOptions(gone.base).options),
+      "gX",
+      waitOptions(fakeClock(), 10),
+    ).catch((e) => e);
     assert.equal(error.status, 404, "a 404 is never 'still running'");
     assert.match(error.message, /no such generation/);
   } finally {
@@ -171,18 +259,32 @@ test("the wait is cut by the call's budget: a 50 s wait inside a call with 10 s 
     const clock = fakeClock();
     const client = new IdeogramClient(testClientOptions(api.base).options);
     const budget = toolCallBudget(clock, undefined, 10_000);
-    const outcome = await execute(client, jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x" }), { waitS: 50, clock, budget });
+    const outcome = await execute(client, jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x" }), {
+      waitS: 50,
+      clock,
+      budget,
+    });
     assert.deepEqual(outcome, { kind: "pending", generationId: "g7", note: null });
-    assert.deepEqual(clock.sleeps, [2000, 3000, 4500], "the next poll (at 16.25 s) would pass the call's 10 s deadline, not the wait's 50 s");
+    assert.deepEqual(
+      clock.sleeps,
+      [2000, 3000, 4500],
+      "the next poll (at 16.25 s) would pass the call's 10 s deadline, not the wait's 50 s",
+    );
   } finally {
     await api.close();
   }
 });
 
 test("ideogram_generation with wait_s 0 reads the status once: the lookup is never cut by a wait of zero (a guard: 21a054d read once too)", async () => {
-  const api = await startFakeApi(() => ({ json: { generation_id: "g8", status: "pending", created: "2026-10-07T00:00:00Z" } }));
+  const api = await startFakeApi(() => ({
+    json: { generation_id: "g8", status: "pending", created: "2026-10-07T00:00:00Z" },
+  }));
   try {
-    const outcome = await resume(new IdeogramClient(testClientOptions(api.base).options), "g8", waitOptions(fakeClock(), 0));
+    const outcome = await resume(
+      new IdeogramClient(testClientOptions(api.base).options),
+      "g8",
+      waitOptions(fakeClock(), 0),
+    );
     assert.deepEqual([outcome.kind, api.requests.length], ["pending", 1]);
   } finally {
     await api.close();
@@ -190,17 +292,29 @@ test("ideogram_generation with wait_s 0 reads the status once: the lookup is nev
 });
 
 test("a cancellation during a poll's sleep ends the wait at once: Pending with the cancel noted, well before the 2 s poll", async () => {
-  const api = await startFakeApi((req) => (req.method === "POST" ? { json: { generation_id: "g9", seed: 1 } } : { json: { generation_id: "g9", status: "pending", created: "2026-10-07T00:00:00Z" } }));
+  const api = await startFakeApi((req) =>
+    req.method === "POST"
+      ? { json: { generation_id: "g9", seed: 1 } }
+      : { json: { generation_id: "g9", status: "pending", created: "2026-10-07T00:00:00Z" } },
+  );
   try {
     const client = new IdeogramClient(testClientOptions(api.base).options);
     const cancel = new AbortController();
     setTimeout(() => cancel.abort("the client gave up"), 100);
     const started = Date.now();
     const { SYSTEM_CLOCK } = await import("../dist/budget.js");
-    const outcome = await execute(client, jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x" }), { waitS: 45, clock: SYSTEM_CLOCK, budget: realBudget(10_000, cancel.signal) });
+    const outcome = await execute(client, jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x" }), {
+      waitS: 45,
+      clock: SYSTEM_CLOCK,
+      budget: realBudget(10_000, cancel.signal),
+    });
     assert.equal(outcome.kind, "pending");
     assert.match(outcome.note, /cancelled by the caller/);
-    assert.equal(api.requests.length, 1, "the acceptance POST only: the poll the cancel woke up saw the aborted budget and sent nothing");
+    assert.equal(
+      api.requests.length,
+      1,
+      "the acceptance POST only: the poll the cancel woke up saw the aborted budget and sent nothing",
+    );
     assert.ok(Date.now() - started < 1_000, `${Date.now() - started} ms`);
   } finally {
     await api.close();
@@ -243,15 +357,24 @@ test("a budget bounded by a nearer deadline has a signal of its own that fires a
 });
 
 test("a poll cut in flight by the WAIT is a clean Pending — no 'last poll failed' note, not the call's timeout (wait 3 s, the poll at 2 s hangs)", async () => {
-  const api = await startFakeApi((req) => (req.method === "POST" ? { json: { generation_id: "gW", seed: 1 } } : () => {}));
+  const api = await startFakeApi((req) =>
+    req.method === "POST" ? { json: { generation_id: "gW", seed: 1 } } : () => {},
+  );
   try {
     const client = new IdeogramClient(testClientOptions(api.base, { maxRetries: 0 }).options);
     const { SYSTEM_CLOCK } = await import("../dist/budget.js");
     const started = Date.now();
-    const outcome = await execute(client, jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x" }), { waitS: 3, clock: SYSTEM_CLOCK, budget: realBudget(30_000) });
+    const outcome = await execute(client, jsonRequest(op("post_generate_image_v2_ideogram_v3"), { prompt: "x" }), {
+      waitS: 3,
+      clock: SYSTEM_CLOCK,
+      budget: realBudget(30_000),
+    });
     assert.equal(outcome.kind, "pending");
     assert.equal(outcome.note, null, "the wait ending during a poll is a normal end, not a poll failure");
-    assert.ok(Date.now() - started >= 2_900 && Date.now() - started < 4_500, `${Date.now() - started} ms: cut at the wait's 3 s, not at the call's 30 s`);
+    assert.ok(
+      Date.now() - started >= 2_900 && Date.now() - started < 4_500,
+      `${Date.now() - started} ms: cut at the wait's 3 s, not at the call's 30 s`,
+    );
   } finally {
     await api.close();
   }

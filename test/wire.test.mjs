@@ -18,7 +18,8 @@ const png = join(dir, "photo.png");
 await writeFile(png, PNG);
 
 const CRLF = "\r\n";
-const textPart = (name, value) => `--test-boundary${CRLF}Content-Disposition: form-data; name="${name}"${CRLF}${CRLF}${value}${CRLF}`;
+const textPart = (name, value) =>
+  `--test-boundary${CRLF}Content-Disposition: form-data; name="${name}"${CRLF}${CRLF}${value}${CRLF}`;
 const jsonPart = (name, json) =>
   `--test-boundary${CRLF}Content-Disposition: form-data; name="${name}"${CRLF}Content-Type: application/json${CRLF}${CRLF}${json}${CRLF}`;
 const fileHead = (name, filename) =>
@@ -26,7 +27,11 @@ const fileHead = (name, filename) =>
 const END = `--test-boundary--${CRLF}`;
 
 async function sent(name, args) {
-  const api = await startFakeApi((req) => (req.method === "POST" ? { json: { generation_id: "g", seed: 1 } } : { json: { generation_id: "g", status: "pending", created: "2026-10-07T00:00:00Z" } }));
+  const api = await startFakeApi((req) =>
+    req.method === "POST"
+      ? { json: { generation_id: "g", seed: 1 } }
+      : { json: { generation_id: "g", status: "pending", created: "2026-10-07T00:00:00Z" } },
+  );
   try {
     const ctx = await testContext(api.base, dir);
     await (await tool(name)).handler(ctx, args);
@@ -72,7 +77,10 @@ test("a JSON remix by asset reference: the fields in the caller's order, then pr
   });
   assert.equal(req.url, "/v2/image/remix/ideogram-3");
   assert.equal(req.headers["content-type"], "application/json");
-  assert.equal(req.body.toString(), '{"prompt":"night","image_asset_identifier":{"asset_type":"UPLOAD","asset_id":"abc"},"image_weight":40,"private":true,"async":true}');
+  assert.equal(
+    req.body.toString(),
+    '{"prompt":"night","image_asset_identifier":{"asset_type":"UPLOAD","asset_id":"abc"},"image_weight":40,"private":true,"async":true}',
+  );
 });
 
 test("a query array is sent as repeated name=value pairs (account usage), dry_run as one more pair", async () => {
@@ -80,8 +88,21 @@ test("a query array is sent as repeated name=value pairs (account usage), dry_ru
   try {
     const client = new IdeogramClient(testClientOptions(api.base).options);
     const op = operationById("get_account_usage");
-    await client.call({ op, path: {}, query: { start_time: "2026-10-01T00:00:00Z", sources: ["api", "web app"] }, headers: {}, body: null, dryRun: false }, openBudget());
-    assert.equal(api.requests[0].url, "/v2/account/usage?start_time=2026-10-01T00%3A00%3A00Z&sources=api&sources=web+app");
+    await client.call(
+      {
+        op,
+        path: {},
+        query: { start_time: "2026-10-01T00:00:00Z", sources: ["api", "web app"] },
+        headers: {},
+        body: null,
+        dryRun: false,
+      },
+      openBudget(),
+    );
+    assert.equal(
+      api.requests[0].url,
+      "/v2/account/usage?start_time=2026-10-01T00%3A00%3A00Z&sources=api&sources=web+app",
+    );
     assert.equal(api.requests[0].body.length, 0);
   } finally {
     await api.close();
@@ -99,7 +120,15 @@ test("semantic refusals send nothing: a mask without its image, size source with
   await writeFile(big, PNG);
   await truncate(big, 60 * 1024 * 1024);
   const cases = [
-    ["ideogram_api", { operation: "post_precise_edit_image_v2_ideogram45", params: { body: { prompt: "x" } }, files: [{ field: "mask", path: png }] }, /mask needs the source image/],
+    [
+      "ideogram_api",
+      {
+        operation: "post_precise_edit_image_v2_ideogram45",
+        params: { body: { prompt: "x" } },
+        files: [{ field: "mask", path: png }],
+      },
+      /mask needs the source image/,
+    ],
     ["ideogram_generate", { model: "ideogram-4-5", prompt: "x", size: "source" }, /size "source" needs source images/],
     ["ideogram_describe", { image: big }, /over 10\.0 MB/],
   ];
@@ -119,7 +148,10 @@ test("an undefined value (an in-process caller's absent optional) is neither sen
   const { buildUrl } = await import("../dist/wire.js");
   const { splitFiles } = await import("../dist/tools/family.js");
   const { operationById } = await import("../dist/spec/operations.js");
-  assert.equal(buildUrl("https://x", "/v2/account/usage", {}, { start_time: "2026-10-01T00:00:00Z", sources: undefined }), "https://x/v2/account/usage?start_time=2026-10-01T00%3A00%3A00Z");
+  assert.equal(
+    buildUrl("https://x", "/v2/account/usage", {}, { start_time: "2026-10-01T00:00:00Z", sources: undefined }),
+    "https://x/v2/account/usage?start_time=2026-10-01T00%3A00%3A00Z",
+  );
   const split = splitFiles(operationById("post_generate_image_v2_ideogram45"), { prompt: "x", images: undefined });
   assert.deepEqual([split.files, Object.keys(split.body)], [[], ["prompt"]]);
 });

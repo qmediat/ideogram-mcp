@@ -17,5 +17,9 @@ test("the reference lists every family with its models and the fields of each se
   assert.match(text, /### generate\n\n\| model \| operation/);
   assert.match(text, /#### ideogram-4-5 — `POST \/v2\/image\/generate\/ideogram-4-5`/);
   assert.match(text, /\| `quality` \| one of very_low, low, medium, high \|/);
-  assert.match(text, /#### post_ad_resizer — `POST \/v2\/tool\/ad-resizer`/, "a commercial tool's operation is detailed since 2.5.0 (nothing is planned any more)");
+  assert.match(
+    text,
+    /#### post_ad_resizer — `POST \/v2\/tool\/ad-resizer`/,
+    "a commercial tool's operation is detailed since 2.5.0 (nothing is planned any more)",
+  );
 });

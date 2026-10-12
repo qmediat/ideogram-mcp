@@ -11,7 +11,9 @@ test("the registry and the newest table agree with the snapshot", () => {
 });
 
 test("every exposable /v2 model path is in the registry under its family, and every registry id has its path", () => {
-  const fromSpec = OPERATIONS.filter((op) => isExposable(op) && op.model !== null).map((op) => `${op.family}/${op.model}`);
+  const fromSpec = OPERATIONS.filter((op) => isExposable(op) && op.model !== null).map(
+    (op) => `${op.family}/${op.model}`,
+  );
   const fromRegistry = [...REGISTRY].flatMap(([family, entry]) => entry.models.map((model) => `${family}/${model}`));
   assert.deepEqual([...fromRegistry].sort(), [...fromSpec].sort());
   for (const [family, entry] of REGISTRY) {
@@ -21,15 +23,36 @@ test("every exposable /v2 model path is in the registry under its family, and ev
 
 test("the generate family offers the eighteen documented models of the snapshot", () => {
   assert.deepEqual([...documentedModelsOf("generate")].sort(), [
-    "auto", "gpt-image-2", "gpt-image-2-5-flare", "gpt-image-2-5-sunburst", "ideogram-2", "ideogram-2a",
-    "ideogram-3", "ideogram-3-character", "ideogram-3-custom-model", "ideogram-3-transparent", "ideogram-4",
-    "ideogram-4-5", "ideogram-4-custom-model", "ideogram-4-transparent", "nano-banana-2", "nano-banana-pro",
-    "p-image-ideogram", "z-image",
+    "auto",
+    "gpt-image-2",
+    "gpt-image-2-5-flare",
+    "gpt-image-2-5-sunburst",
+    "ideogram-2",
+    "ideogram-2a",
+    "ideogram-3",
+    "ideogram-3-character",
+    "ideogram-3-custom-model",
+    "ideogram-3-transparent",
+    "ideogram-4",
+    "ideogram-4-5",
+    "ideogram-4-custom-model",
+    "ideogram-4-transparent",
+    "nano-banana-2",
+    "nano-banana-pro",
+    "p-image-ideogram",
+    "z-image",
   ]);
 });
 
 test("a documented model comes before a spec-only one of the same family", () => {
-  assert.deepEqual(modelsOf("reframe"), ["ideogram-3", "nano-banana-2", "auto", "bria-expand", "gpt-image-2-5-flare", "nano-banana-pro"]);
+  assert.deepEqual(modelsOf("reframe"), [
+    "ideogram-3",
+    "nano-banana-2",
+    "auto",
+    "bria-expand",
+    "gpt-image-2-5-flare",
+    "nano-banana-pro",
+  ]);
   assert.deepEqual(documentedModelsOf("reframe"), ["ideogram-3", "nano-banana-2"]);
 });
 

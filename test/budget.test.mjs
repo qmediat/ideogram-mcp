@@ -16,7 +16,11 @@ const { IdeogramClient, defaultClientOptions } = await import("../dist/client.js
 const BUDGET_BYTES = 136 * 1024; // 38 tools after step 5: the twelve single-operation tools cost 32.8 KB with their field sentences (132 254 bytes measured on 2026-10-11)
 
 async function listTools() {
-  const ctx = { client: new IdeogramClient(defaultClientOptions("unused")), outputDir: "/tmp/unused", clock: { now: () => 0, sleep: async () => {} } };
+  const ctx = {
+    client: new IdeogramClient(defaultClientOptions("unused")),
+    outputDir: "/tmp/unused",
+    clock: { now: () => 0, sleep: async () => {} },
+  };
   const server = createServer(ctx);
   const client = new Client({ name: "budget-test", version: "0.0.0" });
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
@@ -37,7 +41,12 @@ test("the serialized tools/list is within the 136 KB budget", async () => {
 
 test("each family tool advertises one exact variant per documented model, and the variants agree with the registry", async () => {
   const { tools } = await listTools();
-  const families = { ideogram_generate: "generate", ideogram_inpaint: "inpaint", ideogram_remix: "remix", ideogram_upscale: "upscale" };
+  const families = {
+    ideogram_generate: "generate",
+    ideogram_inpaint: "inpaint",
+    ideogram_remix: "remix",
+    ideogram_upscale: "upscale",
+  };
   for (const [name, family] of Object.entries(families)) {
     const schema = tools.find((t) => t.name === name).inputSchema;
     const models = schema.oneOf.map((variant) => variant.properties.model.const);
@@ -46,17 +55,25 @@ test("each family tool advertises one exact variant per documented model, and th
   }
   const generate = tools.find((t) => t.name === "ideogram_generate").inputSchema;
   const variant = (model) => generate.oneOf.find((v) => v.properties.model.const === model);
-  assert.ok("quality" in variant("ideogram-4-5").properties && !("rendering_speed" in variant("ideogram-4-5").properties));
+  assert.ok(
+    "quality" in variant("ideogram-4-5").properties && !("rendering_speed" in variant("ideogram-4-5").properties),
+  );
   assert.ok("rendering_speed" in variant("ideogram-3").properties && !("quality" in variant("ideogram-3").properties));
-  assert.equal(variant("ideogram-3").required?.includes("model") ?? false, false, "the default model's variant does not require model");
+  assert.equal(
+    variant("ideogram-3").required?.includes("model") ?? false,
+    false,
+    "the default model's variant does not require model",
+  );
 });
 
 test("a definition shorter than its $ref is inlined, and every $ref that remains resolves", async () => {
   const { tools } = await listTools();
   for (const t of tools) {
     const definitions = t.inputSchema.definitions ?? {};
-    for (const [name, def] of Object.entries(definitions)) assert.ok(JSON.stringify(def).length > 34, `${t.name}: ${name} is shorter than a $ref`);
+    for (const [name, def] of Object.entries(definitions))
+      assert.ok(JSON.stringify(def).length > 34, `${t.name}: ${name} is shorter than a $ref`);
     const refs = JSON.stringify(t.inputSchema).match(/"#\/definitions\/[^"]+"/g) ?? [];
-    for (const ref of refs) assert.ok(JSON.parse(ref).replace("#/definitions/", "") in definitions, `${t.name}: ${ref} resolves`);
+    for (const ref of refs)
+      assert.ok(JSON.parse(ref).replace("#/definitions/", "") in definitions, `${t.name}: ${ref} resolves`);
   }
 });

@@ -15,14 +15,21 @@ export async function startFakeApi(handler) {
       requests.push(record);
       const answer = await handler(record, requests.length);
       if (typeof answer === "function") return answer(res, req);
-      const headers = { ...(answer.json !== undefined ? { "content-type": "application/json" } : {}), ...answer.headers };
+      const headers = {
+        ...(answer.json !== undefined ? { "content-type": "application/json" } : {}),
+        ...answer.headers,
+      };
       res.writeHead(answer.status ?? 200, headers);
       res.end(answer.json !== undefined ? JSON.stringify(answer.json) : (answer.body ?? ""));
     });
   });
   await new Promise((done) => server.listen(0, "127.0.0.1", done));
   const base = `http://127.0.0.1:${server.address().port}`;
-  const close = () => new Promise((done) => { server.closeAllConnections(); server.close(done); });
+  const close = () =>
+    new Promise((done) => {
+      server.closeAllConnections();
+      server.close(done);
+    });
   return { base, requests, close, server };
 }
 
@@ -52,7 +59,15 @@ export function testClientOptions(base, overrides = {}) {
 
 /** A clock that advances only when slept on. */
 export function fakeClock() {
-  const clock = { t: 0, sleeps: [], now: () => clock.t, sleep: async (ms) => { clock.sleeps.push(ms); clock.t += ms; } };
+  const clock = {
+    t: 0,
+    sleeps: [],
+    now: () => clock.t,
+    sleep: async (ms) => {
+      clock.sleeps.push(ms);
+      clock.t += ms;
+    },
+  };
   return clock;
 }
 
