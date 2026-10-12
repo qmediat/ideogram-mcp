@@ -57,7 +57,8 @@ export function operationMap(spec) {
   const map = new Map();
   for (const [path, item] of Object.entries(spec.paths ?? {})) {
     for (const [method, op] of Object.entries(item)) {
-      if (op && typeof op === "object" && typeof op.operationId === "string") map.set(`${method.toUpperCase()} ${path}`, op);
+      if (op && typeof op === "object" && typeof op.operationId === "string")
+        map.set(`${method.toUpperCase()} ${path}`, op);
     }
   }
   return map;

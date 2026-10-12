@@ -14,6 +14,12 @@ const normalized = normalizeSpec(raw);
 writeFileSync(SPEC_PATH, normalized);
 writeFileSync(
   SNAPSHOT_PATH,
-  formatSnapshot({ date, source, rawSha256: sha256(raw), rawBytes: Buffer.byteLength(raw), normalizedSha256: sha256(normalized) }),
+  formatSnapshot({
+    date,
+    source,
+    rawSha256: sha256(raw),
+    rawBytes: Buffer.byteLength(raw),
+    normalizedSha256: sha256(normalized),
+  }),
 );
 console.log(`spec/openapi.json: ${Buffer.byteLength(normalized)} bytes, raw sha256 ${sha256(raw)}`);

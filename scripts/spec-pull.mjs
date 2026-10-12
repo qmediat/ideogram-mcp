@@ -75,7 +75,8 @@ function drift(snapshot, live) {
 }
 
 function report({ added, removed, changed }, snapshotDate) {
-  const section = (title, keys) => (keys.length === 0 ? [] : [`### ${title} (${keys.length})`, "", ...keys.map((k) => `- \`${k}\``), ""]);
+  const section = (title, keys) =>
+    keys.length === 0 ? [] : [`### ${title} (${keys.length})`, "", ...keys.map((k) => `- \`${k}\``), ""];
   return [
     `The live specification (${SPEC_SOURCE_URL}) differs from the snapshot of ${snapshotDate} on the operations this server may expose.`,
     "",
@@ -90,7 +91,13 @@ function writeSnapshot(raw) {
   const normalized = normalizeSpec(raw);
   writeFileSync(SPEC_PATH, normalized);
   const date = new Date().toISOString().slice(0, 10);
-  const record = { date, source: SPEC_SOURCE_URL, rawSha256: sha256(raw), rawBytes: Buffer.byteLength(raw), normalizedSha256: sha256(normalized) };
+  const record = {
+    date,
+    source: SPEC_SOURCE_URL,
+    rawSha256: sha256(raw),
+    rawBytes: Buffer.byteLength(raw),
+    normalizedSha256: sha256(normalized),
+  };
   writeFileSync(SNAPSHOT_PATH, formatSnapshot(record));
 }
 

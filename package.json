@@ -29,7 +29,10 @@
     "spec:check": "node scripts/spec-generate.mjs --check",
     "docs:api": "node scripts/api-reference.mjs",
     "spec:pull": "node scripts/spec-pull.mjs",
-    "lint": "eslint . && jscpd --config .jscpd.json && node lint/baseline-ratchet.mjs --duplicates .jscpd-report/jscpd-report.json"
+    "lint": "eslint . && jscpd --config .jscpd.json && node lint/baseline-ratchet.mjs --duplicates .jscpd-report/jscpd-report.json",
+    "fmt": "prettier \"**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}\"",
+    "format": "npm run -s fmt -- --write",
+    "format:check": "npm run -s fmt -- --check"
   },
   "keywords": [
     "mcp",
@@ -66,6 +69,7 @@
     "@types/node": "22.20.5",
     "eslint": "10.12.0",
     "jscpd": "5.3.2",
+    "prettier": "3.9.9",
     "typescript": "7.0.2"
   },
   "engines": {

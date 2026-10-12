@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   function within 40 lines; three complexity baseline entries are gone. Behaviour unchanged.
 - Internal: every refusal that quotes a Zod error's issues (`path: message`) is built by one helper, `src/issues.ts`
   (seven inline copies in six files before). Messages unchanged.
+- Development only: Prettier formats the code (`npm run format`; CI runs `npm run format:check`), printWidth 120 —
+  the style the code already had; `scripts/` reformatted first, `src/` and `test/` in pull requests of their own.
 
 ## [2.5.0] - 2026-10-11
 

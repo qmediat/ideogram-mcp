@@ -42,13 +42,26 @@ function operationRow(m, op) {
 
 function operationDetail(m, op) {
   const head = [`#### ${op.model ?? op.id} — \`${op.method} ${op.path}\``, "", op.summary, ""];
-  const fieldRows = m.fieldSummaries(op).map((f) => `| \`${f.name}\` | ${f.kind.replaceAll("|", "\\|")} | ${f.required ? "yes" : ""} |`);
+  const fieldRows = m
+    .fieldSummaries(op)
+    .map((f) => `| \`${f.name}\` | ${f.kind.replaceAll("|", "\\|")} | ${f.required ? "yes" : ""} |`);
   const table = fieldRows.length === 0 ? ["No body."] : ["| field | kind | required |", "|---|---|---|", ...fieldRows];
-  const limits = m.fileLimitsOf(op).map((l) => `\`${l.field}\` ${mb(l.maxBytes)}${l.stated ? "" : " (not stated; this server's cap)"}${l.maxItems === null ? "" : ` × ${l.maxItems}`}`);
+  const limits = m
+    .fileLimitsOf(op)
+    .map(
+      (l) =>
+        `\`${l.field}\` ${mb(l.maxBytes)}${l.stated ? "" : " (not stated; this server's cap)"}${l.maxItems === null ? "" : ` × ${l.maxItems}`}`,
+    );
   const rules = m.rulesOf(op).map((text) => `- ${text}`);
   const params = m.parameterSummaries(op).map((p) => `\`${p}\``);
   if (params.length) head.push(`Parameters: ${params.join(", ")}.`, "");
-  return [...head, ...table, "", ...(limits.length ? [`File limits: ${limits.join("; ")}.`, ""] : []), ...(rules.length ? ["Rules:", ...rules, ""] : [])];
+  return [
+    ...head,
+    ...table,
+    "",
+    ...(limits.length ? [`File limits: ${limits.join("; ")}.`, ""] : []),
+    ...(rules.length ? ["Rules:", ...rules, ""] : []),
+  ];
 }
 
 function familySection(m, family) {
