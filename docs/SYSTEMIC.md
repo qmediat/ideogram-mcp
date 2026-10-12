@@ -25,8 +25,8 @@ file (the one glob: the `fmt` script); `npm run format` rewrites; `npm run lint`
 so CI's lint step checks it. Excluded (`.prettierignore`): the vendored presets of Rule 1, whatever ESLint ignores
 (the same list: `src/generated/`, which CI regenerates and compares, and `scripts/spec-gen/`). `.gitattributes` keeps
 every text file LF. Prose, JSON and YAML are not formatted by it. The one-time reformat went in three pull requests
-that each fit one review (#51 `scripts/`, #52 `src/`, then `test/`); `.git-blame-ignore-revs` names each merged one
-for `git blame` (a squash merge gives the hash only after the merge: the last is added by a one-line pull request).
+that each fit one review (#51 `scripts/`, #52 `src/`, then `test/`); `.git-blame-ignore-revs` names all three
+for `git blame`.
 
 **The exemplars** — read before writing, not the nearest file:
 
