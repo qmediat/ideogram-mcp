@@ -32,6 +32,7 @@ bundled TypeScript.
 - `npm run lint` before a pull request: the structure rules (function length, complexity, nesting, a reason on every
   disable directive, no bare `assert.throws(fn)`), repeated blocks and the baseline ratchet — `docs/SYSTEMIC.md` §1,
   with the files new code follows
+- `npm run format` before a commit (Prettier; CI runs `npm run format:check`)
 
 ## Adding a New Tool
 

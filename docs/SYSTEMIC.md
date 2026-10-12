@@ -19,6 +19,12 @@ parse errors ESLint reports first are what keeps a broken file from passing the 
 own package (its own `package.json`, run from `npm run spec:generate`), outside ESLint and jscpd; Babel parses with
 its TypeScript plugin alone, so a decorator or an `accessor` field is a parse error (loud — the code uses neither).
 
+**Formatting.** Prettier (pinned in `package.json`; `.prettierrc.json`: printWidth 120, its defaults otherwise —
+double quotes, semicolons, trailing commas: the style the code had) formats every `*.ts` / `*.mjs` / `*.js` / `*.cjs`
+file; `npm run format` rewrites, `npm run format:check` is a CI step. Excluded (`.prettierignore`): the vendored
+presets of Rule 1, `src/generated/` (CI regenerates it and compares) and, until the pull request that reformats each,
+`src/` and `test/` — a whole-tree reformat does not fit one review. Prose, JSON and YAML are not formatted by it.
+
 **The exemplars** — read before writing, not the nearest file:
 
 | layer | file |

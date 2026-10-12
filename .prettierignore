@@ -1,0 +1,8 @@
+# vendored copies of the shared presets: formatted where they are kept (docs/SYSTEMIC.md §1)
+lint/structure.mjs
+lint/baseline-ratchet.mjs
+# generated from the committed specification; CI regenerates it and compares (scripts/spec-generate.mjs)
+src/generated/
+# not yet reformatted: each leaves this list in the pull request that reformats it
+src/
+test/
