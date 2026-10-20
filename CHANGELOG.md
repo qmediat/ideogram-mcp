@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.1] - 2026-10-20
+
 ### Changed
 
 - Development only: `npm run lint` checks the structure of the code with a shared preset (ESLint with Babel's
@@ -20,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Development only: Prettier formats the code (`npm run format`; `npm run lint` checks it, in CI too), printWidth 120 —
   the style the code already had; the code reformatted once, in three pull requests that each fit one review
   (`scripts/`, `src/`, `test/`); `.git-blame-ignore-revs` names all three.
+- Runtime dependencies: `@modelcontextprotocol/sdk` 1.32.1 (was 1.32.0) and `zod` 4.6.7 (was 4.6.5).
+- Development only: `@babel/core` and `@babel/eslint-parser` 8.0.7, `jscpd` 5.4.1, `prettier` 3.9.10 (the code's
+  formatting is unchanged), and `actions/setup-node` 7.1.0 in the workflows.
 
 ## [2.5.0] - 2026-10-11
 
