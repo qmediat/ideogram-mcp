@@ -38,7 +38,7 @@ Use ideogram to generate a poster for a jazz night, 3:4
 | Custom models | Datasets, training, your models | 4 |
 | Any operation | Collect a job, list or call any operation | 3 |
 
-## Supports · version 2.5.1
+## Supports · version 2.5.2
 
 | | |
 |---|---|
