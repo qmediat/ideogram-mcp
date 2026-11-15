@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 // @ts-check
 // The README's "## Supports · version X.Y.Z" heading names the version the Supports list was checked for; it must equal
-// package.json's version. Exit 0 when they are equal, 1 (one line naming both) when they differ or the heading is
-// missing, 2 when a file cannot be read. `--root <dir>` reads README.md and package.json from another directory.
-import { readFileSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
+// package.json's version. Exit 0 when they are equal, 1 (one line naming both) when they differ, the heading is
+// missing or it is written another way, 2 when a file cannot be read. `--root <dir>` reads README.md and
+// package.json from another directory.
+import { readFileSync, realpathSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const HEADING = /^## Supports · version (\S+)[ \t]*$/m;
+const ANY_SUPPORTS_HEADING = /^#+[ \t]*Supports\b.*$/m;
 
 /**
  * @typedef {{ ok: true, version: string } | { ok: false, message: string }} SupportsCheck
@@ -30,10 +33,9 @@ export function supportsVersion(readme) {
 export function checkSupports(readme, packageVersion) {
   const readmeVersion = supportsVersion(readme);
   if (readmeVersion === null) {
-    return {
-      ok: false,
-      message: `README.md has no "## Supports · version ${packageVersion}" heading (package.json is ${packageVersion})`,
-    };
+    const written = ANY_SUPPORTS_HEADING.exec(readme)?.[0];
+    const found = written === undefined ? "has no" : `has "${written}", not a`;
+    return { ok: false, message: `README.md ${found} "## Supports · version ${packageVersion}" heading` };
   }
   if (readmeVersion !== packageVersion) {
     return {
@@ -73,7 +75,18 @@ export function main(argv) {
   return 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+/** @returns {boolean} whether this file is the program node runs (not a module another file imports) */
+function isProgram() {
+  const self = fileURLToPath(import.meta.url);
+  const started = process.argv[1] ?? "";
+  try {
+    return Boolean(started) && realpathSync(started) === realpathSync(self);
+  } catch {
+    return resolve(started) === self; // a path realpath cannot resolve still names this file when node started it
+  }
+}
+
+if (isProgram()) {
   try {
     process.exitCode = main(process.argv.slice(2));
   } catch (error) {

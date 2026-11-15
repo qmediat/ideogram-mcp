@@ -55,6 +55,8 @@ Use ideogram to generate a poster for a jazz night, 3:4
 | [Every tool and its models](https://github.com/qmediat/ideogram-mcp/blob/main/docs/TOOLS.md) | docs/TOOLS.md |
 | [Prices](https://github.com/qmediat/ideogram-mcp/blob/main/docs/PRICES.md) | docs/PRICES.md |
 | [Security](https://github.com/qmediat/ideogram-mcp/blob/main/SECURITY.md) | SECURITY.md |
+| [Contributing](https://github.com/qmediat/ideogram-mcp/blob/main/CONTRIBUTING.md) | CONTRIBUTING.md |
+| [Changelog](https://github.com/qmediat/ideogram-mcp/blob/main/CHANGELOG.md) | CHANGELOG.md |
 | [For AI agents](https://github.com/qmediat/ideogram-mcp/blob/main/AGENTS.md) | AGENTS.md |
 
 Node.js 22.18 or newer · [MIT](https://github.com/qmediat/ideogram-mcp/blob/main/LICENSE) · [Quantum Media Technologies](https://www.qmediat.io/open-source?utm_source=oss-readme&utm_medium=ideogram-mcp&utm_campaign=open-source) · [Trademarks](https://github.com/qmediat/ideogram-mcp/blob/main/docs/TRADEMARKS.md)
