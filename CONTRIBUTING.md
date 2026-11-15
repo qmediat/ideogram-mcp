@@ -81,7 +81,8 @@ needs a decision).
 
 - A release updates the README's `## Supports · version X.Y.Z` heading (and the list under it), `server.json`
   (`version` and every `packages[].version`) and the root of `package-lock.json` to the new version;
-  `npm run check:supports` fails in CI and in the release workflow while one of them differs.
+  `npm run check:supports` fails in CI and in the release workflow while one of them differs or is missing; the
+  release workflow also runs `npm run check:addresses`.
 
 ## Security
 

@@ -2,10 +2,11 @@
 // @ts-check
 // Every file that carries the package version names package.json's: the README's "## Supports · version X.Y.Z" heading
 // (the version the Supports list was checked for), server.json's `version` and every `packages[].version`,
-// package-lock.json's `version` and `packages[""].version` (a version file that does not exist carries none). Exit 0
-// when every version equals package.json's, 1 (one line per mismatch, naming the file, the value found and
-// package.json's version) when one differs, the heading is missing or it is written another way, 2 when a file cannot
-// be read. `--root <dir>` reads the files from another directory.
+// package-lock.json's `version` and `packages[""].version` (both files are required; a lockfile without a `packages`
+// map carries only its root `version`). Exit 0 when every version equals package.json's, 1 (one line per mismatch,
+// naming the file, the value found and package.json's version, or per version file that is missing) when one differs,
+// the heading is missing or it is written another way, 2 when a file cannot be read. `--root <dir>` reads the files
+// from another directory.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,6 +19,7 @@ const ANY_SUPPORTS_HEADING = /^#+[ \t]*Supports\b.*$/m;
 /**
  * @typedef {{ ok: true, version: string } | { ok: false, message: string }} SupportsCheck
  * @typedef {{ file: string, field: string, value: unknown }} VersionField
+ * @typedef {{ ok: true, fields: VersionField[] } | { ok: false, problem: string }} VersionFields
  */
 
 /**
@@ -52,26 +54,38 @@ export function checkSupports(readme, packageVersion) {
 }
 
 /**
- * The fields that carry the package version in server.json and package-lock.json.
+ * server.json's version fields: `version` and every `packages[].version`. The registry manifest is required here.
  * @param {any} server the parsed server.json, or undefined when the file does not exist
- * @param {any} lock the parsed package-lock.json, or undefined when the file does not exist
- * @returns {VersionField[]}
+ * @returns {VersionFields}
  */
-export function versionFields(server, lock) {
+function serverFields(server) {
+  if (server === undefined) return { ok: false, problem: "server.json is missing" };
+  const packages = server.packages ?? [];
+  if (!Array.isArray(packages)) return { ok: false, problem: "server.json packages is not an array" };
   /** @type {VersionField[]} */
-  const fields = [];
-  if (server !== undefined) {
-    fields.push({ file: "server.json", field: "version", value: server.version });
-    const packages = Array.isArray(server.packages) ? server.packages : [];
-    packages.forEach((entry, index) => {
-      fields.push({ file: "server.json", field: `packages[${index}].version`, value: entry?.version });
-    });
-  }
-  if (lock !== undefined) {
-    fields.push({ file: "package-lock.json", field: "version", value: lock.version });
-    fields.push({ file: "package-lock.json", field: 'packages[""].version', value: lock.packages?.[""]?.version });
-  }
-  return fields;
+  const fields = packages.map((entry, index) => ({
+    file: "server.json",
+    field: `packages[${index}].version`,
+    value: entry?.version,
+  }));
+  return { ok: true, fields: [{ file: "server.json", field: "version", value: server.version }, ...fields] };
+}
+
+/**
+ * package-lock.json's version fields: the root `version` and, in a lockfile with a `packages` map (lockfileVersion 2
+ * and 3), `packages[""].version`.
+ * @param {any} lock the parsed package-lock.json, or undefined when the file does not exist
+ * @returns {VersionFields}
+ */
+function lockFields(lock) {
+  if (lock === undefined) return { ok: false, problem: "package-lock.json is missing" };
+  /** @type {VersionField} */
+  const root = { file: "package-lock.json", field: "version", value: lock.version };
+  if (lock.packages === undefined) return { ok: true, fields: [root] };
+  return {
+    ok: true,
+    fields: [root, { file: "package-lock.json", field: 'packages[""].version', value: lock.packages?.[""]?.version }],
+  };
 }
 
 /**
@@ -110,12 +124,15 @@ function readJsonIfPresent(path) {
 /**
  * @param {string} dir the directory holding server.json and package-lock.json
  * @param {string} packageVersion the version in package.json
- * @returns {string[]} one line per version field of those files that names another version
+ * @returns {string[]} one line per version field of those files that names another version, or per file that cannot
+ *   carry one (missing, or `packages` not an array)
  */
 export function versionFileMismatches(dir, packageVersion) {
-  const server = readJsonIfPresent(join(dir, "server.json"));
-  const lock = readJsonIfPresent(join(dir, "package-lock.json"));
-  return versionMismatches(versionFields(server, lock), packageVersion);
+  const found = [
+    serverFields(readJsonIfPresent(join(dir, "server.json"))),
+    lockFields(readJsonIfPresent(join(dir, "package-lock.json"))),
+  ];
+  return found.flatMap((files) => (files.ok ? versionMismatches(files.fields, packageVersion) : [files.problem]));
 }
 
 /**
