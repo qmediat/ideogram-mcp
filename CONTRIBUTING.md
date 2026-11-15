@@ -21,7 +21,8 @@ npm run typecheck
 npm run lint        # structure rules, repeated blocks, the baseline ratchet (docs/SYSTEMIC.md §1)
 npm run format      # Prettier (npm run lint checks it)
 npm test            # builds, then every test against a fake API (no key, no network); with IDEOGRAM_API_KEY set, the live dry-run suite runs too (below)
-npm run check:supports  # README "Supports" names the package version
+npm run check:supports  # README "Supports", server.json and package-lock.json name the package version
+npm run check:addresses # every email address in a tracked file is in qmediat.io
 ```
 
 The specification snapshot drives the code: `npm ci --prefix scripts/spec-gen && npm run spec:generate` regenerates
@@ -78,8 +79,10 @@ needs a decision).
 
 ## Releases
 
-- A release updates the README's `## Supports · version X.Y.Z` heading (and the list under it) to the new version;
-  `npm run check:supports` fails in CI and in the release workflow while the two differ.
+- A release updates the README's `## Supports · version X.Y.Z` heading (and the list under it), `server.json`
+  (`version` and every `packages[].version`) and the root of `package-lock.json` to the new version;
+  `npm run check:supports` fails in CI and in the release workflow while one of them differs or is missing; the
+  release workflow also runs `npm run check:addresses`.
 
 ## Security
 

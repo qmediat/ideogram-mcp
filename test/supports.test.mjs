@@ -1,6 +1,7 @@
-// The README's "## Supports · version X.Y.Z" heading must name package.json's version (scripts/check-supports.mjs):
-// CI and the release workflow run the check, so a version bump that leaves the heading behind fails before publishing
-// (the heading's version is what is compared; reviewing the list under it is the release step CONTRIBUTING.md names).
+// The README's "## Supports · version X.Y.Z" heading, server.json and package-lock.json must name package.json's version
+// (scripts/check-supports.mjs): CI and the release workflow run the check, so a version bump that leaves one behind
+// fails before publishing (the heading's version is what is compared; reviewing the list under it is the release step
+// CONTRIBUTING.md names).
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -13,12 +14,34 @@ import { checkSupports } from "../scripts/check-supports.mjs";
 
 const SCRIPT = fileURLToPath(new URL("../scripts/check-supports.mjs", import.meta.url));
 
-/** Runs the check on a directory holding the given README and a package.json of the given version. */
-function runCheck(readme, version) {
+/**
+ * server.json and package-lock.json naming the given versions.
+ * @param {{ server: string, serverPackage: string, lock: string, lockRoot: string }} versions
+ */
+const versionFiles = ({ server, serverPackage, lock, lockRoot }) => ({
+  "server.json": {
+    name: "io.github.example/x",
+    version: server,
+    packages: [{ identifier: "x", version: serverPackage }],
+  },
+  "package-lock.json": { name: "x", version: lock, packages: { "": { name: "x", version: lockRoot } } },
+});
+/** @param {string} version @returns {{ server: string, serverPackage: string, lock: string, lockRoot: string }} */
+const currentAt = (version) => ({ server: version, serverPackage: version, lock: version, lockRoot: version });
+const ALL_CURRENT = currentAt("2.5.1");
+
+/**
+ * Runs the check on a directory holding the given README, a package.json of the given version and the other files.
+ * @param {string} readme
+ * @param {string} version
+ * @param {Record<string, unknown>} [files] file name → its JSON value; by default the version files at `version`
+ */
+function runCheck(readme, version, files = versionFiles(currentAt(version))) {
   const dir = mkdtempSync(join(tmpdir(), "supports-"));
   try {
     writeFileSync(join(dir, "README.md"), readme);
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "x", version }));
+    for (const [name, value] of Object.entries(files)) writeFileSync(join(dir, name), JSON.stringify(value));
     return spawnSync(process.execPath, [SCRIPT, "--root", dir], { encoding: "utf8" });
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -57,6 +80,39 @@ test("the verdict tells an absent heading from one written another way", () => {
   assert.deepEqual(checkSupports(readmeOf("2.5.1"), "2.5.1"), { ok: true, version: "2.5.1" });
 });
 
+test("server.json and package-lock.json naming the package version pass, and the output says so", () => {
+  const run = runCheck(readmeOf("2.5.1"), "2.5.1", versionFiles(ALL_CURRENT));
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(run.stdout, /README\.md Supports and the version files name version 2\.5\.1/);
+});
+
+test("a stale top-level server.json version fails, naming the file, the value and the package version", () => {
+  const run = runCheck(readmeOf("2.5.1"), "2.5.1", versionFiles({ ...ALL_CURRENT, server: "2.5.0" }));
+  assert.equal(run.status, 1);
+  assert.equal(run.stderr, "server.json version is 2.5.0; package.json is 2.5.1\n");
+});
+
+test("a stale server.json packages[0].version fails, naming the field", () => {
+  const run = runCheck(readmeOf("2.5.1"), "2.5.1", versionFiles({ ...ALL_CURRENT, serverPackage: "2.5.0" }));
+  assert.equal(run.status, 1);
+  assert.equal(run.stderr, "server.json packages[0].version is 2.5.0; package.json is 2.5.1\n");
+});
+
+test("a stale package-lock.json root version fails, naming the field", () => {
+  const run = runCheck(readmeOf("2.5.1"), "2.5.1", versionFiles({ ...ALL_CURRENT, lockRoot: "2.5.0" }));
+  assert.equal(run.status, 1);
+  assert.equal(run.stderr, 'package-lock.json packages[""].version is 2.5.0; package.json is 2.5.1\n');
+});
+
+test("two stale version fields fail with one line each", () => {
+  const run = runCheck(readmeOf("2.5.1"), "2.5.1", versionFiles({ ...ALL_CURRENT, server: "2.5.0", lock: "2.5.0" }));
+  assert.equal(run.status, 1);
+  assert.equal(
+    run.stderr,
+    "server.json version is 2.5.0; package.json is 2.5.1\npackage-lock.json version is 2.5.0; package.json is 2.5.1\n",
+  );
+});
+
 test("the script runs when node starts it through a symlink", () => {
   const dir = mkdtempSync(join(tmpdir(), "supports-link-"));
   try {
@@ -64,7 +120,7 @@ test("the script runs when node starts it through a symlink", () => {
     symlinkSync(SCRIPT, link);
     const run = spawnSync(process.execPath, [link], { encoding: "utf8" });
     assert.equal(run.status, 0, run.stderr);
-    assert.match(run.stdout, /Supports names version/);
+    assert.match(run.stdout, /Supports and the version files name version/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -83,4 +139,33 @@ test("the committed README names the committed package version", () => {
   const { version } = JSON.parse(readFileSync(new URL("package.json", root), "utf8"));
   const run = spawnSync(process.execPath, [SCRIPT], { encoding: "utf8" });
   assert.equal(run.status, 0, `${run.stderr} (package.json ${version})`);
+});
+
+test("a directory without server.json fails: the registry manifest is required", () => {
+  const { "package-lock.json": lock } = versionFiles(ALL_CURRENT);
+  const run = runCheck(readmeOf("2.5.1"), "2.5.1", { "package-lock.json": lock });
+  assert.equal(run.status, 1);
+  assert.equal(run.stderr, "server.json is missing\n");
+});
+
+test("a server.json whose packages is not an array fails, naming it", () => {
+  const files = versionFiles(ALL_CURRENT);
+  const server = { name: "io.github.example/x", version: "2.5.1", packages: { identifier: "x", version: "2.5.1" } };
+  const run = runCheck(readmeOf("2.5.1"), "2.5.1", { ...files, "server.json": server });
+  assert.equal(run.status, 1);
+  assert.equal(run.stderr, "server.json packages is not an array\n");
+});
+
+test("a directory without package-lock.json fails: the lockfile is required", () => {
+  const { "server.json": server } = versionFiles(ALL_CURRENT);
+  const run = runCheck(readmeOf("2.5.1"), "2.5.1", { "server.json": server });
+  assert.equal(run.status, 1);
+  assert.equal(run.stderr, "package-lock.json is missing\n");
+});
+
+test("a lockfile without a packages map (lockfileVersion 1) is checked on its root version only", () => {
+  const files = versionFiles(ALL_CURRENT);
+  const lock = { name: "x", version: "2.5.1", lockfileVersion: 1, dependencies: {} };
+  const run = runCheck(readmeOf("2.5.1"), "2.5.1", { ...files, "package-lock.json": lock });
+  assert.equal(run.status, 0, run.stderr);
 });

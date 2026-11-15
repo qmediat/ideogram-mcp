@@ -3,6 +3,8 @@
 // first. `--check` exits 1 when the committed file is not what the snapshot renders. The file is never edited by hand.
 import { readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+
+import { isProgram } from "./is-program.mjs";
 import { readSnapshot, ROOT } from "./spec-lib.mjs";
 
 const OUT = `${ROOT}docs/API-REFERENCE.md`;
@@ -119,7 +121,7 @@ async function main() {
   return 1;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isProgram(import.meta.url)) {
   main().then(
     (code) => process.exit(code),
     (error) => {
