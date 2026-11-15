@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.2] - 2026-11-15
+
 ### Changed
 
 - Documentation: the README is one screen (install, try it, the tools by group, what it supports, the docs); the
@@ -15,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   places and the rules for coding agents (`CLAUDE.md` points at it). The README's "Supports" list names the version it
   was checked for, and `npm run check:supports` — run by CI and by the release workflow before staging — fails while
   that version differs from `package.json`'s. Nothing in the published server changes.
+
+### Security
+
+- Development and transitive dependencies: `npm audit fix` (lockfile only) — `qs` [GHSA-6pq8-jhm2-2vcw](https://github.com/advisories/GHSA-6pq8-jhm2-2vcw) and five moderate advisories.
 
 ## [2.5.1] - 2026-10-20
 
