@@ -8,7 +8,7 @@
 | Build | `npm run build` |
 | Check before a commit | `npm run typecheck && npm run lint && npm test && npm run check:supports && npm run check:addresses` |
 | README "Supports", `server.json` and `package-lock.json` against the package version | `npm run check:supports` |
-| Every email address in a tracked file in `qmediat.io` | `npm run check:addresses` |
+| Every address-shaped text in a tracked file in an allowed domain or its subdomain, else in `REPOSITORY_ADDRESSES` | `npm run check:addresses` |
 | Format | `npm run format` (Prettier; `npm run lint` checks it) |
 | Tests | `test/`, against a fake API (`test/support/fake-api.mjs`): no key, no network — run them with `IDEOGRAM_API_KEY` unset, or the live dry-run suite runs too |
 | Run the local build | `IDEOGRAM_API_KEY=your-key node dist/index.js` |
@@ -48,6 +48,6 @@
 | `private` | Sent as `true` by a curated tool whose model takes it, unless the caller sets it |
 | Runtime dependencies | Two (`@modelcontextprotocol/sdk`, `zod`); a new one is discussed first |
 | A user-visible change | One CHANGELOG.md entry under `[Unreleased]` |
-| Addresses | The addresses this repository publishes for the project are in `qmediat.io` (`contact@`, `security@`, `dev@`); the qmediat team's commits are authored as `dev@qmediat.io`, a contributor's with their own address; no personal or account address in any file (`npm run check:addresses` enforces it) |
+| Addresses | The addresses this repository publishes for the project are in `qmediat.io` (`contact@`, `security@`, `dev@`); the qmediat team's commits are authored as `dev@qmediat.io`, a contributor's with their own address; no personal or account address in any file; a file that must show other address-shaped text (a git remote with a user, an image name with a scale suffix) adds an exact (file, address) entry to `REPOSITORY_ADDRESSES` in `scripts/check-addresses.mjs` (`npm run check:addresses` enforces it) |
 | A live dry run | The new `docs/PRICES-<date>.md` linked from `docs/PRICES.md` |
 | A release | README "Supports", `server.json` and `package-lock.json` name the new version; the release check fails when one differs |
