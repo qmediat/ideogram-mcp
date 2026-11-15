@@ -8,3 +8,8 @@ are compared with `package.json` only by inline steps of `publish.yml`, so a bum
 time, not at PR time. Move those comparisons into one script (one helper, every version-bearing file) and run it in
 CI. Found by the review of the PR that added the Supports check; a different mechanism (the registry manifest and the
 release notes), so not part of that PR.
+
+## DEF-ADDRESSES-CHECK (2026-11-15). A check that every email address is in `qmediat.io`
+
+AGENTS.md states the rule; nothing enforces it. Add a check, beside the one above, that fails on an address outside
+`qmediat.io` in a tracked text file (the test fixtures' `example.com` and `a@b.c` excepted by name).
