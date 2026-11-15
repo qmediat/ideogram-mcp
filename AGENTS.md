@@ -46,6 +46,6 @@
 | `private` | Sent as `true` by a curated tool whose model takes it, unless the caller sets it |
 | Runtime dependencies | Two (`@modelcontextprotocol/sdk`, `zod`); a new one is discussed first |
 | A user-visible change | One CHANGELOG.md entry under `[Unreleased]` |
-| Addresses | Every email address in this repository is in `qmediat.io` (`contact@`, `security@`, `dev@`); commits are authored as `dev@qmediat.io`; no personal or account address, in any file |
+| Addresses | The addresses this repository publishes for the project are in `qmediat.io` (`contact@`, `security@`, `dev@`); the qmediat team's commits are authored as `dev@qmediat.io`, a contributor's with their own address; no personal or account address in any file |
 | A live dry run | The new `docs/PRICES-<date>.md` linked from `docs/PRICES.md` |
 | A release | README "Supports" updated to the new version; the release check fails when its version differs |
