@@ -15,21 +15,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   workflow runs it instead of its own `server.json` step, which stays only for a tag older than the script.
   `npm run check:addresses` (`scripts/check-addresses.mjs`, run by CI and by the publish workflow) fails on an email
   address outside `qmediat.io` in a tracked text file — a repository's fixture addresses are allowed only in their own
-  file — and exits 2 when a tracked file cannot be read. A path, a port or a colon after an address does not hide it —
-  only a git remote (local part `git`, in scp form with a path or after a URL scheme) is exempt — a version pin is one
-  only when shaped like a version (`3.x`, `1.2.x.x`, `1.0.0-alpha.beta`), and only an image file name at a pixel scale
-  (`logo@2x.png`) is not an address. Nothing in the published package changes. ## [2.5.2] - 2026-11-15 ### Changed -
-  Documentation: the README is one screen (install, try it, the tools by group, what it supports, the docs); the
+  file — and exits 2 when a tracked file cannot be read. Every address-shaped text outside the allowed domains and
+  their subdomains is reported — nothing is exempt by its shape — and an exact per-file allowlist in the script holds
+  what a file must show. Nothing in the published package changes.
+
+## [2.5.2] - 2026-11-15
+
+### Changed
+
+- Documentation: the README is one screen (install, try it, the tools by group, what it supports, the docs); the
   reference moved to `docs/` — `docs/CONFIGURATION.md`, `docs/TOOLS.md`, `docs/PRICES.md` (an index of the measured
   quotes), `docs/TRADEMARKS.md`, the development commands to `CONTRIBUTING.md`; `AGENTS.md` holds the commands, the
   places and the rules for coding agents (`CLAUDE.md` points at it). The README's "Supports" list names the version it
   was checked for, and `npm run check:supports` — run by CI and by the release workflow before staging — fails while
-  that version differs from `package.json`'s. Nothing in the published server changes. ### Development - The
-  repository's lockfile: `npm audit fix` — `qs` 6.17.1 (was 6.16.0,
+  that version differs from `package.json`'s. Nothing in the published server changes.
+
+### Development
+
+- The repository's lockfile: `npm audit fix` — `qs` 6.17.1 (was 6.16.0,
   [GHSA-6pq8-jhm2-2vcw](https://github.com/advisories/GHSA-6pq8-jhm2-2vcw)) and five moderate advisories; `npm audit`
   on the repository reports none. `package-lock.json` is not part of the published package and the dependency ranges
-  in `package.json` are unchanged, so an install resolves its own tree as before. ## [2.5.1] - 2026-10-20 ### Changed
-  - Development only: `npm run lint` checks the structure of the code with a shared preset (ESLint with Babel's
+  in `package.json` are unchanged, so an install resolves its own tree as before.
+
+## [2.5.1] - 2026-10-20
+
+### Changed
+
+- Development only: `npm run lint` checks the structure of the code with a shared preset (ESLint with Babel's
   TypeScript parser — TypeScript 7 has no JavaScript API for typescript-eslint —, jscpd for repeated blocks, a ratchet
   that keeps the recorded baselines from growing); CI runs it. Nothing in the published package changes.
 - Internal: the usage, raw-call, file-answer and training tools each hand one step to a function of its own (the usage
