@@ -32,6 +32,8 @@ jobs:
       - name: The generated code is what the committed snapshot generates
         run: npm ci --prefix scripts/spec-gen && npm run spec:check
       - run: npm run typecheck
+      - name: README "Supports" names the package version
+        run: npm run check:supports
       - run: npm test
       - run: npm audit --omit=dev --audit-level=high
       - name: The generator toolchain's lockfile carries no high advisory (the js-yaml override of #38 holds)

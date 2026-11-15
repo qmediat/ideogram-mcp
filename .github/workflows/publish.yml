@@ -1,6 +1,6 @@
 name: Release
 
-# A published GitHub Release whose tag is v<version> (equal to package.json) → verify (read-only job: tag, manifest and CHANGELOG checks, typecheck, tests, audit of the shipped
+# A published GitHub Release whose tag is v<version> (equal to package.json) → verify (read-only job: tag, manifest, CHANGELOG and README Supports checks, typecheck, tests, audit of the shipped
 # tree) → publish (the only job with the publishing permissions; installs with --ignore-scripts): `npm stage publish`
 # — public on npm once a maintainer approves it with 2FA; a re-run skips a version that is already public and fails
 # while the version still waits for approval.
@@ -72,6 +72,14 @@ jobs:
           if ! awk -v v="$v" 'index($0, "## [" v "]") == 1 {p=1; next} /^## \[/ {p=0} p && /^[[:space:]]*- / {found=1} END {exit !found}' CHANGELOG.md; then
             echo "::error ::CHANGELOG.md has no section with entries for [$v]"
             exit 1
+          fi
+
+      - name: README "Supports" must name this version
+        run: |
+          if [ -f scripts/check-supports.mjs ]; then
+            npm run check:supports
+          else
+            echo "::warning::this tag predates the README Supports check"
           fi
 
       - run: npm ci

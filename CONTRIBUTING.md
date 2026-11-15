@@ -17,6 +17,24 @@ git clone https://github.com/qmediat/ideogram-mcp.git
 cd ideogram-mcp
 npm install
 npm run build
+npm run typecheck
+npm run lint        # structure rules, repeated blocks, the baseline ratchet (docs/SYSTEMIC.md §1)
+npm run format      # Prettier (npm run lint checks it)
+npm test            # builds, then every test against a fake API (no key, no network); with IDEOGRAM_API_KEY set, the live dry-run suite runs too (below)
+npm run check:supports  # README "Supports" names the package version
+```
+
+The specification snapshot drives the code: `npm ci --prefix scripts/spec-gen && npm run spec:generate` regenerates
+`src/generated/` (CI checks it with `npm run spec:check`), `npm run docs:api` the API reference, `npm run spec:pull`
+compares the live specification with the snapshot. These scripts need Node.js 22.18 or newer (type stripping), and so
+does `npm run lint` (its Babel 8 parser: 22.18+ or 24.11+).
+With `IDEOGRAM_API_KEY` set, `test/live-dry-run.test.mjs` quotes every curated model at no cost and writes the prices
+to `docs/PRICES-<date>.md` (link the new file from `docs/PRICES.md`).
+
+Run locally:
+
+```bash
+IDEOGRAM_API_KEY=your-key node dist/index.js
 ```
 
 The project compiles with TypeScript 7 (the native compiler). Its npm package ships only `tsc` — no `tsserver` —
@@ -57,6 +75,11 @@ needs a decision).
 - Include a clear description of what changed and why
 - All PRs go through code review before merge
 - Ensure `npm run build` passes with zero errors
+
+## Releases
+
+- A release updates the README's `## Supports · version X.Y.Z` heading (and the list under it) to the new version;
+  `npm run check:supports` fails in CI and in the release workflow while the two differ.
 
 ## Security
 

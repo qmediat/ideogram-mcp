@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Documentation: the README is one screen (install, try it, the tools by group, what it supports, the docs); the
+  reference moved to `docs/` — `docs/CONFIGURATION.md`, `docs/TOOLS.md`, `docs/PRICES.md` (an index of the measured
+  quotes), `docs/TRADEMARKS.md`, the development commands to `CONTRIBUTING.md`; `AGENTS.md` holds the commands, the
+  places and the rules for coding agents (`CLAUDE.md` points at it). The README's "Supports" list names the version it
+  was checked for, and `npm run check:supports` — run by CI and by the release workflow before staging — fails while
+  that version differs from `package.json`'s. Nothing in the published server changes.
+
 ## [2.5.1] - 2026-10-20
 
 ### Changed

@@ -1,0 +1,143 @@
+# Tools
+
+MCP server for the [Ideogram](https://developer.ideogram.ai) platform through its v2 API: every image and video model Ideogram sells through one API key — Ideogram 4.5, 4.0, 3.0, 2a and 2.0, GPT Image, Nano Banana, P-Image, Z-Image, the Topaz upscalers; Seedance 2.5 and 2, Kling 3, MiniMax H3 for video — for generate, precise edit, inpaint, remix, reframe, replace background, remove background, remove object, upscale, describe, layerize and video (from a prompt, an image or references), the commercial tools (ad localizer, resizer and variations, colorways, ghost mannequin, material swap, model pose variants, sketch to render), the utilities (magic prompt, layerize logos, provenance, snap mask), plus the account's usage, invoices and keys and custom-model training, from Claude Code, Claude Desktop or any MCP client over stdio. Every call can be priced first (the API's own dry run), long jobs are returned by id and collected later, and any other operation the release serves is one validated raw call away. Built from Ideogram's OpenAPI specification ([ADR-0001](https://github.com/qmediat/ideogram-mcp/blob/main/docs/adr/0001-openapi-snapshot-as-the-source-of-truth.md)).
+
+## What every tool shares
+
+- **The platform, not one model** — `model` on every tool, with each model's own fields (a field the model does not take is refused, naming the models that do). The model lists and fields come from Ideogram's specification, so a new model is a reviewed snapshot update, not a rewrite
+- **Price before you pay** — `ideogram_quote` asks the API what exactly this call would cost (USD and credits; nothing generated or billed)
+- **Private by default** — every curated tool whose model takes `private` sends it as `true` unless you set it (on remove background, replace background and the `auto` models the API's own default is your plan's setting); a model without the field (reframe with Ideogram 3.0, remove object) follows the API's own behaviour, and `ideogram_api` sends what you give it
+- **Never billed twice** — a job is returned the moment Ideogram accepts it; the tool waits up to `wait_s` and otherwise hands back the `generation_id` for `ideogram_generation`. A request is resent only when it never left the machine or got a 429
+- **Everything else, validated** — `ideogram_operations` lists what the API offers; `ideogram_api` calls any served operation by id, checked against its own schema first
+- **Guarded I/O** — per-operation upload limits checked before any file is read, streamed downloads with a 50 MB cap (512 MB for a video) from allow-listed HTTPS hosts, typed 402/429 errors that say what to do ([details](https://github.com/qmediat/ideogram-mcp/blob/main/SECURITY.md))
+- **2 runtime dependencies** — `@modelcontextprotocol/sdk` + `zod`; native `fetch`
+
+## Every tool and its models
+
+| Tool | What it does | Models |
+|------|--------------|--------|
+| `ideogram_generate` | Images from a text prompt | `ideogram-3` (default), `ideogram-4-5`, `ideogram-4`, `ideogram-3-character`, `ideogram-3-custom-model`, `ideogram-4-custom-model`, `ideogram-3-transparent`, `ideogram-4-transparent`, `ideogram-2a`, `ideogram-2`, `gpt-image-2`, `gpt-image-2-5-flare`, `gpt-image-2-5-sunburst`, `nano-banana-2`, `nano-banana-pro`, `p-image-ideogram`, `z-image`, `auto` |
+| `ideogram_precise_edit` | Edit an image at its exact size: a prompt, an optional mask (black = edit), up to 4 reference images, `context_window` to confine the edit | `ideogram-4-5` |
+| `ideogram_inpaint` | Repaint the masked part of an image (black = repaint) | `ideogram-3` (default), `ideogram-3-character`, `ideogram-3-custom-model` |
+| `ideogram_edit` | The 1.x name of `ideogram_inpaint` (kept through 2.x) | as inpaint |
+| `ideogram_remix` | New images from a source image and a prompt | `ideogram-3` (default), `ideogram-3-character`, `ideogram-3-custom-model`, `ideogram-4`, `auto` |
+| `ideogram_reframe` | Extend an image to a new size (outpainting) | `ideogram-3` (default), `nano-banana-2` |
+| `ideogram_replace_background` | A new background, the subject kept | `ideogram-3` (default), `gpt-image-2` |
+| `ideogram_remove_background` | The foreground as a transparent PNG | `ideogram-1` |
+| `ideogram_remove_object` | Remove what the mask marks (white = remove) and fill the gap | `ideogram-1` |
+| `ideogram_upscale` | Enlarge an image | `auto` (default), `topaz-bloom-2`, `topaz-redefine`, `topaz-standard-2`, `topaz-text-refine`, `topaz-wonder-3-5`, `nano-banana-pro` |
+| `ideogram_describe` | Describe an image: words (`ideogram-3`, default) or a structured JSON prompt (`ideogram-4`) | `ideogram-3`, `ideogram-4` |
+| `ideogram_video_text` | A video from a prompt: duration, aspect ratio, resolution, audio per model; saved as mp4 (give `duration`: omitted, Seedance is quoted at its maximum length) | `seedance-2-5-text-to-video` (default), `seedance-2-text-to-video`, `kling-3-standard-text-to-video`, `minimax-h3-text-to-video` |
+| `ideogram_video_image` | A video from a start image (and an end image): files, URLs or assets | `seedance-2-5-image-to-video` (default), `seedance-2-image-to-video`, `kling-3-standard-image-to-video`, `minimax-h3-image-to-video` |
+| `ideogram_video_reference` | A video guided by reference images, MP3/WAV clips (2-30 s on Seedance 2.5, 2-15 s elsewhere) and videos stored with Ideogram, in prompt order; at least one reference image or video | `seedance-2-5-reference-to-video` (default), `seedance-2-reference-to-video`, `minimax-h3-reference-to-video` |
+| `ideogram_layerize` | A flat image as an editable design: the text-free base image (saved) and the detected text blocks (JSON: text, position, font, size, colour); optional `font_candidate_files` (.ttf, .otf, .woff, .woff2) to match against | `ideogram-3` |
+| `ideogram_ad_localizer` | Translate an ad's copy into one language, keeping layout, logos and product; `exact_copy` pins wordings | one operation (`post_ad_localizer`) |
+| `ideogram_ad_resizer` | Reframe an ad to a platform's exact ad size inside its safe zone | one operation (`post_ad_resizer`) |
+| `ideogram_ad_variations` | Vary an ad along one axis: people, setting, group_size or scene | one operation (`post_ad_variations`) |
+| `ideogram_colorways` | Recolor a product photo: up to 4 masks paired with hex colours | one operation (`post_colorways`) |
+| `ideogram_ghost_mannequin` | A garment on an invisible mannequin from its photos, in the view asked | one operation (`post_ghost_mannequin`) |
+| `ideogram_material_swap` | Apply reference materials to the masked regions of a product photo | one operation (`post_material_swap`) |
+| `ideogram_model_pose_variants` | Re-pose the model of a fashion image by instruction | one operation (`post_model_pose_variants`) |
+| `ideogram_sketch_to_render` | Render a fashion sketch as a product photo | one operation (`post_sketch_to_render`) |
+| `ideogram_magic_prompt` | Rewrite a prompt into an Ideogram 4.0 structured JSON prompt (nothing generated) | one operation (`post_magic_prompt_v4`) |
+| `ideogram_layerize_logos` | Detect and remove reference logos from a flat design: the base image saved, the layers listed | one operation (`post_layerize_logos`) |
+| `ideogram_provenance` | Check whether an image was created by Ideogram (free) | one operation (`post_provenance_verify`) |
+| `ideogram_snap_mask` | Snap a hand-drawn mask to the object it marks; the PNG saved | one operation (`post_snap_mask`) |
+| `ideogram_quote` | The price of a call: `{"tool": "ideogram_generate", "arguments": {…}}` | every operation that offers a dry run (not describe, ad variations, pose variants, sketch to render, nor the v1 utilities) |
+| `ideogram_generation` | Collect a generation by `generation_id` — its images or its video | — |
+| `ideogram_usage` | Billed usage as Ideogram reports it: buckets of line items summed per product and currency, the buckets handed on (the shape ai-cost reads); default the last 7 days by day | — |
+| `ideogram_invoices` | The organization's invoices with their line items (organization-admin key) | — |
+| `ideogram_api_keys` | The organization's API keys, redacted (organization-admin key) | — |
+| `ideogram_datasets` | Your training datasets: the list (searched by name) or one with its files and models | — |
+| `ideogram_dataset_upload` | Images, .txt captions and .zip archives into a dataset (an existing one, or a new one from a name); local paths or public https URLs | — |
+| `ideogram_train` | Train a custom model from a dataset of 15–100 images; hyperparameters route to the advanced operation | `ideogram-4` (default), `ideogram-3` |
+| `ideogram_models` | Your custom models and the shared ones, or one with its training runs; a completed model's `custom_model_uri` generates through `ideogram_generate` | — |
+| `ideogram_operations` | What the API offers: families, operations, fields, limits | — |
+| `ideogram_api` | Any served operation by id, including the ones the documentation index does not list (the reframe models `auto`, `bria-expand`, `gpt-image-2-5-flare`, `nano-banana-pro`) | — |
+
+Each model's fields are listed in the tool's schema (one variant per model) and in [docs/API-REFERENCE.md](https://github.com/qmediat/ideogram-mcp/blob/main/docs/API-REFERENCE.md), generated from the specification. Image inputs are local file paths or public https URLs (or Ideogram asset identifiers where a model takes them); each operation's own upload limits apply, checked each file against its field's limit before any is read, the whole encoded request against the request cap before it is sent.
+
+## A client without files: URL inputs and inline images
+
+Any file field (`image`, `images`, `mask`, the reference and style images, the font files) takes a public `https://`
+URL beside a local path: the file is fetched under the field's own limit and types, from a public host only (no IP
+address, no local name, no private address, no redirect), inside the call's budget, one input after another.
+`inline_images: true` on any tool that saves images returns each saved image under 3.75 MB, up to 10 MB per result,
+as image content beside the text (the others stay by path), so a client that cannot read this machine's files still
+sees the result. Both are off unless asked.
+
+## Usage, invoices, webhooks
+
+`ideogram_usage` asks `GET /v2/account/usage` for a range (RFC 3339 times; `1d` buckets over at most 92 days, `1h`
+over at most 168 hours — the tool refuses a longer one before asking; the `api` and `app` sources) and answers with
+the sums per product, unit and currency — decimal strings, never floats; an amount it cannot read is counted, not
+summed — and writes the buckets exactly as Ideogram sent them to a JSON file in the output directory (named by the
+query, readable by the owner only — the line items carry member emails and key prefixes; printed too when under
+64 KB): the shape a cost tool reads. The invoices and the API keys are written and shown the same way, and so is an
+answer off its specification (reported as such, never as a success). All three account tools need an API key owned by an organization
+admin (Ideogram answers 404 to any other key, and the tool says so with Ideogram's words).
+
+Ideogram signs its webhooks with Ed25519: the canonical message is `request_id\nuser_id\ntimestamp\nsha256_hex(body)`,
+the signature travels in `X-Ideogram-Webhook-Signature` (the key id in `X-Ideogram-Webhook-Key-Id`), the public keys
+are the JWKS at `GET https://api.ideogram.ai/v1/.well-known/jwks.json` (public; cache up to 24 h). Where `request_id`,
+`user_id` and `timestamp` travel is not stated by the specification (it names the two signature headers only): take
+them from the delivery as Ideogram's webhook documentation says. The receiver — not this server, which has no public
+URL — verifies with the helper this package ships; a delivery whose timestamp is more than `maxAgeS` (300 s by
+default; `Infinity` turns it off) from now is refused as a replay — the signature alone never expires:
+
+```js
+import { verifyWebhook } from "@qmediat.io/ideogram-mcp/dist/webhooks.js";
+const kid = verifyWebhook(
+  { body, requestId, userId, timestamp, signature: headers["x-ideogram-webhook-signature"], keyId: headers["x-ideogram-webhook-key-id"] },
+  jwks,
+  { maxAgeS: 300 },
+);
+if (kid === null) reject(); // the key id that verified, else null
+```
+
+## Training a custom model
+
+Drop a folder of references: `ideogram_dataset_upload {"name": "brand refs", "files": ["…/1.png", "…/1.txt", "…/more.zip"]}`
+creates the dataset and uploads the assets (a caption sidecar `x.txt` goes with `x.png`; an archive may hold both),
+`ideogram_train {"dataset_id": "…", "model_name": "Brand Refs"}` starts an Ideogram 4.0 training (`"model": "ideogram-3"`
+for 3.0; `training_steps`, `lora_rank`, `ema`, `learning_rate` — and for 4.0 `batch_size`, `base_variant`,
+`wandb_project` — route to the advanced operation), `ideogram_models {"model_id": "…"}` follows it, and a COMPLETED
+model's `custom_model_uri` generates through `ideogram_generate` with `model: "ideogram-4-custom-model"`. Training is
+billed by Ideogram per its plan; the tools say what was started, never start it twice.
+
+## Waiting, and collecting later
+
+A generation is sent asynchronously and returned the moment Ideogram accepts it. The tool then waits up to `wait_s` seconds (default 45, at most 50: MCP clients time a call out at 60 s), polling at 2 s, ×1.5, up to 30 s apart. A job still running at the end of the wait comes back as its `generation_id`: `ideogram_generation {"generation_id": "…"}` collects it later, in this session or another. Sending the request again would start — and bill — a second job.
+Every tool call has one budget, fixed when it starts: 55 s (the caller's 60 s minus a margin), ended earlier by the
+caller's own cancellation (a client that times out or a user who cancels). Every request, retry sleep (Retry-After
+included), poll and download of the call is judged against what remains of it, so nothing of a call outlives its caller
+and a request that creates work is never resent after the caller has given up: a POST is resent only when the time left
+also covers an attempt as long as the one just rejected. A download the budget cuts is listed as not saved beside the
+generation id; `ideogram_generation` saves it in a new call. What that leaves open: an upload that needs more than 55 s
+cannot be served inside one MCP call at all; a request the budget cuts while it is in flight is reported as possibly
+accepted (never resent); and a job the API accepts after the caller gave up keeps an id nobody receives — a limit of
+the 60 s client, not of this server.
+
+## Prices
+
+What a call costs, and the measured quotes: [PRICES.md](./PRICES.md).
+
+## Compatibility with 1.x
+
+Calls written for 1.x keep working through 2.x, and the result says what was mapped:
+
+| 1.x input | 2.0 |
+|---|---|
+| `ideogram_generate` without `model` | `ideogram-3`, as before |
+| `model: "3.0"` / `"4.0"` | `ideogram-3` / `ideogram-4` |
+| `rendering_speed: "TURBO"` / `"DEFAULT"` / `"QUALITY"` | `turbo` / `default` / `quality` on the models that take `rendering_speed`; `quality: low / medium / high` on those that take `quality` (Ideogram 4.5, GPT Image 2.5, P-Image) |
+| `rendering_speed: "FLASH"` | refused (v2 has no FLASH) — `quality: very_low` on the models that offer it |
+| `magic_prompt`, `style_type`, `color_palette.name` in capitals | lowercase |
+| `ideogram_edit` | `ideogram_inpaint` |
+| `describe_model_version: "V_3"` | `model: "ideogram-3"` |
+
+A 1.x field that the chosen v2 model does not take is refused with the models that take it (the [changelog](https://github.com/qmediat/ideogram-mcp/blob/main/CHANGELOG.md) has the full table).
+
+## The raw call
+
+`ideogram_api` runs any operation this release serves — the curated ones and every other `/v2/image` operation (the reframe models the documentation index does not list) — by its id, with its parameters kept in their places: `{"operation": "…", "params": {"path": {}, "query": {}, "body": {}}, "files": [{"field": "image", "path": "…"}], "dry_run": false}`. The parameters are checked against the operation's own schema and rules before anything is sent. Operations Ideogram's documentation does not list need `allow_undocumented: true`; web-app (Bearer) and internal operations are refused; the undocumented `get_asset_reference_usage` of the account family too; the customer-specific tools (skechers, swan, sole-swap) and the spec-only workflows run here and only here, behind `allow_undocumented`; the v1 model variants (ernie, flux-2 klein, the Ideogram 4.0 tiers, the P-Image tiers, design and graphic v3/v4) run here without opt-in — Ideogram documents them in its v1 reference (prefer an `_async` twin where one exists: a synchronous v1 generation must finish inside the call's budget); nothing is planned for a later release ([plan](https://github.com/qmediat/ideogram-mcp/blob/main/docs/DESIGN-ideogram-v2.md#8-steps-one-release-per-finished-family--invariant-15)).
